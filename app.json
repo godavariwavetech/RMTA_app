@@ -1,4 +1,28 @@
 {
   "name": "RMTA",
-  "displayName": "RMTA"
+  "displayName": "RMTA",
+  "expo": {
+    "name": "RMTA",
+    "slug": "rmta",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "icon": "./src/Assets/images/appLogo.png",
+    "splash": {
+      "image": "./src/Assets/images/appLogo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#071A3D"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
+  }
 }

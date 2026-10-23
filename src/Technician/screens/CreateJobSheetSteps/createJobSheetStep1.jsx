@@ -1,0 +1,493 @@
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  StatusBar,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { launchImageLibrary } from 'react-native-image-picker';
+
+import {
+  widthPercentageToDP as wp,
+  heightPercentageToDP as hp,
+} from 'react-native-responsive-screen';
+import { useDispatch, useSelector } from 'react-redux';
+
+import { Colors } from '../../../Constants/Colors';
+import { ENDPOINTS } from '../../../Constants/config';
+import { postJson } from '../../../redux/slices/authSlice';
+import { updateJobDraft, resetJobDraft } from '../../../redux/slices/jobSheetSlice';
+
+export default function CreateJobSheetStep1({ onNavigate, fresh }) {
+  const dispatch = useDispatch();
+  const user = useSelector(state => state.auth.user) || {};
+  const draftCustomer = useSelector(state => state.jobSheet.draft.customer) || {};
+
+  // Pre-fill from the saved draft so returning here (e.g. "Use another number"
+  // on the verify screen, or "Edit details" from the review step) keeps
+  // everything the technician already entered.
+  const [customerName, setCustomerName] = useState(draftCustomer.full_name || '');
+  const [mobileNumber, setMobileNumber] = useState(draftCustomer.mobile || '');
+  const [alternateNumber, setAlternateNumber] = useState(draftCustomer.alternate_mobile || '');
+  const [aadharNumber, setAadharNumber] = useState(draftCustomer.aadhaar_number || '');
+
+  // Customer photo: { uri, file_id, uploading }. Restore both the preview uri
+  // and the uploaded file_id so the thumbnail shows on revisit.
+  const [photo, setPhoto] = useState(
+    draftCustomer.photo_file_id || draftCustomer.photo_uri
+      ? {
+          uri: draftCustomer.photo_uri || null,
+          file_id: draftCustomer.photo_file_id || null,
+          uploading: false,
+        }
+      : null,
+  );
+
+  // Only wipe the draft when starting a brand-new job sheet (entered from the
+  // jobs list / home / + button, which pass `fresh`). Navigating back here to
+  // edit must keep the data.
+  useEffect(() => {
+    if (fresh) {
+      dispatch(resetJobDraft());
+      setCustomerName('');
+      setMobileNumber('');
+      setAlternateNumber('');
+      setAadharNumber('');
+      setPhoto(null);
+    }
+  }, [fresh, dispatch]);
+
+  const handleCapturePhoto = () => {
+    launchImageLibrary(
+      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      async response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
+          return;
+        }
+        const asset = response.assets && response.assets[0];
+        if (!asset || !asset.base64) return;
+
+        setPhoto({ uri: asset.uri, uploading: true });
+        try {
+          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
+            base64: asset.base64,
+            mime_type: asset.type || 'image/jpeg',
+            original_name: asset.fileName || 'customer.jpg',
+            uploaded_by: user.user_id,
+          });
+          if (res.ok && data && data.success !== false) {
+            setPhoto({ uri: asset.uri, file_id: data.data.file_id, uploading: false });
+          } else {
+            setPhoto({ uri: asset.uri, uploading: false });
+            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
+          }
+        } catch (err) {
+          setPhoto({ uri: asset.uri, uploading: false });
+          Alert.alert('Upload failed', err.message);
+        }
+      },
+    );
+  };
+
+  const handleBackPress = () => {
+    if (onNavigate) {
+      onNavigate('goBack');
+    }
+  };
+
+  const handleContinue = () => {
+    // Save customer details into the draft, then go verify the mobile number.
+    const customer = {
+      full_name: customerName.trim(),
+      mobile: mobileNumber,
+      alternate_mobile: alternateNumber,
+      aadhaar_last4: aadharNumber.replace(/\D/g, '').slice(-4),
+      // Keep the full value + photo preview uri so revisiting this step can
+      // restore exactly what the technician entered (the backend uses
+      // aadhaar_last4 / photo_file_id; these extras are for the draft only).
+      aadhaar_number: aadharNumber,
+      photo_file_id: photo && photo.file_id ? photo.file_id : null,
+      photo_uri: photo && photo.uri ? photo.uri : null,
+      consent: true,
+    };
+    dispatch(updateJobDraft({ customer }));
+    console.log('[JobSheet][Step1] customer captured →', customer);
+    if (onNavigate) {
+      onNavigate('verifyMobileNumber');
+    }
+  };
+
+  return (
+    <>
+      <StatusBar
+        backgroundColor={Colors.primary}
+        barStyle="light-content"
+        translucent={true}
+      />
+      <SafeAreaView style={styles.container}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
+              <Text style={styles.backButtonText}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>New Job Sheet</Text>
+            <View style={styles.placeholderButton} />
+          </View>
+
+          {/* Step Indicator */}
+          <View style={styles.stepIndicator}>
+            <Text style={styles.stepText}>STEP 1 OF 8 · CUSTOMER</Text>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: '12.5%' }]} />
+          </View>
+
+          {/* Content Section */}
+          <View style={styles.content}>
+            {/* Title */}
+            <Text style={styles.sectionTitle}>Customer details</Text>
+            <Text style={styles.sectionDescription}>
+              Start with the person bringing in the device.
+            </Text>
+
+            {/* Form Fields */}
+            <View style={styles.formContainer}>
+              {/* Customer Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Customer Name <Text style={styles.required}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter customer name"
+                  placeholderTextColor="#D1D5DB"
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                />
+              </View>
+
+              {/* Mobile Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Mobile Number <Text style={styles.required}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter mobile number"
+                  placeholderTextColor="#D1D5DB"
+                  value={mobileNumber}
+                  onChangeText={setMobileNumber}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Alternate Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Alternate Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Optional"
+                  placeholderTextColor="#D1D5DB"
+                  value={alternateNumber}
+                  onChangeText={setAlternateNumber}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Aadhar Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Aadhar Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter aadhar number"
+                  placeholderTextColor="#D1D5DB"
+                  value={aadharNumber}
+                  onChangeText={setAadharNumber}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              {/* Camera Section */}
+              <View style={styles.cameraSection}>
+                <TouchableOpacity
+                  style={styles.cameraButton}
+                  onPress={handleCapturePhoto}
+                  activeOpacity={0.8}
+                >
+                  {photo && photo.uri ? (
+                    <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+                  ) : (
+                    <Image
+                      source={require('../../../Assets/icons/camera.png')}
+                      style={styles.cameraIcon}
+                    />
+                  )}
+                  <Text style={styles.cameraText}>
+                    {photo && photo.uri ? 'Change customer photo' : 'Capture customer photo'}
+                  </Text>
+                  {photo && photo.uploading ? (
+                    <View style={styles.photoStatusRow}>
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                      <Text style={styles.cameraSubtext}>Uploading…</Text>
+                    </View>
+                  ) : photo && photo.file_id ? (
+                    <Text style={[styles.cameraSubtext, styles.photoUploaded]}>
+                      ✓ Uploaded
+                    </Text>
+                  ) : (
+                    <Text style={styles.cameraSubtext}>JPG or PNG - Up to 5 MB</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Consent Notice */}
+              <View style={styles.consentContainer}>
+                <Image
+                  source={require('../../../Assets/icons/shieldTick.png')}
+                  style={styles.consentIcon}
+                />
+                <Text style={styles.consentText}>
+                  Collect identity information only with customer consent.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.bottomSpacer} />
+          </View>
+        </ScrollView>
+
+        {/* Continue Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+            <Text style={styles.continueButtonText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F7F9FC',
+    flexDirection: 'column',
+  },
+  header: {
+    // backgroundColor: '#FFFFFF',
+    paddingHorizontal: wp('3%'),
+    paddingVertical: hp('2%'),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: wp('4%'),
+    paddingVertical: wp('0%'),
+    padding: 8,
+    // width: 44,
+    // height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9e9e9ff',
+    borderRadius: wp('4%')
+  },
+  backButtonText: {
+    fontSize: wp('10%'),
+    color: Colors.primary,
+    fontWeight: '300',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholderButton: {
+    width: 44,
+  },
+  stepIndicator: {
+    paddingHorizontal: wp('5%'),
+    paddingVertical: hp('2%'),
+  },
+  stepText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2F5DDC',
+    letterSpacing: 0.5,
+  },
+  progressBarContainer: {
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: wp('5%'),
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#2F5DDC',
+    borderRadius: 2,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: wp('5%'),
+    paddingVertical: hp('2%'),
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginBottom: 24,
+  },
+  formContainer: {
+    gap: 16,
+  },
+  formGroup: {
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginBottom: 8,
+  },
+  required: {
+    color: '#EF4444',
+  },
+  input: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cameraSection: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  cameraButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cameraIcon: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
+    marginBottom: 8,
+    // tintColor: Colors.primary,
+  },
+  cameraText: {
+    fontSize: 16,
+    fontWeight: '600',
+    // color: Colors.primary,
+    color: '#2F5DDC',
+    marginBottom: 4,
+  },
+  cameraSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  photoPreview: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    marginBottom: 8,
+    resizeMode: 'cover',
+  },
+  photoStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  photoUploaded: {
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  consentContainer: {
+    backgroundColor: '#EAF1FF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  consentIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+    marginTop: 2,
+    // tintColor: Colors.primary,
+  },
+  consentText: {
+    fontSize: 13,
+    color: '#4B5563',
+    flex: 1,
+    lineHeight: 18,
+  },
+  bottomSpacer: {
+    height: 24,
+  },
+  buttonContainer: {
+    paddingHorizontal: wp('5%'),
+    paddingVertical: hp('2%'),
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  continueButton: {
+    backgroundColor: '#2F5DDC',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+});
