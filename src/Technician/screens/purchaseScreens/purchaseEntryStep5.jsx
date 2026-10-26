@@ -8,7 +8,6 @@ import {
   Image,
   StatusBar,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -20,15 +19,12 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
 
 const MAX_PHOTOS = 3;
 
 export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData, imeiData, ceirVerified }) {
   const dispatch = useDispatch();
-  const user = useSelector(state => state.auth.user) || {};
   const draftCondition = useSelector(state => state.purchase.draft.condition);
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
   const [condition, setCondition] = useState(
@@ -42,12 +38,13 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     },
   );
 
-  // Up to 3 condition photos: { uri, file_id, uploading }. Restore from draft.
+  // Up to 3 condition photos: { uri, base64 }. The first photo is sent as
+  // create_purchase's backimage. Restore from draft.
   const [photos, setPhotos] = useState(
     Array.isArray(draftConditionPhotos)
       ? draftConditionPhotos
-          .filter(p => p && p.file_id)
-          .map(p => ({ uri: p.uri || null, file_id: p.file_id, uploading: false }))
+          .filter(p => p && p.base64)
+          .map(p => ({ uri: p.uri || null, base64: p.base64 }))
       : [],
   );
 
@@ -58,31 +55,6 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     }));
   };
 
-  const uploadOne = async asset => {
-    setPhotos(prev => [...prev, { uri: asset.uri, uploading: true }]);
-    try {
-      const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-        base64: asset.base64,
-        mime_type: asset.type || 'image/jpeg',
-        original_name: asset.fileName || 'condition.jpg',
-        uploaded_by: user.user_id,
-      });
-      if (res.ok && data && data.success !== false) {
-        setPhotos(prev =>
-          prev.map(p =>
-            p.uri === asset.uri ? { ...p, file_id: data.data.file_id, uploading: false } : p,
-          ),
-        );
-      } else {
-        setPhotos(prev => prev.map(p => (p.uri === asset.uri ? { ...p, uploading: false } : p)));
-        Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-      }
-    } catch (err) {
-      setPhotos(prev => prev.map(p => (p.uri === asset.uri ? { ...p, uploading: false } : p)));
-      Alert.alert('Upload failed', err.message);
-    }
-  };
-
   const handlePickPhotos = () => {
     const remaining = MAX_PHOTOS - photos.length;
     if (remaining <= 0) {
@@ -91,19 +63,17 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     }
     launchImageLibrary(
       { mediaType: 'photo', includeBase64: true, quality: 0.7, selectionLimit: remaining },
-      async response => {
+      response => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
           return;
         }
-        const assets = (response.assets || []).slice(0, remaining);
-        for (const asset of assets) {
-          if (asset && asset.base64) {
-            // eslint-disable-next-line no-await-in-loop
-            await uploadOne(asset);
-          }
-        }
+        const assets = (response.assets || []).slice(0, remaining).filter(a => a && a.base64);
+        setPhotos(prev => [
+          ...prev,
+          ...assets.map(asset => ({ uri: asset.uri, base64: asset.base64 })),
+        ]);
       },
     );
   };
@@ -112,9 +82,9 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Keep only uploaded photos (file_id); keep uri for the revisit preview.
+  // Keep the local uri too so the previews show when revisiting this step.
   const buildConditionPhotos = () =>
-    photos.filter(p => p && p.file_id).map(p => ({ file_id: p.file_id, uri: p.uri || null }));
+    photos.filter(p => p && p.base64).map(p => ({ base64: p.base64, uri: p.uri || null }));
 
   const handleContinue = () => {
     const conditionPhotos = buildConditionPhotos();
@@ -348,17 +318,12 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
               {photos.length > 0 && (
                 <View style={styles.thumbRow}>
                   {photos.map((photo, index) => (
-                    <View key={photo.uri || photo.file_id || index} style={styles.thumbWrapper}>
+                    <View key={photo.uri || index} style={styles.thumbWrapper}>
                       {photo.uri ? (
                         <Image source={{ uri: photo.uri }} style={styles.thumb} />
                       ) : (
                         <View style={[styles.thumb, styles.thumbPlaceholder]}>
                           <Text style={styles.thumbPlaceholderText}>✓</Text>
-                        </View>
-                      )}
-                      {photo.uploading && (
-                        <View style={styles.thumbOverlay}>
-                          <ActivityIndicator size="small" color="#FFFFFF" />
                         </View>
                       )}
                       <TouchableOpacity

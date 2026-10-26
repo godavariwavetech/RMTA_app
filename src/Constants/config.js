@@ -11,7 +11,11 @@ export const BASE_URL = 'https://rmtatech.com:1810/';
 // export const BASE_URL= 'https://rmtatech.com:1810/';
 
 // Default network request timeout (ms) — fail fast instead of hanging.
-export const REQUEST_TIMEOUT = 10000;
+// Raised from 10s: this backend is occasionally slow enough to exceed 10s
+// even on requests that ultimately succeed (DB write commits before the
+// HTTP response arrives), which was showing up as false "could not reach
+// the server" failures in the app.
+export const REQUEST_TIMEOUT = 30000;
 
 // API endpoint paths, relative to BASE_URL.
 export const ENDPOINTS = {
@@ -22,8 +26,11 @@ export const ENDPOINTS = {
   ADMIN_DETAILS: 'public_app/admin_details',
   TECHNICIAN_DETAILS: 'public_app/technician_details',
   SEND_CUSTOMER_OTP: 'public_app/send_customer_otp',
+  VERIFY_CUSTOMER_OTP: 'public_app/verify_customer_otp',
+  VERIFY_SALE_CUSTOMER_OTP: 'public_app/verify_salecustomer_otp',
   UPLOAD_FILE: 'public_app/upload_file',
-  CREATE_JOB_SHEET: 'public_app/create_job_sheet',
+  CREATE_JOB_SHEET_CUSTOMER: 'public_app/create_job_sheet_customer',
+  CREATE_JOB_SHEET: 'public_app/create_job_sheets',
   JOB_COUNTS: 'public_app/job_counts',
   RECENT_ACTIVITY: 'public_app/recent_activity',
   IMEI_CHECK: 'public_app/imei_check',
@@ -35,10 +42,13 @@ export const ENDPOINTS = {
   JOB_SHEET_DETAILS: 'public_app/job_sheet_details',
   START_JOB_REPAIR: 'public_app/start_job_repair',
   MARK_JOB_READY: 'public_app/mark_job_ready',
+  CREATE_PURCHASE_CUSTOMER: 'public_app/create_purchase_customer',
   CREATE_PURCHASE: 'public_app/create_purchase',
   PURCHASES_LIST: 'public_app/purchases_list',
   INVENTORY_LIST: 'public_app/inventory_list',
-  CREATE_SALE: 'public_app/create_sale',
+  SEARCH_PURCHASE: 'public_app/search_purchase',
+  CREATE_SALE_CUSTOMER: 'public_app/create_sale_customer',
+  CREATE_SALE: 'public_app/create_sale_sheets',
   SALES_LIST: 'public_app/sales_list',
   FORGOT_SEND_OTP: 'public_app/forgot_password/send_otp',
   FORGOT_VERIFY_OTP: 'public_app/forgot_password/verify_otp',

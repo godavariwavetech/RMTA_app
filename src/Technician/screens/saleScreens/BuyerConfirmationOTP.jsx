@@ -104,34 +104,32 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
     if (fullOtp.length !== 6 || submitting) return;
 
     // Buyer confirmed → create the sale in the DB, then show completion.
+    // deviceData.id is the purchase/inventory record's id (from
+    // inventory_list / search_purchase), used here as purchase_id.
     const payload = {
       member_id: user.member_id,
-      created_by: user.user_id,
-      buyer: {
-        full_name: buyerData?.buyerName || '',
-        mobile: buyerData?.buyerMobile || '',
-        aadhaar_last4: String(buyerData?.aadhaarNumber || '').replace(/\D/g, '').slice(-4) || null,
-        address: buyerData?.address || null,
-        photo_file_id: (buyerData?.buyerPhoto && buyerData.buyerPhoto.file_id) || null,
-      },
-      inventory_device_id: deviceData?.id,
-      sale: {
-        sale_price: saleData?.salePrice || '0',
-        payment_mode: saleData?.paymentMode || 'cash',
-        transaction_ref: saleData?.transactionId || null,
-        warranty_notes: saleData?.warranty || null,
-      },
+      purchase_id: deviceData?.id,
+      buyer_id: buyerData?.customer_id,
+      sale_price: saleData?.salePrice || '0',
+      payment_mode: saleData?.paymentMode || 'cash',
+      warranty_notes: saleData?.warranty || null,
     };
-    console.log('[Sale][Confirm] submitting full payload →', JSON.stringify(payload, null, 2));
+    console.log(
+      `[Sale][Confirm] create_sale_sheets POST ${ENDPOINTS.CREATE_SALE} payload →`,
+      payload,
+    );
     setSubmitting(true);
     try {
       const { response, data } = await postJson(ENDPOINTS.CREATE_SALE, payload);
+      console.log(
+        `[Sale][Confirm] create_sale_sheets response → HTTP ${response.status}`,
+        data,
+      );
       setSubmitting(false);
       if (!response.ok || (data && data.success === false)) {
         Alert.alert('Could not complete sale', (data && data.message) || 'Please try again.');
         return;
       }
-      console.log('[Sale][Confirm] created ✓ →', data.data);
       dispatch(resetSaleDraft());
       if (onNavigate) {
         onNavigate('saleCompleted', {

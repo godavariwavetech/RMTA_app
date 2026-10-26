@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { launchImageLibrary } from 'react-native-image-picker';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
@@ -42,6 +43,11 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
+  // Shop photo / person photo: { uri, base64 } or null. Sent to the backend
+  // as raw base64 under shop_image / person_image — no separate upload step.
+  const [shopImage, setShopImage] = useState(null);
+  const [personImage, setPersonImage] = useState(null);
+
   const dispatch = useDispatch();
 
   // Which login type initiated this registration (passed from LoginScreen).
@@ -50,6 +56,22 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
   const updateField = (key, value) => {
     setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handlePickImage = setter => {
+    launchImageLibrary(
+      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
+          return;
+        }
+        const asset = response.assets && response.assets[0];
+        if (!asset || !asset.base64) return;
+        setter({ uri: asset.uri, base64: asset.base64 });
+      },
+    );
   };
 
   const handleBackPress = () => {
@@ -93,8 +115,23 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       return;
     }
 
-    if (mobileNumber.replace(/\D/g, '').length < 10) {
-      alert('Please enter a valid mobile number');
+    if (!/^[a-zA-Z\s]+$/.test(fullName.trim())) {
+      alert('Full name should only contain letters');
+      return;
+    }
+
+    if (mobileNumber.replace(/\D/g, '').length !== 10) {
+      alert('Please enter a valid 10-digit mobile number');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(city.trim())) {
+      alert('City should only contain letters');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(state.trim())) {
+      alert('State should only contain letters');
       return;
     }
 
@@ -125,6 +162,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       password,
       membership_status: 'pending',
       user_ind, // 1 = admin, 0 = technician (separate account namespaces)
+      shop_image: shopImage ? shopImage.base64 : null,
+      person_image: personImage ? personImage.base64 : null,
     };
 
     console.log('📝 Register button pressed — registration data:');
@@ -137,17 +176,22 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
     if (registerMember.fulfilled.match(result)) {
       // Success means the mobile number did NOT already exist and the account
-      // was created. Branch on the returned membership_status:
-      //   'pending' → account awaiting admin approval → StatusPendingScreen
-      //   otherwise → straight into the app (Admin home).
+      // was created. Send them to Login (matching tab) to sign in with the
+      // mobile + password they just set.
       console.log('🟢 DB WRITE OK — record stored', result.payload);
-      const membershipStatus =
-        result.payload && result.payload.membership_status;
-      if (membershipStatus === 'pending') {
-        onNavigate('statusPending');
-      } else {
-        onNavigate(user_ind === 1 ? 'adminHome' : 'home');
-      }
+      Alert.alert(
+        'Registration successful',
+        'You can now log in with your mobile number and password.',
+        [
+          {
+            text: 'OK',
+            onPress: () =>
+              onNavigate('login', {
+                loginMode: user_ind === 1 ? 'admin' : 'technician',
+              }),
+          },
+        ],
+      );
     } else {
       // Rejected: duplicate mobile (409), server error (500), or network/timeout.
       const payload = result.payload;
@@ -233,7 +277,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                   placeholder="Enter your full name"
                   placeholderTextColor="#999999"
                   value={form.fullName}
-                  onChangeText={text => updateField('fullName', text)}
+                  onChangeText={text => updateField('fullName', text.replace(/[^a-zA-Z\s]/g, ''))}
                   autoCapitalize="words"
                 />
               </View>
@@ -250,6 +294,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                   value={form.mobileNumber}
                   onChangeText={text => updateField('mobileNumber', text)}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
             </View>
@@ -296,7 +341,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                     placeholder="City"
                     placeholderTextColor="#999999"
                     value={form.city}
-                    onChangeText={text => updateField('city', text)}
+                    onChangeText={text => updateField('city', text.replace(/[^a-zA-Z\s]/g, ''))}
                     autoCapitalize="words"
                   />
                 </View>
@@ -309,10 +354,56 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                     placeholder="State"
                     placeholderTextColor="#999999"
                     value={form.state}
-                    onChangeText={text => updateField('state', text)}
+                    onChangeText={text => updateField('state', text.replace(/[^a-zA-Z\s]/g, ''))}
                     autoCapitalize="words"
                   />
                 </View>
+              </View>
+            </View>
+
+            {/* Shop Photo & Person Photo Row */}
+            <View style={styles.rowContainer}>
+              <View style={styles.rowFieldContainer}>
+                <Text style={styles.fieldLabel}>Shop photo</Text>
+                <TouchableOpacity
+                  style={styles.photoPicker}
+                  onPress={() => handlePickImage(setShopImage)}
+                  activeOpacity={0.8}
+                >
+                  {shopImage ? (
+                    <Image source={{ uri: shopImage.uri }} style={styles.photoPreview} />
+                  ) : (
+                    <>
+                      <Image
+                        source={require('../../../Assets/icons/camera.png')}
+                        style={styles.photoPickerIcon}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.photoPickerText}>Upload</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={styles.rowFieldContainer}>
+                <Text style={styles.fieldLabel}>Person photo</Text>
+                <TouchableOpacity
+                  style={styles.photoPicker}
+                  onPress={() => handlePickImage(setPersonImage)}
+                  activeOpacity={0.8}
+                >
+                  {personImage ? (
+                    <Image source={{ uri: personImage.uri }} style={styles.photoPreview} />
+                  ) : (
+                    <>
+                      <Image
+                        source={require('../../../Assets/icons/camera.png')}
+                        style={styles.photoPickerIcon}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.photoPickerText}>Upload</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -553,6 +644,31 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: hp('8%'),
+  },
+  photoPicker: {
+    height: hp('11%'),
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: wp('2.5%'),
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  photoPickerIcon: {
+    width: wp('6%'),
+    height: wp('6%'),
+    marginBottom: hp('0.5%'),
+  },
+  photoPickerText: {
+    fontSize: wp('3.3%'),
+    fontWeight: '600',
+    color: Colors.secondary,
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   roleRow: {
     flexDirection: 'row',

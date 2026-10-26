@@ -36,6 +36,92 @@ export async function postJson(endpoint, payload) {
   }
 }
 
+// Shared GET helper for endpoints registered as GET (e.g. search_purchase) —
+// same timeout/JSON-parse behavior as postJson, params go on the query string.
+export async function getJson(endpoint, params) {
+  const query = params
+    ? '?' +
+      new URLSearchParams(
+        Object.entries(params)
+          .filter(([, v]) => v !== undefined && v !== null)
+          .map(([k, v]) => [k, String(v)]),
+      ).toString()
+    : '';
+  const url = `${BASE_URL}${endpoint}${query}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const raw = await response.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      data = raw;
+    }
+    return { response, data };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    const message =
+      err.name === 'AbortError'
+        ? 'The server did not respond in time (timeout). Check your connection.'
+        : `Could not reach the server (${err.message}).`;
+    const tagged = new Error(message);
+    tagged.isNetwork = true;
+    throw tagged;
+  }
+}
+
+// Variant of getJson for endpoints that are registered as GET but still read
+// their params from a JSON body (e.g. search_purchase) instead of the query
+// string. fetch()/Request refuses a body on GET ("Body not allowed for GET
+// or HEAD requests") before the call ever reaches the network, so this uses
+// XMLHttpRequest directly, which doesn't enforce that restriction.
+export function getJsonWithBody(endpoint, payload) {
+  return new Promise((resolve, reject) => {
+    const url = `${BASE_URL}${endpoint}`;
+    const xhr = new XMLHttpRequest();
+    const timeoutId = setTimeout(() => xhr.abort(), REQUEST_TIMEOUT);
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState !== 4) return;
+      clearTimeout(timeoutId);
+      let data;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch (e) {
+        data = xhr.responseText;
+      }
+      resolve({
+        response: { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status },
+        data,
+      });
+    };
+    xhr.onerror = () => {
+      clearTimeout(timeoutId);
+      const tagged = new Error('Could not reach the server.');
+      tagged.isNetwork = true;
+      reject(tagged);
+    };
+    xhr.ontimeout = () => {
+      clearTimeout(timeoutId);
+      const tagged = new Error(
+        'The server did not respond in time (timeout). Check your connection.',
+      );
+      tagged.isNetwork = true;
+      reject(tagged);
+    };
+
+    xhr.open('GET', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify(payload));
+  });
+}
+
 // POST /public_app/member_registertion
 // payload: { full_name, mobile, shop_name, address, city, state, password, membership_status }
 //
@@ -138,7 +224,24 @@ export const loginUser = createAsyncThunk(
       }
 
       // Success → persist the session, then return the user/member object.
-      const user = data.data || data;
+      // The backend wraps it in a single-element array ([{ ...member }]) —
+      // unwrap it so callers get the plain object.
+      const responseData = data.data || data;
+      const record = Array.isArray(responseData) ? responseData[0] : responseData;
+
+      // The backend's record only has `id` (no user_id/member_id) and no
+      // `role` at all — fill those in from what we know client-side
+      // (which tab the person logged in from) so the rest of the app
+      // (profile fetches, job counts, admin checks) can rely on them.
+      const user = record
+        ? {
+            ...record,
+            user_id: record.user_id ?? record.id,
+            member_id: record.member_id ?? record.id,
+            role: record.role ?? (payload.user_ind === 1 ? 'admin' : 'technician'),
+          }
+        : record;
+
       await saveUser(user);
       return user;
     } catch (err) {

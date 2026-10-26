@@ -23,7 +23,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
-import { updateJobDraft, resetJobDraft } from '../../../redux/slices/jobSheetSlice';
+import {
+  updateJobDraft,
+  resetJobDraft,
+  createJobSheetCustomer,
+} from '../../../redux/slices/jobSheetSlice';
 
 export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   const dispatch = useDispatch();
@@ -49,6 +53,8 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
         }
       : null,
   );
+
+  const [submitting, setSubmitting] = useState(false);
 
   // Only wipe the draft when starting a brand-new job sheet (entered from the
   // jobs list / home / + button, which pass `fresh`). Navigating back here to
@@ -104,9 +110,66 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (!customerName.trim() || !mobileNumber.trim()) {
+      Alert.alert('Missing details', 'Please enter the customer name and mobile number.');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(customerName.trim())) {
+      Alert.alert('Invalid name', 'Customer name should only contain letters.');
+      return;
+    }
+
+    const mobileDigits = mobileNumber.replace(/\D/g, '');
+    if (mobileDigits.length !== 10) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    const alternateDigits = alternateNumber.replace(/\D/g, '');
+    if (alternateDigits && alternateDigits.length !== 10) {
+      Alert.alert('Invalid alternate number', 'Please enter a valid 10-digit alternate number.');
+      return;
+    }
+
+    const aadharDigits = aadharNumber.replace(/\D/g, '');
+    if (aadharDigits && aadharDigits.length !== 12) {
+      Alert.alert('Invalid Aadhar number', 'Please enter a valid 12-digit Aadhar number.');
+      return;
+    }
+
+    // Create the customer record up front (POST /public_app/create_job_sheet_customer)
+    // so later steps and the final create_job_sheet call can reference its id.
+    setSubmitting(true);
+    const result = await dispatch(
+      createJobSheetCustomer({
+        customer_name: customerName.trim(),
+        customer_number: mobileDigits,
+        customer_alternatenumber: alternateDigits,
+        member_id: user.member_id,
+      }),
+    );
+    setSubmitting(false);
+
+    if (!createJobSheetCustomer.fulfilled.match(result)) {
+      const message =
+        (result.payload && result.payload.message) ||
+        'Could not save customer details. Please try again.';
+      Alert.alert('Could not continue', message);
+      return;
+    }
+
+    // This backend returns the raw MySQL insert result (OkPacket) here, not a
+    // record — the new customer's id is insertId (see the same fix in
+    // purchaseEntryStep1.jsx for create_purchase_customer).
+    const customerId =
+      result.payload &&
+      (result.payload.insertId || result.payload.customer_id || result.payload.id);
+
     // Save customer details into the draft, then go verify the mobile number.
     const customer = {
+      customer_id: customerId,
       full_name: customerName.trim(),
       mobile: mobileNumber,
       alternate_mobile: alternateNumber,
@@ -174,7 +237,8 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   placeholder="Enter customer name"
                   placeholderTextColor="#D1D5DB"
                   value={customerName}
-                  onChangeText={setCustomerName}
+                  onChangeText={text => setCustomerName(text.replace(/[^a-zA-Z\s]/g, ''))}
+                  autoCapitalize="words"
                 />
               </View>
 
@@ -190,6 +254,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   value={mobileNumber}
                   onChangeText={setMobileNumber}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
 
@@ -203,6 +268,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   value={alternateNumber}
                   onChangeText={setAlternateNumber}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
 
@@ -216,6 +282,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   value={aadharNumber}
                   onChangeText={setAadharNumber}
                   keyboardType="number-pad"
+                  maxLength={12}
                 />
               </View>
 
@@ -270,8 +337,16 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinue}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

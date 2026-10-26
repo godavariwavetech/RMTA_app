@@ -8,6 +8,8 @@ import {
   Image,
   StatusBar,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,11 +20,20 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { updateSaleDraft } from '../../../redux/slices/saleSlice';
+import { ENDPOINTS } from '../../../Constants/config';
+import { postJson } from '../../../redux/slices/authSlice';
+import { updateSaleDraft, resetSaleDraft } from '../../../redux/slices/saleSlice';
 
 export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   const dispatch = useDispatch();
-  const draftSale = useSelector(state => state.sale.draft.sale) || {};
+  const user = useSelector(state => state.auth.user) || {};
+  // Fall back to the Redux draft when buyerData/deviceData weren't passed in
+  // nav params (e.g. navigating back from step 4, which doesn't re-send them).
+  const draft = useSelector(state => state.sale.draft) || {};
+  const buyer = buyerData || draft.buyer || {};
+  const device = deviceData || draft.device || {};
+  const draftSale = draft.sale || {};
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     salePrice: draftSale.salePrice || '',
     paymentMode: draftSale.paymentMode || 'cash', // 'cash', 'upi', 'bank'
@@ -51,15 +62,46 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
     }
   };
 
-  const handleCreateInvoice = () => {
-    if (formData.salePrice && onNavigate) {
-      console.log('[Sale][Step3] sale captured →', formData);
-      dispatch(updateSaleDraft({ sale: formData }));
+  const handleCreateInvoice = async () => {
+    if (!formData.salePrice || !onNavigate || submitting) return;
+    dispatch(updateSaleDraft({ sale: formData }));
+
+    // deviceData.id is the purchase/inventory record's id (from
+    // inventory_list / search_purchase), used here as purchase_id.
+    const payload = {
+      member_id: user.member_id,
+      purchase_id: device?.id,
+      buyer_id: buyer?.customer_id,
+      sale_price: formData.salePrice || '0',
+      payment_mode: formData.paymentMode || 'cash',
+      warranty_notes: formData.warranty || null,
+    };
+    console.log(
+      `[Sale][Step3] create_sale_sheets POST ${ENDPOINTS.CREATE_SALE} payload →`,
+      payload,
+    );
+    setSubmitting(true);
+    try {
+      const { response, data } = await postJson(ENDPOINTS.CREATE_SALE, payload);
+      console.log(
+        `[Sale][Step3] create_sale_sheets response → HTTP ${response.status}`,
+        data,
+      );
+      setSubmitting(false);
+      if (!response.ok || (data && data.success === false)) {
+        Alert.alert('Could not complete sale', (data && data.message) || 'Please try again.');
+        return;
+      }
+      dispatch(resetSaleDraft());
       onNavigate('saleEntryStep4', {
-        buyerData: buyerData,
-        deviceData: deviceData,
+        buyerData: buyer,
+        deviceData: device,
         saleData: formData,
+        sale: data.data,
       });
+    } catch (err) {
+      setSubmitting(false);
+      Alert.alert('Could not complete sale', err.message);
     }
   };
 
@@ -71,9 +113,9 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   };
 
   const completedSteps = 3;
-  const deviceTitle = `${deviceData?.brand || 'Device'} ${deviceData?.model || ''}`;
-  const deviceSubtitle = `${deviceData?.storage || ''} - ${deviceData?.color || ''}`;
-  const deviceImei = deviceData?.imei || '';
+  const deviceTitle = `${device.brand || 'Device'} ${device.model || ''}`;
+  const deviceSubtitle = `${device.storage || ''} - ${device.color || ''}`;
+  const deviceImei = device.imei || '';
 
   return (
     <>
@@ -108,7 +150,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {/* Device Summary Card */}
             <View style={styles.deviceCard}>
               <Image
-                source={deviceData?.deviceImage}
+                source={device.deviceImage}
                 style={styles.deviceImage}
               />
               <View style={styles.deviceInfo}>
@@ -245,12 +287,16 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
           <TouchableOpacity
             style={[
               styles.createInvoiceButton,
-              !formData.salePrice && styles.createInvoiceButtonDisabled,
+              (!formData.salePrice || submitting) && styles.createInvoiceButtonDisabled,
             ]}
             onPress={handleCreateInvoice}
-            disabled={!formData.salePrice}
+            disabled={!formData.salePrice || submitting}
           >
-            <Text style={styles.createInvoiceButtonText}>Create invoice</Text>
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.createInvoiceButtonText}>Create invoice</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

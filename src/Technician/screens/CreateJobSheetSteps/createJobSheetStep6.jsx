@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,27 +19,21 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
 
 export default function CreateJobSheetStep6({ onNavigate }) {
   const dispatch = useDispatch();
-  const user = useSelector(state => state.auth.user) || {};
   const draftPhotos = useSelector(state => state.jobSheet.draft.photos);
 
-  // Per-category photo state: { uri, file_id, uploading }. Restore any photos
-  // already uploaded in the draft so navigating back keeps them.
+  // Per-category photo state: { uri, base64 }. create_job_sheets takes the
+  // front/back/damage images as raw base64 (no separate upload_file step).
+  // Restore from the draft so navigating back keeps them.
   const [photos, setPhotos] = useState(() => {
     const restored = {};
     if (Array.isArray(draftPhotos)) {
       draftPhotos.forEach(p => {
-        if (p && p.file_id) {
-          restored[p.photo_type] = {
-            uri: p.uri || null,
-            file_id: p.file_id,
-            uploading: false,
-          };
+        if (p && p.base64) {
+          restored[p.photo_type] = { uri: p.uri || null, base64: p.base64 };
         }
       });
     }
@@ -50,7 +43,7 @@ export default function CreateJobSheetStep6({ onNavigate }) {
   const pickAndUpload = categoryId => {
     launchImageLibrary(
       { mediaType: 'photo', includeBase64: true, quality: 0.7 },
-      async response => {
+      response => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
@@ -59,44 +52,21 @@ export default function CreateJobSheetStep6({ onNavigate }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        // Show the local preview immediately; mark as uploading.
         setPhotos(prev => ({
           ...prev,
-          [categoryId]: { uri: asset.uri, uploading: true },
+          [categoryId]: { uri: asset.uri, base64: asset.base64 },
         }));
-
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || `${categoryId}.jpg`,
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setPhotos(prev => ({
-              ...prev,
-              [categoryId]: { uri: asset.uri, file_id: data.data.file_id, uploading: false },
-            }));
-          } else {
-            setPhotos(prev => ({ ...prev, [categoryId]: { uri: asset.uri, uploading: false } }));
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setPhotos(prev => ({ ...prev, [categoryId]: { uri: asset.uri, uploading: false } }));
-          Alert.alert('Upload failed', err.message);
-        }
       },
     );
   };
 
   const buildPhotos = () =>
-    // Keep the uploaded photos (those with a file_id); keep the local uri too so
-    // the previews show when revisiting this step.
+    // Keep the local uri too so the previews show when revisiting this step.
     Object.keys(photos)
-      .filter(key => photos[key] && photos[key].file_id)
+      .filter(key => photos[key] && photos[key].base64)
       .map(key => ({
         photo_type: key,
-        file_id: photos[key].file_id,
+        base64: photos[key].base64,
         uri: photos[key].uri || null,
       }));
 
@@ -204,14 +174,9 @@ export default function CreateJobSheetStep6({ onNavigate }) {
                       <Image source={category.icon} style={styles.cameraIcon} />
                     )}
                     <Text style={styles.photoTitle}>{category.title}</Text>
-                    {p && p.uploading ? (
-                      <View style={styles.photoStatusRow}>
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                        <Text style={styles.photoSubtitle}>Uploading…</Text>
-                      </View>
-                    ) : p && p.file_id ? (
+                    {p && p.base64 ? (
                       <Text style={[styles.photoSubtitle, styles.photoUploaded]}>
-                        ✓ Uploaded · Tap to replace
+                        ✓ Selected · Tap to replace
                       </Text>
                     ) : (
                       <Text style={styles.photoSubtitle}>{category.subtitle}</Text>

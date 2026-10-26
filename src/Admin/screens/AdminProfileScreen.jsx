@@ -44,7 +44,10 @@ export default function AdminProfileScreen({ onNavigate }) {
         if (!response.ok || (data && data.success === false)) {
           setError((data && data.message) || 'Could not load profile.');
         } else {
-          setDetails(data.data);
+          // This backend sometimes wraps the record in a single-element
+          // array ([{ ...profile }]) instead of returning it directly.
+          const record = Array.isArray(data.data) ? data.data[0] : data.data;
+          setDetails(record);
         }
       } catch (err) {
         if (active) setError(err.message);

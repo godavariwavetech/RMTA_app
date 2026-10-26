@@ -23,7 +23,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
-import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import { updatePurchaseDraft, createPurchaseCustomer } from '../../../redux/slices/purchaseSlice';
 
 export default function PurchaseEntryStep1({ onNavigate }) {
   const dispatch = useDispatch();
@@ -37,6 +37,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
     address: draftSeller.address || '',
     sellerPhoto: draftSeller.sellerPhoto || null,
   });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -45,12 +46,66 @@ export default function PurchaseEntryStep1({ onNavigate }) {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('[Purchase][Step1] seller captured →', formData);
-    dispatch(updatePurchaseDraft({ seller: formData }));
+  const handleContinue = async () => {
+    if (!formData.sellerName.trim() || !formData.sellerMobile.trim() || !formData.address.trim()) {
+      Alert.alert('Missing details', 'Please enter the seller name, mobile number and address.');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(formData.sellerName.trim())) {
+      Alert.alert('Invalid name', 'Seller name should only contain letters.');
+      return;
+    }
+
+    const mobileDigits = formData.sellerMobile.replace(/\D/g, '');
+    if (mobileDigits.length !== 10) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    const aadharDigits = formData.aadhaarNumber.replace(/\D/g, '');
+    if (aadharDigits && aadharDigits.length !== 12) {
+      Alert.alert('Invalid Aadhaar number', 'Please enter a valid 12-digit Aadhaar number.');
+      return;
+    }
+
+    // Create the customer record up front (POST /public_app/create_purchase_customer)
+    // so later steps and the final create_purchase call can reference its id.
+    setSubmitting(true);
+    const result = await dispatch(
+      createPurchaseCustomer({
+        customer_name: formData.sellerName.trim(),
+        mobile_number: mobileDigits,
+        member_id: user.member_id,
+        aadharnumber: aadharDigits,
+        address: formData.address.trim(),
+      }),
+    );
+    setSubmitting(false);
+
+    if (!createPurchaseCustomer.fulfilled.match(result)) {
+      const message =
+        (result.payload && result.payload.message) ||
+        'Could not save seller details. Please try again.';
+      Alert.alert('Could not continue', message);
+      return;
+    }
+
+    // The backend returns the raw MySQL insert result (OkPacket), not a
+    // record — the new customer's id is insertId.
+    const customerId =
+      result.payload &&
+      (result.payload.insertId ||
+        result.payload.seller_id ||
+        result.payload.customer_id ||
+        result.payload.id);
+    const seller = { ...formData, customer_id: customerId };
+
+    console.log('[Purchase][Step1] seller captured →', seller);
+    dispatch(updatePurchaseDraft({ seller }));
     if (onNavigate) {
       onNavigate('verifySellerMobileNumber', {
-        sellerData: formData,
+        sellerData: seller,
       });
     }
   };
@@ -147,7 +202,8 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               placeholder="Enter seller name"
               placeholderTextColor="#9CA3AF"
               value={formData.sellerName}
-              onChangeText={(value) => handleInputChange('sellerName', value)}
+              onChangeText={(value) => handleInputChange('sellerName', value.replace(/[^a-zA-Z\s]/g, ''))}
+              autoCapitalize="words"
             />
           </View>
 
@@ -163,6 +219,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               value={formData.sellerMobile}
               onChangeText={(value) => handleInputChange('sellerMobile', value)}
               keyboardType="phone-pad"
+              maxLength={10}
             />
           </View>
 
@@ -213,6 +270,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               onChangeText={(value) => handleInputChange('aadhaarNumber', value)}
               secureTextEntry={true}
               keyboardType="numeric"
+              maxLength={12}
             />
           </View>
 
@@ -244,8 +302,13 @@ export default function PurchaseEntryStep1({ onNavigate }) {
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
+            disabled={submitting}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

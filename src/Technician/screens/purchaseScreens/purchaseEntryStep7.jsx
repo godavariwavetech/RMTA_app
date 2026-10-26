@@ -29,36 +29,36 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
   const [submitting, setSubmitting] = useState(false);
 
-  // Collapse all the screens' data into the payload the backend expects.
-  const buildPayload = () => ({
-    member_id: user.member_id,
-    created_by: user.user_id,
-    seller: {
-      full_name: sellerData?.sellerName || '',
-      mobile: sellerData?.sellerMobile || '',
-      aadhaar_last4: String(sellerData?.aadhaarNumber || '').replace(/\D/g, '').slice(-4) || null,
-      address: sellerData?.address || null,
-      photo_file_id: (sellerData?.sellerPhoto && sellerData.sellerPhoto.file_id) || null,
-    },
-    device: {
-      brand: deviceData?.deviceBrand || '',
-      model: deviceData?.deviceModel || '',
-      storage: deviceData?.storage || null,
-      color: deviceData?.color || null,
-      photo_file_id: (deviceData?.devicePhoto && deviceData.devicePhoto.file_id) || null,
-    },
-    imei: { imei: imeiData?.imei || '', verified: !!(imeiData && imeiData.verified) },
-    ceir_verified: !!ceirVerified,
-    condition: conditionData || {},
-    condition_photos: Array.isArray(draftConditionPhotos)
-      ? draftConditionPhotos.filter(p => p && p.file_id).map(p => ({ file_id: p.file_id }))
-      : [],
-    price: {
-      purchase_price: priceData?.purchasePrice || '0',
-      payment_mode: priceData?.paymentMode || 'Cash',
-      transaction_ref: priceData?.transactionId || null,
-    },
-  });
+  // Collapse all the screens' data into the flat payload create_purchase expects.
+  const buildPayload = () => {
+    const now = new Date().toISOString();
+    const conditionPhotos = Array.isArray(draftConditionPhotos) ? draftConditionPhotos : [];
+    return {
+      member_id: user.member_id,
+      seller_id: sellerData?.customer_id || null,
+      device_brand: deviceData?.deviceBrand || '',
+      device_model: deviceData?.deviceModel || '',
+      imei1: imeiData?.imei || '',
+      imei2: '',
+      color: deviceData?.color || '',
+      storage: deviceData?.storage || '',
+      screen: conditionData?.screen || '',
+      body: conditionData?.body || '',
+      camera: conditionData?.camera || '',
+      speaker: conditionData?.speaker || '',
+      chargingport: conditionData?.chargingPort || '',
+      batterey: conditionData?.battery || '',
+      // frontimage = step 2's device photo, backimage = step 5's first
+      // condition photo — both sent as raw base64.
+      frontimage: (deviceData?.devicePhoto && deviceData.devicePhoto.base64) || null,
+      backimage: (conditionPhotos[0] && conditionPhotos[0].base64) || null,
+      purchaseprice: priceData?.purchasePrice || '0',
+      paymentmode: priceData?.paymentMode || 'Cash',
+      transactionid: priceData?.transactionId || '',
+      purchase_date: now,
+      created_date: now,
+    };
+  };
 
   const handleCompletePurchase = async () => {
     if (submitting) return;
@@ -72,12 +72,14 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
         Alert.alert('Could not complete purchase', (data && data.message) || 'Please try again.');
         return;
       }
-      console.log('[Purchase][Step7] created ✓ →', data.data);
+      // Unwrap in case this endpoint also wraps the record in an array.
+      const purchase = Array.isArray(data.data) ? data.data[0] : data.data;
+      console.log('[Purchase][Step7] created ✓ →', purchase);
       dispatch(resetPurchaseDraft());
       if (onNavigate) {
         onNavigate('purchaseEntryStep8', {
           sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData,
-          purchase: data.data,
+          purchase,
         });
       }
     } catch (err) {

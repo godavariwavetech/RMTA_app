@@ -3,7 +3,7 @@ import { Provider } from 'react-redux';
 import { useState, useEffect } from 'react';
 import { store } from './src/redux/store';
 import { hydrateUser } from './src/redux/slices/authSlice';
-import { loadUser } from './src/utils/authStorage';
+import { loadUser, clearUser } from './src/utils/authStorage';
 import IntroScreen from './src/Technician/screens/LoginScreens/IntroScreen';
 import LoginScreen from './src/Technician/screens/LoginScreens/LoginScreen';
 import RegisterScreen from './src/Technician/screens/LoginScreens/RegisterScreen';
@@ -84,11 +84,17 @@ function App() {
     (async () => {
       const user = await loadUser();
       if (user) {
-        // Restore redux auth state and jump straight to the right home screen.
-        store.dispatch(hydrateUser(user));
-        const home = user.role === 'admin' ? 'adminHome' : 'home';
-        setCurrentScreen(home);
-        setNavigationHistory([home]);
+        // Only auto-restore a session that's still active (membership_status
+        // 1). Otherwise the persisted session is stale (deactivated/rejected
+        // since last login) — drop it and let them sign in again, so they
+        // hit the same "contact the administrator" gate as a fresh login.
+        if (Number(user.membership_status) === 1) {
+          store.dispatch(hydrateUser(user));
+          setCurrentScreen('home');
+          setNavigationHistory(['home']);
+        } else {
+          await clearUser();
+        }
       }
       setBooting(false);
     })();
@@ -324,11 +330,11 @@ function App() {
       ) : currentScreen === 'saleEntryStep3' ? (
         <SaleEntryStep3 onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} />
       ) : currentScreen === 'saleEntryStep4' ? (
-        <SaleEntryStep4 onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} saleData={navigationParams.saleData} />
+        <SaleEntryStep4 onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} saleData={navigationParams.saleData} sale={navigationParams.sale} />
       ) : currentScreen === 'buyerConfirmationOTP' ? (
         <BuyerConfirmationOTP onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} saleData={navigationParams.saleData} invoiceId={navigationParams.invoiceId} />
       ) : currentScreen === 'saleCompleted' ? (
-        <SaleCompleted onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} saleData={navigationParams.saleData} invoiceId={navigationParams.invoiceId} />
+        <SaleCompleted onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} saleData={navigationParams.saleData} invoiceId={navigationParams.invoiceId} sale={navigationParams.sale} />
       ) : currentScreen === 'viewSaleHistory' ? (
         <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="sales" />
       ) : currentScreen === 'myDigitalId' ? (

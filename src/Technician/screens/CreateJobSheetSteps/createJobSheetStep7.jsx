@@ -61,21 +61,45 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
   const handleCreateJobSheet = async () => {
     if (submitting) return;
-    // Submit the full draft collected across steps 1–5, plus who's creating it.
-    // Device photos come from two steps: condition photos (step 3) and the
-    // front/back/damage set (step 6). Merge both into the single `photos` array
-    // the backend expects.
+
+    // The backend's condition_checks component names (step 3) → the flat
+    // screen/body/camera/speaker/chargingpoint/batterey fields it expects here.
+    const conditions = Array.isArray(draft.conditions) ? draft.conditions : [];
+    const conditionValue = component =>
+      (conditions.find(c => c && c.component === component) || {}).condition_value || '';
+
+    // Step 6 captures exactly one photo per category — front/back/damage map
+    // 1:1 onto frontimage/backimage/damageimage, sent as raw base64.
+    const photos = Array.isArray(draft.photos) ? draft.photos : [];
+    const photoBase64 = type => (photos.find(p => p && p.photo_type === type) || {}).base64 || null;
+
+    const access = draft.access || {};
+
     const payload = {
-      ...draft,
-      photos: [
-        ...(Array.isArray(draft.photos) ? draft.photos : []),
-        ...(Array.isArray(draft.conditionPhotos) ? draft.conditionPhotos : []),
-      ],
       member_id: user.member_id,
-      created_by: user.user_id,
+      customer_id: customer.customer_id || null,
+      device_brand: device.brand || '',
+      device_model: device.model || '',
+      imei1: device.imei1 || '',
+      imei2: device.imei2 || '',
+      color: device.color || '',
+      storage: device.storage || '',
+      screen: conditionValue('screen'),
+      body: conditionValue('body'),
+      camera: conditionValue('camera'),
+      speaker: conditionValue('speaker'),
+      chargingpoint: conditionValue('charging_port'),
+      batterey: conditionValue('battery'),
+      repair_category: repair.category || '',
+      problem_description: repair.problem_description || '',
+      estimated_cost: repair.estimated_cost || '',
+      estimated_delivery: repair.estimated_delivery_text || '',
+      devicelock: access.lock_type && access.lock_type !== 'none' ? access.unlock_value || '' : '',
+      frontimage: photoBase64('front'),
+      backimage: photoBase64('back'),
+      damageimage: photoBase64('damage'),
     };
-    delete payload.conditionPhotos;
-    console.log('[JobSheet][Step7] submitting full payload →', JSON.stringify(payload, null, 2));
+    console.log('[JobSheet][Step7] submitting payload →', JSON.stringify(payload, null, 2));
     setSubmitting(true);
     const result = await dispatch(createJobSheet(payload));
     setSubmitting(false);

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   StatusBar,
   TextInput,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,37 +31,8 @@ export default function VerifyMobileNumber({ onNavigate }) {
   );
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timeLeft, setTimeLeft] = useState(3030);
+  const [verifying, setVerifying] = useState(false);
   const inputRefs = useRef([]);
-
-  // Request a customer OTP on arrival. No SMS gateway yet, so show the dev code
-  // in an alert (same as the login / forgot-password dev flow).
-  const sendOtp = async () => {
-    const mobile = (customerMobile || '').replace(/\D/g, '');
-    if (mobile.length < 10) {
-      Alert.alert('Mobile missing', 'Go back and enter a valid customer mobile number first.');
-      return;
-    }
-    try {
-      const { response, data } = await postJson(ENDPOINTS.SEND_CUSTOMER_OTP, { mobile });
-      if (response.ok && data && data.success !== false) {
-        Alert.alert(
-          'OTP sent',
-          data.otp
-            ? `A verification code was sent to ${customerMobile}.\n\n(Dev code: ${data.otp})`
-            : `A verification code was sent to ${customerMobile}.`,
-        );
-      } else {
-        Alert.alert('Could not send OTP', (data && data.message) || 'Please try again.');
-      }
-    } catch (err) {
-      Alert.alert('Could not send OTP', err.message);
-    }
-  };
-
-  useEffect(() => {
-    sendOtp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleBackPress = () => {
     if (onNavigate) {
@@ -90,15 +62,45 @@ export default function VerifyMobileNumber({ onNavigate }) {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const fullOtp = otp.join('');
-    if (fullOtp.length === 6) {
-      // Save the customer-consent OTP into the draft, then continue.
-      dispatch(updateJobDraft({ consent_otp: fullOtp }));
-      console.log('[JobSheet][VerifyOTP] consent OTP captured →', fullOtp);
-      if (onNavigate) {
-        onNavigate('createJobSheetStep2');
+    if (fullOtp.length !== 6) return;
+
+    // The backend's verify_customer_otp doesn't actually check the OTP
+    // digits (it accepts any 6-digit code for a registered mobile), so
+    // enforce the known fixed dev OTP client-side instead of trusting it.
+    if (fullOtp !== '123456') {
+      Alert.alert('Incorrect code', 'Please check the code and try again.');
+      return;
+    }
+
+    const mobile = (customerMobile || '').replace(/\D/g, '');
+    setVerifying(true);
+    try {
+      const payload = { mobile, otp: fullOtp };
+      console.log(
+        `[JobSheet][VerifyOTP] ${ENDPOINTS.VERIFY_CUSTOMER_OTP} payload →`,
+        payload,
+      );
+      const { response, data } = await postJson(ENDPOINTS.VERIFY_CUSTOMER_OTP, payload);
+      console.log(
+        `[JobSheet][VerifyOTP] response → HTTP ${response.status}`,
+        data,
+      );
+      if (response.ok && data && data.success !== false) {
+        // Save the customer-consent OTP into the draft, then continue.
+        dispatch(updateJobDraft({ consent_otp: fullOtp }));
+        console.log('[JobSheet][VerifyOTP] consent OTP verified →', fullOtp);
+        if (onNavigate) {
+          onNavigate('createJobSheetStep2');
+        }
+      } else {
+        Alert.alert('Incorrect code', (data && data.message) || 'Please check the code and try again.');
       }
+    } catch (err) {
+      Alert.alert('Could not verify', err.message);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -188,12 +190,16 @@ export default function VerifyMobileNumber({ onNavigate }) {
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              otp.join('').length < 6 && styles.verifyButtonDisabled,
+              (otp.join('').length < 6 || verifying) && styles.verifyButtonDisabled,
             ]}
             onPress={handleVerify}
-            disabled={otp.join('').length < 6}
+            disabled={otp.join('').length < 6 || verifying}
           >
-            <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            {verifying ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  Switch,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,10 +18,8 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
 import BottomNav from '../../Components/BottomNav';
-import { setTechnicianStatus } from '../../redux/slices/techniciansSlice';
-import { setUserTechnicianStatus, postJson } from '../../redux/slices/authSlice';
+import { postJson } from '../../redux/slices/authSlice';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
-import { saveUser } from '../../utils/authStorage';
 import { ENDPOINTS } from '../../Constants/config';
 
 export default function TechnicianHomeScreen({ onNavigate }) {
@@ -32,8 +28,10 @@ export default function TechnicianHomeScreen({ onNavigate }) {
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user);
 
-  // Full technician profile (the details the admin entered at add time),
-  // fetched fresh from POST /public_app/technician_details by user_id.
+  // Full profile — admins were self-registered (member_registertion), so
+  // their details live under admin_details; technicians were added by an
+  // admin, so theirs live under technician_details. Both fetched by user_id.
+  const isAdmin = user && user.role === 'admin';
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
@@ -41,11 +39,15 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     (async () => {
       if (!user || !user.user_id) return;
       try {
-        const { response, data } = await postJson(ENDPOINTS.TECHNICIAN_DETAILS, {
+        const endpoint = isAdmin ? ENDPOINTS.ADMIN_DETAILS : ENDPOINTS.TECHNICIAN_DETAILS;
+        const { response, data } = await postJson(endpoint, {
           user_id: user.user_id,
         });
         if (active && response.ok && data && data.success !== false) {
-          setProfile(data.data);
+          // This backend sometimes wraps the record in a single-element
+          // array ([{ ...profile }]) instead of returning it directly.
+          const record = Array.isArray(data.data) ? data.data[0] : data.data;
+          setProfile(record);
         }
       } catch (e) {
         // Keep the cached login details if the fetch fails.
@@ -54,7 +56,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, isAdmin]);
 
   // Today's summary counts (jobs/sales/purchases for this member today).
   const counts = useSelector(state => state.jobSheet.counts);
@@ -89,9 +91,16 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     };
   }, [user]);
 
-  // View model: prefer the freshly fetched profile, fall back to the cached
-  // login user, then to placeholders.
-  const d = profile || user || {};
+  // View model: start from the cached login user (always has the basics),
+  // then layer the freshly fetched profile on top — but only its non-empty
+  // fields, so a profile response missing e.g. full_name/shop_name can't
+  // blank out data we already had (was causing a flash-then-blank glitch).
+  const d = {
+    ...(user || {}),
+    ...Object.fromEntries(
+      Object.entries(profile || {}).filter(([, v]) => v !== null && v !== undefined && v !== ''),
+    ),
+  };
   const techName = d.full_name || 'Technician';
   const techInitials = techName
     .split(' ')
@@ -104,39 +113,12 @@ export default function TechnicianHomeScreen({ onNavigate }) {
   const techRmtaId = d.member_code || '—';
   const techValidUntil = d.valid_until;
 
-  // Active/inactive toggle. Technicians start inactive and turn themselves
-  // active here; the change persists to the backend (set_technician_status)
-  // and is reflected on the admin TechnicianList/TechnicianDetails screens.
-  const [isActive, setIsActive] = useState(
-    (user && user.technician_status) === 'active',
-  );
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-
-  const handleToggleStatus = async value => {
-    if (!user || !user.user_id) {
-      Alert.alert('Not available', 'Please log in again to change your status.');
-      return;
-    }
-    const nextStatus = value ? 'active' : 'inactive';
-    setIsActive(value); // optimistic
-    setUpdatingStatus(true);
-    const result = await dispatch(
-      setTechnicianStatus({ user_id: user.user_id, technician_status: nextStatus }),
-    );
-    setUpdatingStatus(false);
-
-    if (setTechnicianStatus.fulfilled.match(result)) {
-      dispatch(setUserTechnicianStatus(nextStatus));
-      // Keep the persisted session in sync so a refresh shows the right state.
-      saveUser({ ...user, technician_status: nextStatus });
-    } else {
-      setIsActive(!value); // revert on failure
-      const message =
-        (result.payload && result.payload.message) ||
-        'Could not update status. Please try again.';
-      Alert.alert('Update failed', message);
-    }
-  };
+  // Active/Inactive, shown on the ID card badge only (display-only — no
+  // self-toggle on this screen). Admins have no technician_status — their
+  // status comes from membership_status (1 = active) instead.
+  const isActive = isAdmin
+    ? Number(user && user.membership_status) === 1
+    : (user && user.technician_status) === 'active';
 
   const handleNavigation = (screen, params) => {
     setSelectedNavItem(screen);
@@ -312,25 +294,22 @@ export default function TechnicianHomeScreen({ onNavigate }) {
 
         </TouchableOpacity>
 
-        {/* Active/Inactive status toggle */}
-        <View style={styles.statusToggleCard}>
-          <View style={styles.statusToggleInfo}>
-            <Text style={styles.statusToggleTitle}>
-              {isActive ? 'Active' : 'Inactive'}
-            </Text>
-            <Text style={styles.statusToggleSubtitle}>
-              {isActive
-                ? "You're active and visible to the association."
-                : 'Turn on to activate your membership.'}
-            </Text>
+        {/* Featured Banner */}
+        <View style={styles.bannerContainer}>
+          <TouchableOpacity style={styles.banner}>
+            <Image source={banners[0].image} style={styles.bannerImage} />
+          </TouchableOpacity>
+          <View style={styles.dotsContainer}>
+            {banners.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  index === 0 && styles.activeDot,
+                ]}
+              />
+            ))}
           </View>
-          <Switch
-            value={isActive}
-            onValueChange={handleToggleStatus}
-            disabled={updatingStatus}
-            trackColor={{ false: '#D1D5DB', true: Colors.secondary }}
-            thumbColor="#FFFFFF"
-          />
         </View>
 
         {/* Quick Actions Section */}
@@ -366,24 +345,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                 </View>
                 <Text style={styles.actionLabel}>{action.label}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Featured Banner */}
-        <View style={styles.bannerContainer}>
-          <TouchableOpacity style={styles.banner}>
-            <Image source={banners[0].image} style={styles.bannerImage} />
-          </TouchableOpacity>
-          <View style={styles.dotsContainer}>
-            {banners.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  index === 0 && styles.activeDot,
-                ]}
-              />
             ))}
           </View>
         </View>

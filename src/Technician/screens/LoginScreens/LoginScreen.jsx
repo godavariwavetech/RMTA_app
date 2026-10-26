@@ -76,6 +76,11 @@ export default function LoginScreen({ onNavigate, initialMode }) {
       return;
     }
 
+    if (mobileNumber.replace(/\D/g, '').length !== 10) {
+      alert('Please enter a valid 10-digit mobile number');
+      return;
+    }
+
     // user_ind: 1 = admin login, 0 = technician login
     const user_ind = loginMode === 'admin' ? 1 : 0;
 
@@ -84,19 +89,15 @@ export default function LoginScreen({ onNavigate, initialMode }) {
     );
 
     if (loginUser.fulfilled.match(result)) {
-      // const status = result.payload && result.payload.membership_status;
-      const status = 'active';
-      if (status === 'pending') {
-        // Account exists but an admin hasn't approved it yet.
-        onNavigate('statusPending');
-      } else if (status === 'active') {
-        // Approved → into the app.
-        onNavigate(loginMode === 'admin' ? 'adminHome' : 'home');
+      // membership_status: 1 = active/approved, 0 or 2 = not usable.
+      const status = Number(result.payload && result.payload.membership_status);
+      if (status === 1) {
+        // Active → into the app. Admin and technician both land on the
+        // same home dashboard (TechnicianHomeScreen / 'home').
+        onNavigate('home');
       } else {
-        // expired / suspended / rejected / unknown
-        alert(
-          `Your account is "${status || 'inactive'}". Please contact the administrator.`,
-        );
+        // 0, 2, null, or anything unexpected → not yet usable.
+        alert('Your account is not active. Please contact the administrator.');
       }
     } else {
       const payload = result.payload;
@@ -237,6 +238,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   value={mobileNumber}
                   onChangeText={setMobileNumber}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
             </View>

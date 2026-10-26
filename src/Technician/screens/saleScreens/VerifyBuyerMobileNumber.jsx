@@ -8,6 +8,8 @@ import {
   Image,
   StatusBar,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,7 +17,6 @@ import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
-import { Alert } from 'react-native';
 
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
@@ -24,38 +25,8 @@ import { postJson } from '../../../redux/slices/authSlice';
 export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes
+  const [verifying, setVerifying] = useState(false);
   const inputRefs = useRef([]);
-
-  // Request an OTP for the buyer's mobile on arrival. No SMS gateway yet, so
-  // show the dev code in an alert (same as the job-sheet / login dev flow).
-  const sendOtp = async () => {
-    const mobile = String((buyerData && buyerData.buyerMobile) || '').replace(/\D/g, '');
-    if (mobile.length < 10) {
-      Alert.alert('Mobile missing', 'Go back and enter a valid buyer mobile number first.');
-      return;
-    }
-    try {
-      const { response, data } = await postJson(ENDPOINTS.SEND_CUSTOMER_OTP, { mobile });
-      if (response.ok && data && data.success !== false) {
-        setTimeLeft(180);
-        Alert.alert(
-          'OTP sent',
-          data.otp
-            ? `A verification code was sent to ${buyerData.buyerMobile}.\n\n(Dev code: ${data.otp})`
-            : `A verification code was sent to ${buyerData.buyerMobile}.`,
-        );
-      } else {
-        Alert.alert('Could not send OTP', (data && data.message) || 'Please try again.');
-      }
-    } catch (err) {
-      Alert.alert('Could not send OTP', err.message);
-    }
-  };
-
-  useEffect(() => {
-    sendOtp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     // Timer countdown
@@ -100,17 +71,44 @@ export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const fullOtp = otp.join('');
-    if (fullOtp.length === 6) {
-      console.log('[Sale][VerifyBuyer] OTP verified for', buyerData && buyerData.buyerMobile);
-      // Navigate to next step with buyer data
+    if (fullOtp.length !== 6) return;
+
+    const mobile = String((buyerData && buyerData.buyerMobile) || '').replace(/\D/g, '');
+    setVerifying(true);
+    try {
+      const { response, data } = await postJson(ENDPOINTS.VERIFY_SALE_CUSTOMER_OTP, {
+        mobile,
+        otp: fullOtp,
+      });
+      if (!response.ok || (data && data.success === false)) {
+        Alert.alert('Incorrect code', (data && data.message) || 'Please check the code and try again.');
+        return;
+      }
+
+      // Pick up the buyer's id here if create_sale_customer didn't already
+      // give us one (seller/buyer id may arrive from either call on this
+      // backend — see purchaseEntryStep1.jsx / VerifySellerMobileNumber.jsx).
+      const record = Array.isArray(data.data) ? data.data[0] : data.data;
+      const verifiedId =
+        record &&
+        (record.insertId || record.buyer_id || record.customer_id || record.id);
+      const buyer = verifiedId
+        ? { ...buyerData, customer_id: buyerData?.customer_id || verifiedId }
+        : buyerData;
+
+      console.log('[Sale][VerifyBuyer] OTP verified for', buyer && buyer.buyerMobile);
       if (onNavigate) {
         onNavigate('saleEntryStep2', {
-          buyerData: buyerData,
+          buyerData: buyer,
           otpVerified: true,
         });
       }
+    } catch (err) {
+      Alert.alert('Could not verify', err.message);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -210,12 +208,16 @@ export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              otp.join('').length < 6 && styles.verifyButtonDisabled,
+              (otp.join('').length < 6 || verifying) && styles.verifyButtonDisabled,
             ]}
             onPress={handleVerify}
-            disabled={otp.join('').length < 6}
+            disabled={otp.join('').length < 6 || verifying}
           >
-            <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            {verifying ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

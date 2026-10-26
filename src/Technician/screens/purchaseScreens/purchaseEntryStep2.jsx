@@ -9,7 +9,6 @@ import {
   StatusBar,
   TextInput,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -21,13 +20,10 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
 
 export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   const dispatch = useDispatch();
-  const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
   const draftDevice = useSelector(state => state.purchase.draft.device) || {};
   const [formData, setFormData] = useState({
@@ -59,7 +55,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   const handleCapturePhoto = () => {
     launchImageLibrary(
       { mediaType: 'photo', includeBase64: true, quality: 0.7 },
-      async response => {
+      response => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
@@ -68,27 +64,11 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setFormData(prev => ({ ...prev, devicePhoto: { uri: asset.uri, uploading: true } }));
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'device.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setFormData(prev => ({
-              ...prev,
-              devicePhoto: { uri: asset.uri, file_id: data.data.file_id, uploading: false },
-            }));
-          } else {
-            setFormData(prev => ({ ...prev, devicePhoto: { uri: asset.uri, uploading: false } }));
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setFormData(prev => ({ ...prev, devicePhoto: { uri: asset.uri, uploading: false } }));
-          Alert.alert('Upload failed', err.message);
-        }
+        // Sent as create_purchase's frontimage — raw base64, no upload step.
+        setFormData(prev => ({
+          ...prev,
+          devicePhoto: { uri: asset.uri, base64: asset.base64 },
+        }));
       },
     );
   };
@@ -202,13 +182,8 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
                     ? 'Change device photo'
                     : 'Capture device photo'}
                 </Text>
-                {formData.devicePhoto && formData.devicePhoto.uploading ? (
-                  <View style={styles.photoStatusRow}>
-                    <ActivityIndicator size="small" color="#0066FF" />
-                    <Text style={styles.photoUploadSubtitle}>Uploading…</Text>
-                  </View>
-                ) : formData.devicePhoto && formData.devicePhoto.file_id ? (
-                  <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Uploaded</Text>
+                {formData.devicePhoto && formData.devicePhoto.base64 ? (
+                  <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Selected</Text>
                 ) : (
                   <Text style={styles.photoUploadSubtitle}>JPG or PNG • Up to 5 MB</Text>
                 )}
