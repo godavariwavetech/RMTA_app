@@ -114,6 +114,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
     // user_ind: 1 = admin login, 0 = technician login
     const user_ind = loginMode === 'admin' ? 1 : 0;
+    console.log('[Login] Submitting account type:', user_ind === 1 ? 'admin' : 'technician');
 
     setIsSubmitting(true);
     let result;
