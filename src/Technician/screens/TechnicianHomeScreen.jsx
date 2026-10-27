@@ -244,7 +244,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         </View>
 
         {/* ID Card Section */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.idCard}
           onPress={() => handleNavigation('myDigitalId')}
         >
@@ -290,7 +290,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
 
             </View>
 
-            
+
           </View>
 
         </TouchableOpacity>
@@ -318,8 +318,8 @@ export default function TechnicianHomeScreen({ onNavigate }) {
           <Text style={styles.sectionTitle}>Quick actions</Text>
           <View style={styles.quickActionsGrid}>
             {quickActions.map((action) => (
-              <TouchableOpacity 
-                key={action.id} 
+              <TouchableOpacity
+                key={action.id}
                 style={styles.actionButton}
                 onPress={() => {
                   if (action.id === 1) {
@@ -378,31 +378,31 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                   <Image source={stat.icon} style={styles.statIcon} />
                   <Text style={[styles.statCount, { color: stat.textColor }]}>{stat.count}</Text>
                 </View>
-                
+
                 <Text style={[styles.statLabelWide, ]}>{stat.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
           <View style={styles.statsGridBottom}>
             {todayStats.slice(3).map((stat) => (
-              <TouchableOpacity 
-                key={stat.id} 
+              <TouchableOpacity
+                key={stat.id}
                 style={[
-                  styles.statCardWide, 
-                  { 
+                  styles.statCardWide,
+                  {
                     backgroundColor: stat.color,
                     borderWidth: 2,
                     borderColor: stat.borderColor
                   }
                 ]}
               >
-                
+
                 <View style={styles.statWideContent}>
                   <View style={{flexDirection: 'row', alignItems: 'center', gap: wp('2%')}}>
                     <Image source={stat.icon} style={styles.statIconWide} />
                     <Text style={[styles.statLabelWide, ]}>{stat.label}</Text>
                   </View>
-                  
+
                   <Text style={[styles.statCountWide, { color: stat.textColor }]}>{stat.count}</Text>
                 </View>
               </TouchableOpacity>
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: wp('3%'),
+    paddingHorizontal: wp('4%'),
     paddingTop: hp('2%'),
     paddingBottom: hp('10%'),
   },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center'
-  },  
+  },
 
   mapPinIcon: {
     height: wp('4%'),

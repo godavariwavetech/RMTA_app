@@ -51,12 +51,7 @@ export default function MemberDetails({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -64,6 +59,12 @@ export default function MemberDetails({ onNavigate }) {
             <Text style={styles.headerTitle}>Member Details</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Digital ID Card */}
           <View style={styles.idCardContainer}>
@@ -100,7 +101,7 @@ export default function MemberDetails({ onNavigate }) {
                     </Text>
                   </View>
                 </View>
-                
+
               </View>
             </View>
           </View>
@@ -108,7 +109,7 @@ export default function MemberDetails({ onNavigate }) {
           {/* Membership Section */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Membership</Text>
-            
+
             <View style={styles.detailsCard}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Member name</Text>
@@ -144,7 +145,7 @@ export default function MemberDetails({ onNavigate }) {
           {/* Business Section */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Business</Text>
-            
+
             <View style={styles.detailsCard}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Shop</Text>

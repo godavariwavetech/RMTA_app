@@ -50,8 +50,7 @@ export default function MemberApproval({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               onPress={handleBackPress}
@@ -62,6 +61,8 @@ export default function MemberApproval({ onNavigate }) {
             <Text style={styles.headerTitle}>Member Approval</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Title Section */}
           <View style={styles.titleSection}>

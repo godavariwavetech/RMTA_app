@@ -86,8 +86,7 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -95,6 +94,8 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
             <Text style={styles.headerTitle}>Settings</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Section Title */}
           <View style={styles.sectionTitleContainer}>
@@ -166,8 +167,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

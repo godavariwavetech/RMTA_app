@@ -75,13 +75,7 @@ export default function ForgotPassStep1({ onNavigate }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContentContainer}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -92,6 +86,13 @@ export default function ForgotPassStep1({ onNavigate }) {
               <Text style={styles.headerTitle}>Reset password</Text>
               <View style={styles.placeholderButton} />
             </View>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContentContainer}
+          >
+
 
             {/* Main Title */}
             <View style={styles.titleSection}>

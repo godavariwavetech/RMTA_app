@@ -97,8 +97,7 @@ export default function AdminHomeScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Admin Dashboard</Text>
             <TouchableOpacity
@@ -112,6 +111,8 @@ export default function AdminHomeScreen({ onNavigate }) {
               />
             </TouchableOpacity>
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Association Overview Card */}
           <View style={styles.overviewCard}>
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

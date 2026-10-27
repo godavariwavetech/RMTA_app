@@ -25,13 +25,13 @@ export default function ScanNFC({ onNavigate }) {
 
   const handleBack = () => {
     if (onNavigate) {
-      onNavigate('myDigitalId');
+      onNavigate('goBack');
     }
   };
 
   const handleSimulateScan = () => {
     setScanStatus('scanning');
-    
+
     // Simulate scanning animation
     Animated.loop(
       Animated.sequence([
@@ -86,12 +86,7 @@ export default function ScanNFC({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -99,8 +94,14 @@ export default function ScanNFC({ onNavigate }) {
             <Text style={styles.headerTitle}>NFC Scan</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
 
-          
+
+
 
           {/* Main Content */}
           <View style={styles.mainContent}>
@@ -112,7 +113,7 @@ export default function ScanNFC({ onNavigate }) {
                   Keep the RMTA card close to the top edge of your iPhone.
                 </Text>
               </View>
-                
+
 
                 {/* NFC Icon Animation Area */}
                 <View style={styles.nfcIconContainer}>
@@ -124,7 +125,7 @@ export default function ScanNFC({ onNavigate }) {
                   <Text style={styles.readyText}>Ready to scan</Text>
                 </View>
 
-                
+
 
                 {/* Permission Info */}
                 <View style={styles.permissionBox}>
@@ -341,7 +342,7 @@ const styles = StyleSheet.create({
     marginVertical: hp('0%'),
     marginHorizontal: wp('7%'),
     backgroundColor: '#EAF1FF',
-    paddingVertical: hp('4%'), 
+    paddingVertical: hp('4%'),
     gap: wp('5%'),
     // borderWidth: 1,
     // borderColor: '#2f5ddc2a',

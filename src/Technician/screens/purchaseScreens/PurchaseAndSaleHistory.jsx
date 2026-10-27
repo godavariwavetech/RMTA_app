@@ -312,8 +312,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -141,18 +141,19 @@ export default function ReportDetails({ onNavigate, reportType }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.headerSection}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Image source={require('../../../Assets/icons/back.png')} style={{height: wp('5%'), width: wp('5%')}} />
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Report Detail</Text>
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Report Title and Period */}
           <View style={styles.section}>

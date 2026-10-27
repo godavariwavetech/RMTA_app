@@ -105,7 +105,7 @@ export default function ScanQR({ onNavigate }) {
       />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => onNavigate('goBack')}
           >
@@ -135,7 +135,7 @@ export default function ScanQR({ onNavigate }) {
                 //   </Text>
                 // </View>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setShowModal(true)}
                   activeOpacity={0.7}
                   style={styles.cameraPlaceholderContainer}
@@ -157,7 +157,7 @@ export default function ScanQR({ onNavigate }) {
             <View style={styles.actionButtonsContainer}>
 
                 {/* <View style={{display: 'flex', flexDirection: 'row', justifyContent: 'space-between'}}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.cameraButton}
                         onPress={handleCameraLaunch}
                         disabled={isProcessing}
@@ -165,7 +165,7 @@ export default function ScanQR({ onNavigate }) {
                         <Text style={styles.cameraButtonText}>📷 Open Camera</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.galleryButton}
                         onPress={handleImagePicker}
                         disabled={isProcessing}
@@ -173,9 +173,9 @@ export default function ScanQR({ onNavigate }) {
                         <Text style={styles.galleryButtonText}>🖼️ Pick from Gallery</Text>
                     </TouchableOpacity>
                 </View> */}
-              
 
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={handleTestInvalidCode}
                 disabled={isProcessing}
@@ -188,7 +188,7 @@ export default function ScanQR({ onNavigate }) {
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.primaryButton}
             onPress={handleSimulateValidScan}
             disabled={isProcessing}
@@ -214,7 +214,7 @@ export default function ScanQR({ onNavigate }) {
               </View>
 
               <View style={styles.modalOptions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.modalOption}
                   onPress={() => {
                     setShowModal(false);
@@ -225,7 +225,7 @@ export default function ScanQR({ onNavigate }) {
                   <Text style={styles.modalOptionText}>Open Camera</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.modalOption}
                   onPress={() => {
                     setShowModal(false);
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: Colors.primary,
-    paddingHorizontal: wp('3%'),
+    paddingHorizontal: wp('4%'),
     paddingVertical: hp('3%'),
     paddingTop: hp('6%'),
     flexDirection: 'row',

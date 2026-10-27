@@ -80,8 +80,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -89,6 +88,8 @@ export default function CreateJobSheetStep2({ onNavigate }) {
             <Text style={styles.headerTitle}>Device Details</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
@@ -213,8 +214,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

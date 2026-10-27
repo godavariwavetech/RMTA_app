@@ -68,8 +68,7 @@ export default function TechnicianDetails({ onNavigate, technician }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               onPress={handleBackPress}
@@ -80,6 +79,8 @@ export default function TechnicianDetails({ onNavigate, technician }) {
             <Text style={styles.headerTitle}>Technician Details</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Technician Card */}
           <View style={styles.cardContainer}>

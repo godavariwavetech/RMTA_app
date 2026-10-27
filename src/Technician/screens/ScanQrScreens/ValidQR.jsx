@@ -51,12 +51,7 @@ export default function ValidQR({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -64,6 +59,12 @@ export default function ValidQR({ onNavigate }) {
             <Text style={styles.headerTitle}>QR Verified</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Success Alert */}
           <View style={styles.successAlert}>
@@ -119,7 +120,7 @@ export default function ValidQR({ onNavigate }) {
           {/* Verification Details */}
           <View style={styles.verificationDetailsSection}>
             <Text style={styles.sectionTitle}>Verification details</Text>
-            
+
             <View style={styles.detailsCard}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Member ID</Text>

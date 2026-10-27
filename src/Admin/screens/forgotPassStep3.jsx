@@ -90,13 +90,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContentContainer}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -107,6 +101,13 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
               <Text style={styles.headerTitle}>New password</Text>
               <View style={styles.placeholderButton} />
             </View>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContentContainer}
+          >
+
 
             {/* Main Title */}
             <View style={styles.titleSection}>

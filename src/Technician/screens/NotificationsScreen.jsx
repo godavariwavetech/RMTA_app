@@ -62,8 +62,7 @@ export default function NotificationsScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => onNavigate('home')} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -71,6 +70,8 @@ export default function NotificationsScreen({ onNavigate }) {
             <Text style={styles.headerTitle}>Notifications</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Status Section */}
           <View style={styles.statusSection}>
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: Colors.primary,
-    paddingHorizontal: wp('3%'),
+    paddingHorizontal: wp('4%'),
     paddingTop: hp('2%'),
     paddingBottom: hp('3%'),
     flexDirection: 'row',

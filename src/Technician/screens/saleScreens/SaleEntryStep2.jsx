@@ -203,7 +203,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
     return (
       <View style={styles.detailsSection}>
         <Text style={styles.detailsTitle}>Available stock</Text>
-        
+
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Purchase price</Text>
           <Text style={styles.detailValue}>₹{selectedDevice.purchasePrice.toLocaleString('en-IN')}</Text>
@@ -230,8 +230,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -239,6 +238,8 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
             <Text style={styles.headerTitle}>Select Device</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
@@ -331,8 +332,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

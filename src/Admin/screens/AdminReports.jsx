@@ -139,18 +139,19 @@ export default function AdminReports({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.headerSection}>
             <TouchableOpacity onPress={handleBackPress}>
               <Image source={require('../../Assets/icons/back.png')} style={{height: wp('5%'), width: wp('5%')}} />
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Admin Reports</Text>
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Your Shop at a Glance Section */}
           <View style={styles.section}>

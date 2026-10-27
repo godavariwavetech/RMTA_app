@@ -72,12 +72,7 @@ export default function DeviceVerification({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -85,6 +80,12 @@ export default function DeviceVerification({ onNavigate }) {
             <Text style={styles.headerTitle}>Device Verification</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Main Content */}
           <View style={styles.content}>
@@ -98,7 +99,7 @@ export default function DeviceVerification({ onNavigate }) {
             {/* IMEI Input Section */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>IMEI number</Text>
-              
+
               <View style={styles.imeiInputContainer}>
                 <TextInput
                   style={styles.imeiInput}
@@ -163,7 +164,7 @@ export default function DeviceVerification({ onNavigate }) {
 
         {/* Check Button */}
         <View style={styles.footer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.checkButton,
               (isChecking || !imeiComplete) && styles.checkButtonDisabled
@@ -192,11 +193,11 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: hp('2%'),
   },
-  
+
   /* Header */
   header: {
     paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

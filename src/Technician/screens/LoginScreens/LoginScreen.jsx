@@ -187,14 +187,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
           keyboardVerticalOffset={0}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={styles.scrollContent}
-            style={styles.scrollView}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -207,6 +200,14 @@ export default function LoginScreen({ onNavigate, initialMode }) {
               </Text>
               <View style={styles.placeholderButton} />
             </View>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={styles.scrollContent}
+            style={styles.scrollView}
+          >
+
 
             {/* Welcome Card */}
             <View style={styles.welcomeCard}>

@@ -143,8 +143,7 @@ export default function VerifySellerMobileNumber({ onNavigate, sellerData }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -152,6 +151,8 @@ export default function VerifySellerMobileNumber({ onNavigate, sellerData }) {
             <Text style={styles.headerTitle}>Seller OTP</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Content Section */}
           <View style={styles.content}>
@@ -201,7 +202,7 @@ export default function VerifySellerMobileNumber({ onNavigate, sellerData }) {
             </View>
 
             {/* Use Another Number Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.alternateButton}
               onPress={handleUseAnotherNumber}
             >
@@ -241,8 +242,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

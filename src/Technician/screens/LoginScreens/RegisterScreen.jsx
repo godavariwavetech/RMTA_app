@@ -231,12 +231,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -247,6 +242,12 @@ export default function RegisterScreen({ onNavigate, userInd }) {
               <Text style={styles.headerTitle}>Register Now</Text>
               <View style={styles.placeholderButton} />
             </View>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.scrollView}
+          >
+
 
             {/* Welcome Card */}
             <View style={styles.welcomeCard}>
@@ -501,7 +502,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 </Text>.
               </Text>
             </View>
-            
+
 
             {/* Sign In Link */}
             <TouchableOpacity

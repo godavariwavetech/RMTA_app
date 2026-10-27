@@ -28,7 +28,7 @@ export default function IMEIResult({ onNavigate, imeiNumber }) {
 
   const handleCheckCEIRStatus = () => {
     setIsCheckingCEIR(true);
-    
+
     // Simulate API call
     setTimeout(() => {
       setIsCheckingCEIR(false);
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   /* Header */
   header: {
     paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
