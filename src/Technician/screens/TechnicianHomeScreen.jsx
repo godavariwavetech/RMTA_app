@@ -110,8 +110,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const techShop = d.shop_name || '—';
-  const techLocation = [d.city, d.state].filter(Boolean).join(', ') || '—';
   const tickerTranslateX = useRef(new Animated.Value(0)).current;
   const [tickerContentWidth, setTickerContentWidth] = useState(0);
   const tickerMessage =
@@ -240,33 +238,20 @@ export default function TechnicianHomeScreen({ onNavigate }) {
             </View>
           </View>
 
-          <View style={styles.storeCon}>
-            <Image source={require('../../Assets/icons/storeIcon.png')} style={styles.storeIcon} />
-            <View>
-              <Text style={{color: '#fff', marginLeft: wp('0.5%')}}>{techShop}</Text>
-              <View style={styles.locationCon}>
-                <Image source={require('../../Assets/icons/map-pin.png')} style={styles.mapPinIcon} />
-                <Text style={{color: '#B5C5DF'}}>{techLocation}</Text>
-              </View>
+          <View style={styles.ticker}>
+            <Text style={styles.tickerLabel}>NEWS</Text>
+            <View style={styles.tickerViewport}>
+              <Animated.View
+                onLayout={event => setTickerContentWidth(event.nativeEvent.layout.width)}
+                style={[
+                  styles.tickerTrack,
+                  { transform: [{ translateX: tickerTranslateX }] },
+                ]}
+              >
+                <Text style={styles.tickerText}>{tickerMessage}</Text>
+                <Text style={styles.tickerText}>{tickerMessage}</Text>
+              </Animated.View>
             </View>
-
-          </View>
-        </View>
-
-        {/* Scrolling announcement ticker */}
-        <View style={styles.ticker}>
-          <Text style={styles.tickerLabel}>NEWS</Text>
-          <View style={styles.tickerViewport}>
-            <Animated.View
-              onLayout={event => setTickerContentWidth(event.nativeEvent.layout.width)}
-              style={[
-                styles.tickerTrack,
-                { transform: [{ translateX: tickerTranslateX }] },
-              ]}
-            >
-              <Text style={styles.tickerText}>{tickerMessage}</Text>
-              <Text style={styles.tickerText}>{tickerMessage}</Text>
-            </Animated.View>
           </View>
         </View>
 
@@ -437,7 +422,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: wp('4%'),
     paddingTop: hp('2%'),
-    paddingBottom: hp('10%'),
+    paddingBottom: hp('2%'),
   },
   headerContent: {
     flexDirection: 'row',
@@ -508,42 +493,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  storeCon: {
-    width: wp('94%'),
-    backgroundColor: '#193057ff',
-    paddingVertical: hp('1.4%'),
-    paddingHorizontal: wp('5%'),
-    borderRadius: wp('2.6%'),
-    marginBottom: hp('2%'),
-    display: 'flex',
-    flexDirection: 'row',
-    gap: wp('3%'),
-    alignItems: 'center'
-  },
-
-  storeIcon: {
-    height: wp('6%'),
-    width: wp('6%'),
-  },
-
-  locationCon: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-
-  mapPinIcon: {
-    height: wp('4%'),
-    width: wp('4%'),
-  },
   ticker: {
-    height: 50,
+    height: 46,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
-    marginHorizontal: 16,
-    marginTop: 14,
-    marginBottom: 8,
+    marginTop: 0,
     paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
