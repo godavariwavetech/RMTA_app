@@ -1,5 +1,5 @@
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-import { showAppModal } from './appModal';
+import { showAppActionSheet } from './appModal';
 
 export function chooseImageSource(onResponse, options = {}) {
   const pickFromLibrary = () =>
@@ -25,9 +25,18 @@ export function chooseImageSource(onResponse, options = {}) {
       onResponse,
     );
 
-  showAppModal('Add photo', 'Choose how you want to add the image.', [
-    { text: 'Take photo', onPress: takePhoto },
-    { text: 'Choose from gallery', onPress: pickFromLibrary },
-    { text: 'Cancel', style: 'cancel' },
+  showAppActionSheet('Add a photo', 'Choose where to get your image.', [
+    {
+      text: 'Take a photo',
+      subtitle: 'Use your camera',
+      icon: '📷',
+      onPress: takePhoto,
+    },
+    {
+      text: 'Choose from gallery',
+      subtitle: 'Select an existing photo',
+      icon: '🖼',
+      onPress: pickFromLibrary,
+    },
   ]);
 }

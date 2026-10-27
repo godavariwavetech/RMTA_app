@@ -21,7 +21,7 @@ import BottomNav from '../../Components/BottomNav';
 import { postJson } from '../../redux/slices/authSlice';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
 import { ENDPOINTS } from '../../Constants/config';
-import { showAppModal } from '../../utils/appModal';
+import { showAppActionSheet, showAppModal } from '../../utils/appModal';
 
 export default function TechnicianHomeScreen({ onNavigate }) {
   const [selectedNavItem, setSelectedNavItem] = useState('home');
@@ -333,10 +333,19 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                   } else if (action.id === 5) {
                     handleNavigation('myDigitalId');
                   } else if (action.id === 6) {
-                    showAppModal('Choose a scan type', 'Select how you want to scan.', [
-                      { text: 'NFC card', onPress: () => handleNavigation('scanNFC') },
-                      { text: 'QR code', onPress: () => handleNavigation('scanQR') },
-                      { text: 'Cancel', style: 'cancel' },
+                    showAppActionSheet('Choose a scan type', 'Select a way to scan.', [
+                      {
+                        text: 'NFC card',
+                        subtitle: 'Read an RMTA card',
+                        icon: '◉',
+                        onPress: () => handleNavigation('scanNFC'),
+                      },
+                      {
+                        text: 'Scan QR code',
+                        subtitle: 'Use a QR code image or camera',
+                        icon: '▦',
+                        onPress: () => handleNavigation('scanQR'),
+                      },
                     ]);
                   } else if (action.id === 8) {
                     handleNavigation('reports');
