@@ -113,7 +113,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
   const tickerTranslateX = useRef(new Animated.Value(0)).current;
   const [tickerContentWidth, setTickerContentWidth] = useState(0);
   const tickerMessage =
-    'RMTA update: Keep member details up to date  •  Welcome to the RMTA member portal  •  Check your job, purchase and sale records regularly  •  Contact your association office for assistance  •  ';
+    'Welcome to RMTA  •  Member updates and services  •  ';
 
   useEffect(() => {
     if (!tickerContentWidth) return undefined;
@@ -519,8 +519,8 @@ const styles = StyleSheet.create({
   tickerText: {
     flexShrink: 0,
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     includeFontPadding: false,
     paddingRight: 28,
   },
