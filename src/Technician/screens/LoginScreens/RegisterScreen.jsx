@@ -12,9 +12,10 @@ import {
   Platform,
   ImageBackground,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
@@ -43,6 +44,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [legalView, setLegalView] = useState(null);
 
   // Shop photo / person photo: { uri, base64 } or null. Sent to the backend
   // as raw base64 under shop_image / person_image — no separate upload step.
@@ -60,7 +62,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   };
 
   const handlePickImage = setter => {
-    launchImageLibrary(
+    chooseImageSource(
       { mediaType: 'photo', includeBase64: true, quality: 0.7 },
       response => {
         if (response.didCancel) return;
@@ -467,25 +469,38 @@ export default function RegisterScreen({ onNavigate, userInd }) {
             </View>
 
             {/* Terms & Conditions */}
-            <TouchableOpacity
-              style={styles.termsContainer}
-              onPress={() => setAcceptedTerms(!acceptedTerms)}
-              activeOpacity={0.7}
-            >
-              <View
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
                 style={[
                   styles.checkbox,
                   acceptedTerms && styles.checkboxChecked,
                 ]}
+                onPress={() => setAcceptedTerms(!acceptedTerms)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: acceptedTerms }}
+                activeOpacity={0.75}
               >
                 {acceptedTerms && <Text style={styles.checkboxTick}>✓</Text>}
-              </View>
+              </TouchableOpacity>
               <Text style={styles.termsText}>
                 I agree to the{' '}
-                <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>.
+                <Text
+                  style={styles.termsLink}
+                  accessibilityRole="link"
+                  onPress={() => setLegalView('terms')}
+                >
+                  Terms & Conditions
+                </Text>{' '}
+                and{' '}
+                <Text
+                  style={styles.termsLink}
+                  accessibilityRole="link"
+                  onPress={() => setLegalView('privacy')}
+                >
+                  Privacy Policy
+                </Text>.
               </Text>
-            </TouchableOpacity>
+            </View>
             
 
             {/* Sign In Link */}
@@ -511,6 +526,36 @@ export default function RegisterScreen({ onNavigate, userInd }) {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <Modal
+        visible={!!legalView}
+        animationType="slide"
+        onRequestClose={() => setLegalView(null)}
+      >
+        <SafeAreaView style={styles.legalScreen}>
+          <View style={styles.legalHeader}>
+            <TouchableOpacity
+              onPress={() => setLegalView(null)}
+              style={styles.legalBackButton}
+              accessibilityRole="button"
+              accessibilityLabel="Back to registration"
+            >
+              <Text style={styles.legalBackText}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalTitle}>
+              {legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+            </Text>
+            <View style={styles.legalHeaderSpacer} />
+          </View>
+          <ScrollView contentContainerStyle={styles.legalContent}>
+            <Text style={styles.legalNoticeTitle}>Document unavailable</Text>
+            <Text style={styles.legalNotice}>
+              The current RMTA {legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+              {' '}document has not been added to the app. Please contact an RMTA administrator
+              for the current document before registering.
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </>
   );
 }
@@ -743,6 +788,53 @@ const styles = StyleSheet.create({
   termsLink: {
     color: Colors.secondary,
     fontWeight: '600',
+  },
+  legalScreen: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  legalHeader: {
+    minHeight: hp('7%'),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: wp('4%'),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  legalBackButton: {
+    width: wp('10%'),
+    paddingVertical: hp('0.5%'),
+  },
+  legalBackText: {
+    fontSize: wp('8%'),
+    color: '#1F2937',
+  },
+  legalTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#1F2937',
+    fontSize: wp('4.5%'),
+    fontWeight: '700',
+  },
+  legalHeaderSpacer: {
+    width: wp('10%'),
+  },
+  legalContent: {
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('3%'),
+  },
+  legalNoticeTitle: {
+    color: '#1F2937',
+    fontSize: wp('5%'),
+    fontWeight: '700',
+    marginBottom: hp('1.5%'),
+  },
+  legalNotice: {
+    color: '#4B5563',
+    fontSize: wp('3.8%'),
+    lineHeight: hp('2.8%'),
   },
   signInLinkButton: {
     marginHorizontal: wp('4%'),

@@ -34,6 +34,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>RMTA uses the camera to capture profile and device images for your records.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>RMTA lets you choose profile and device images from your photo library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>UILaunchStoryboardName</key>

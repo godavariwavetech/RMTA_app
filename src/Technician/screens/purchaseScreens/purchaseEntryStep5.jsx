@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
@@ -61,7 +61,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
       Alert.alert('Limit reached', `You can upload up to ${MAX_PHOTOS} photos.`);
       return;
     }
-    launchImageLibrary(
+    chooseImageSource(
       { mediaType: 'photo', includeBase64: true, quality: 0.7, selectionLimit: remaining },
       response => {
         if (response.didCancel) return;

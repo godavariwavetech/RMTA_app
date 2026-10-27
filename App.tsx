@@ -9,7 +9,6 @@ import IntroScreen from './src/Technician/screens/LoginScreens/IntroScreen';
 import LoginScreen from './src/Technician/screens/LoginScreens/LoginScreen';
 import RegisterScreen from './src/Technician/screens/LoginScreens/RegisterScreen';
 import StatusPendingScreen from './src/Technician/screens/LoginScreens/StatusPendingScreen';
-import AdminHomeScreen from './src/Admin/screens/AdminHomeScreen';
 import TechnicianList from './src/Admin/screens/TechnicianList';
 import AddTechnician from './src/Admin/screens/AddTechnician';
 import AdminProfileScreen from './src/Admin/screens/AdminProfileScreen';
@@ -89,20 +88,10 @@ function App() {
           Number(user.membership_status) === 1 ||
           String(user.membership_status).toLowerCase() === 'active';
         if (active) {
-          const storedRole = String(user.role || '').toLowerCase();
-          const isAdmin =
-            Number(user.user_ind) === 1 ||
-            storedRole === 'admin' ||
-            storedRole === 'administrator' ||
-            storedRole === '1';
-          const normalizedUser = {
-            ...user,
-            role: isAdmin ? 'admin' : 'technician',
-          };
+          const normalizedUser = { ...user };
           store.dispatch(hydrateUser(normalizedUser));
-          const home = isAdmin ? 'adminHome' : 'home';
-          setCurrentScreen(home);
-          setNavigationHistory([home]);
+          setCurrentScreen('home');
+          setNavigationHistory(['home']);
         } else {
           await clearUser();
         }
@@ -152,7 +141,7 @@ function App() {
       forgotPassStep2: 'forgotPassStep2',
       forgotPassStep3: 'forgotPassStep3',
       home: 'home',
-      adminHome: 'adminHome',
+      adminHome: 'home',
       technicianList: 'technicianList',
       addTechnician: 'addTechnician',
       adminProfile: 'adminProfile',
@@ -222,6 +211,14 @@ function App() {
     const newScreen = screenMap[screen] || 'home';
     console.log('✅ Current screen changed to:', newScreen);
     setCurrentScreen(newScreen);
+    if (
+      newScreen === 'home' &&
+      (currentScreen === 'login' || currentScreen === 'register')
+    ) {
+      // Authentication establishes a new root so Back cannot reopen login.
+      setNavigationHistory(['home']);
+      return;
+    }
     // Add to navigation history if it's a new screen
     if (navigationHistory[navigationHistory.length - 1] !== newScreen) {
       setNavigationHistory([...navigationHistory, newScreen]);
@@ -265,8 +262,6 @@ function App() {
         />
       ) : currentScreen === 'home' ? (
         <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
-      ) : currentScreen === 'adminHome' ? (
-        <AdminHomeScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'technicianList' ? (
         <TechnicianList onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'addTechnician' ? (

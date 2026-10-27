@@ -132,11 +132,8 @@ export default function LoginScreen({ onNavigate, initialMode }) {
         // Account exists but an admin hasn't approved it yet.
         onNavigate('statusPending');
       } else if (status === 'active') {
-        // Approved → into the app.
-        const isAdmin = Number(result.payload?.user_ind) === 1;
-        const destination = isAdmin ? 'adminHome' : 'home';
-        console.log('[Login] Opening authenticated account UI:', destination);
-        onNavigate(destination);
+        // Admin and technician accounts use the same app home screen.
+        onNavigate('home');
       } else {
         // expired / suspended / rejected / unknown
         setLoginError(
