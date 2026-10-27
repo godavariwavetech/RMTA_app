@@ -1,7 +1,9 @@
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { showAppActionSheet } from './appModal';
 
-export function chooseImageSource(onResponse, options = {}) {
+export function chooseImageSource(options = {}, onResponse) {
+  const handleResponse = typeof onResponse === 'function' ? onResponse : () => {};
+
   const pickFromLibrary = () =>
     launchImageLibrary(
       {
@@ -10,7 +12,7 @@ export function chooseImageSource(onResponse, options = {}) {
         quality: 0.7,
         ...options,
       },
-      onResponse,
+      handleResponse,
     );
 
   const takePhoto = () =>
@@ -22,7 +24,7 @@ export function chooseImageSource(onResponse, options = {}) {
         ...options,
         selectionLimit: 1,
       },
-      onResponse,
+      handleResponse,
     );
 
   showAppActionSheet('Add a photo', 'Choose where to get your image.', [
