@@ -239,7 +239,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
           </View>
 
           <View style={styles.ticker}>
-            <Text style={styles.tickerLabel}>NEWS</Text>
             <View style={styles.tickerViewport}>
               <Animated.View
                 onLayout={event => setTickerContentWidth(event.nativeEvent.layout.width)}
@@ -501,28 +500,15 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#193057',
     borderWidth: 1,
-    borderColor: '#E4EAF3',
-  },
-  tickerLabel: {
-    zIndex: 1,
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 7,
-    overflow: 'hidden',
-    backgroundColor: Colors.primary,
+    borderColor: '#3E5B86',
   },
   tickerViewport: {
     flex: 1,
     height: '100%',
     justifyContent: 'center',
     overflow: 'hidden',
-    marginLeft: 10,
   },
   tickerTrack: {
     flexDirection: 'row',
@@ -532,7 +518,7 @@ const styles = StyleSheet.create({
   },
   tickerText: {
     flexShrink: 0,
-    color: '#26364D',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
     includeFontPadding: false,
