@@ -140,6 +140,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     { id: 5, icon: require('../../Assets/icons/quickActions5.png'), label: 'Digital ID' },
     { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC / QR scan' },
     { id: 8, icon: require('../../Assets/icons/quickActions8.png'), label: 'Reports' },
+    { id: 9, icon: require('../../Assets/icons/helpIcon.png'), label: 'Support' },
   ];
 
   // Format a count as a 2-digit string (e.g. 3 → "03").
@@ -339,6 +340,11 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                     ]);
                   } else if (action.id === 8) {
                     handleNavigation('reports');
+                  } else if (action.id === 9) {
+                    showAppModal(
+                      'Help & support',
+                      'For assistance, contact the RMTA association office.',
+                    );
                   }
                 }}
               >
