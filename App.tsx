@@ -122,6 +122,13 @@ function App() {
   }, [navigationHistory]);
 
   const handleScreenNavigation = (screen: string, params?: any) => {
+    if (screen === 'logout') {
+      // A signed-out session must not retain authenticated screens in Back history.
+      setNavigationParams({});
+      setCurrentScreen('login');
+      setNavigationHistory(['login']);
+      return;
+    }
     console.log('🔄 Navigation called:', screen, params);
     
     // Handle goBack action

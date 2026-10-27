@@ -69,7 +69,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
   const handleLogout = async () => {
     await dispatch(logoutUser()); // clear the persisted session
     if (onNavigate) {
-      onNavigate('login');
+      onNavigate('logout');
     }
   };
 

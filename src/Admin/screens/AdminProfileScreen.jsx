@@ -67,7 +67,7 @@ export default function AdminProfileScreen({ onNavigate }) {
 
   const handleLogout = async () => {
     await dispatch(logoutUser()); // clear the persisted session
-    if (onNavigate) onNavigate('intro');
+    if (onNavigate) onNavigate('logout');
   };
 
   // Fall back to the logged-in user object while the fetch is in flight.

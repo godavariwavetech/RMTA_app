@@ -34,7 +34,7 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
   const handleSignOut = async () => {
     await dispatch(logoutUser()); // clear the persisted session
     if (onNavigate) {
-      onNavigate('login');
+      onNavigate('logout');
     }
   };
 
