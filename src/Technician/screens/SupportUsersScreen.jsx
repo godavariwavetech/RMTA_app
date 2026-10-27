@@ -83,7 +83,7 @@ export default function SupportUsersScreen({ onNavigate }) {
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>User support</Text>
+            <Text style={styles.title}>Supporters</Text>
             <Text style={styles.subtitle}>RMTA member directory</Text>
           </View>
           <View style={styles.headerSpacer} />

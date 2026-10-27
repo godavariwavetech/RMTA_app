@@ -148,7 +148,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     { id: 5, icon: require('../../Assets/icons/quickActions5.png'), label: 'Digital ID' },
     { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC / QR scan' },
     { id: 8, icon: require('../../Assets/icons/quickActions8.png'), label: 'Reports' },
-    { id: 9, icon: require('../../Assets/icons/profile.png'), label: 'User list' },
+    { id: 9, icon: require('../../Assets/icons/profile.png'), label: 'Supporters' },
   ];
 
   // Format a count as a 2-digit string (e.g. 3 → "03").
