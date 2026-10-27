@@ -71,7 +71,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   const handleBackPress = () => {
     dispatch(updatePurchaseDraft({ imei: { imei: imei, verified: imeiVerified } }));
     if (onNavigate) {
-      onNavigate('purchaseEntryStep2');
+      onNavigate('goBack');
     }
   };
 

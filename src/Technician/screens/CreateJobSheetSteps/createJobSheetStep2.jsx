@@ -45,7 +45,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
     // Persist current edits so they're kept when navigating back.
     dispatch(updateJobDraft({ device: buildDevice() }));
     if (onNavigate) {
-      onNavigate('verifyMobileNumber');
+      onNavigate('goBack');
     }
   };
 

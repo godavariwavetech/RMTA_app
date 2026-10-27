@@ -32,7 +32,7 @@ export default function CreateJobSheetStep8({ onNavigate, job }) {
   const handleBackPress = () => {
     // Job is already created — go back to the jobs list, not the review step.
     if (onNavigate) {
-      onNavigate('jobs');
+      onNavigate('resetTo', { target: 'jobs' });
     }
   };
 

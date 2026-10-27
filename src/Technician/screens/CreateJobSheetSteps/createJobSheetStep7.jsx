@@ -55,7 +55,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('createJobSheetStep6');
+      onNavigate('goBack');
     }
   };
 
@@ -117,9 +117,9 @@ export default function CreateJobSheetStep7({ onNavigate }) {
   };
 
   const handleEditDetails = () => {
-    // Navigate back to edit customer details
+    // Return to the existing step instead of adding a duplicate to history.
     if (onNavigate) {
-      onNavigate('createJobSheetStep1');
+      onNavigate('goBackTo', { target: 'createJobSheetStep1' });
     }
   };
 

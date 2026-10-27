@@ -108,7 +108,7 @@ export default function SaleHistory({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('goBack');
     }
   };
 

@@ -154,7 +154,7 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep3');
+      onNavigate('goBack');
     }
   };
 

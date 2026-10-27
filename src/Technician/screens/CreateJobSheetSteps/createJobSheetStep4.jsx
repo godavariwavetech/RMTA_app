@@ -48,7 +48,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
     // Persist current edits so they're kept when navigating back.
     dispatch(updateJobDraft({ repair: buildRepair() }));
     if (onNavigate) {
-      onNavigate('createJobSheetStep3');
+      onNavigate('goBack');
     }
   };
 

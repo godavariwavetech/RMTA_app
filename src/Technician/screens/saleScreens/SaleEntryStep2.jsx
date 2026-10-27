@@ -156,7 +156,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
   const handleBackPress = () => {
     if (selectedDevice) dispatch(updateSaleDraft({ device: selectedDevice }));
     if (onNavigate) {
-      onNavigate('verifyBuyerMobileNumber');
+      onNavigate('goBack');
     }
   };
 

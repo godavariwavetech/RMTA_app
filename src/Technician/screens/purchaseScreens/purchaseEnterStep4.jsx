@@ -37,7 +37,7 @@ export default function PurchaseEnterStep4({ onNavigate, sellerData, deviceData,
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('purchaseEntryStep3');
+      onNavigate('goBack');
     }
   };
 

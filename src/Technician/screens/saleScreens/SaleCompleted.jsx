@@ -26,7 +26,7 @@ export default function SaleCompleted({ onNavigate, buyerData, deviceData, saleD
 
   const handleBackToHome = () => {
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('resetTo', { target: 'home' });
     }
   };
 

@@ -73,7 +73,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep4');
+      onNavigate('goBack');
     }
   };
 
@@ -149,7 +149,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
 
   const handleUseAnotherNumber = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep1');
+      onNavigate('goBackTo', { target: 'saleEntryStep1' });
     }
   };
 

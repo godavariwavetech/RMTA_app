@@ -51,7 +51,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
   const handleBackPress = () => {
     dispatch(updatePurchaseDraft({ price: buildPrice() }));
     if (onNavigate) {
-      onNavigate('purchaseEntryStep5');
+      onNavigate('goBack');
     }
   };
 

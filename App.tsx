@@ -238,6 +238,23 @@ function App() {
       setNavigationParams({});
     }
     const newScreen = screenMap[screen] || 'home';
+    if (screen === 'goBackTo' || screen === 'resetTo') {
+      const targetScreen = screenMap[params?.target] || params?.target;
+      if (!targetScreen) return;
+      setCurrentScreen(targetScreen);
+      setNavigationParams(params?.screenParams || {});
+      if (screen === 'resetTo') {
+        setNavigationHistory([targetScreen]);
+      } else {
+        const targetIndex = navigationHistory.lastIndexOf(targetScreen);
+        setNavigationHistory(
+          targetIndex >= 0
+            ? navigationHistory.slice(0, targetIndex + 1)
+            : [targetScreen],
+        );
+      }
+      return;
+    }
     console.log('✅ Current screen changed to:', newScreen);
     setCurrentScreen(newScreen);
     if (

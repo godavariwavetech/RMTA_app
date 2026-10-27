@@ -74,7 +74,7 @@ export default function CreateJobSheetStep6({ onNavigate }) {
     // Persist uploaded photos so they're kept when navigating back.
     dispatch(updateJobDraft({ photos: buildPhotos() }));
     if (onNavigate) {
-      onNavigate('createJobSheetStep5');
+      onNavigate('goBack');
     }
   };
 

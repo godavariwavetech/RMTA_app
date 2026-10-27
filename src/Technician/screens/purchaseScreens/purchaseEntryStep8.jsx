@@ -26,7 +26,7 @@ export default function PurchaseEntryStep8({ onNavigate, sellerData, deviceData,
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('resetTo', { target: 'home' });
     }
   };
 

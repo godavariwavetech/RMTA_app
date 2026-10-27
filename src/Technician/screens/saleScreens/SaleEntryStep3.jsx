@@ -108,7 +108,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   const handleBackPress = () => {
     dispatch(updateSaleDraft({ sale: formData }));
     if (onNavigate) {
-      onNavigate('saleEntryStep2');
+      onNavigate('goBack');
     }
   };
 

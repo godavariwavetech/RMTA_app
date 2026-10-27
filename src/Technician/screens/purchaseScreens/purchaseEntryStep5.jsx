@@ -106,7 +106,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
       updatePurchaseDraft({ condition: condition, conditionPhotos: buildConditionPhotos() }),
     );
     if (onNavigate) {
-      onNavigate('purchaseEnterStep4');
+      onNavigate('goBack');
     }
   };
 

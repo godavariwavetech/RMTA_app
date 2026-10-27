@@ -45,7 +45,7 @@ export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep1');
+      onNavigate('goBack');
     }
   };
 
@@ -114,7 +114,7 @@ export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
 
   const handleUseAnotherNumber = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep1');
+      onNavigate('goBack');
     }
   };
 

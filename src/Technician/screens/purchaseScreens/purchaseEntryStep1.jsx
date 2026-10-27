@@ -155,7 +155,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
   const handleBack = () => {
     dispatch(updatePurchaseDraft({ seller: formData }));
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('goBack');
     }
   };
 

@@ -36,7 +36,7 @@ export default function VerifyMobileNumber({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('createJobSheetStep1');
+      onNavigate('goBack');
     }
   };
 

@@ -90,7 +90,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('purchaseEntryStep6');
+      onNavigate('goBack');
     }
   };
 

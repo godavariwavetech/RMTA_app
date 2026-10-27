@@ -108,7 +108,7 @@ export default function ViewPurchaseHistory({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('goBack');
     }
   };
 
