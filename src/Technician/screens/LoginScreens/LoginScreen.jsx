@@ -132,7 +132,10 @@ export default function LoginScreen({ onNavigate, initialMode }) {
         onNavigate('statusPending');
       } else if (status === 'active') {
         // Approved → into the app.
-        onNavigate(loginMode === 'admin' ? 'adminHome' : 'home');
+        const isAdmin = Number(result.payload?.user_ind) === 1;
+        const destination = isAdmin ? 'adminHome' : 'home';
+        console.log('[Login] Opening authenticated account UI:', destination);
+        onNavigate(destination);
       } else {
         // expired / suspended / rejected / unknown
         setLoginError(
@@ -246,6 +249,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   loginMode === 'technician' && styles.modeButtonSelected,
                 ]}
                 onPress={handleTechnicianLogin}
+                disabled={isSubmitting}
                 activeOpacity={0.8}
               >
                 <Text
@@ -263,6 +267,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   loginMode === 'admin' && styles.modeButtonSelected,
                 ]}
                 onPress={handleAdminLogin}
+                disabled={isSubmitting}
                 activeOpacity={0.8}
               >
                 <Text
