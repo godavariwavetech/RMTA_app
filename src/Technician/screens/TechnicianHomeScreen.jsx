@@ -641,10 +641,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginTop: 12,
-    gap: 12,
+    gap: 8,
   },
   statCard: {
-    width: '31%',
+    width: '30%',
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 16,

@@ -1,5 +1,5 @@
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { BackHandler } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Platform } from 'react-native';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider } from 'react-redux';
 import { useState, useEffect } from 'react';
@@ -75,6 +75,23 @@ import CEIRResult from './src/Technician/screens/DeviceVerification/CEIRResult';
 import SupportUsersScreen from './src/Technician/screens/SupportUsersScreen';
 
 installAppModalAlerts();
+
+const keyboardAwareScreens = new Set([
+  'createJobSheetStep1', 'createJobSheetStep2', 'createJobSheetStep3',
+  'createJobSheetStep4', 'createJobSheetStep5', 'createJobSheetStep6',
+  'createJobSheetStep7', 'createJobSheetStep8', 'verifyMobileNumber',
+  'purchaseEntryStep1', 'verifySellerMobileNumber', 'purchaseEntryStep2',
+  'purchaseEntryStep3', 'purchaseEnterStep4', 'purchaseEntryStep5',
+  'purchaseEntryStep6', 'purchaseEntryStep7', 'purchaseEntryStep8',
+  'saleEntryStep1', 'verifyBuyerMobileNumber', 'saleEntryStep2',
+  'saleEntryStep3', 'saleEntryStep4', 'buyerConfirmationOTP',
+  'deviceVerification', 'supportUsers',
+]);
+
+const screensWithTheirOwnKeyboardAvoider = new Set([
+  'login', 'register', 'forgotPassStep1', 'forgotPassStep2', 'forgotPassStep3',
+  'addTechnician',
+]);
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('intro');
@@ -246,6 +263,16 @@ function App() {
     <Provider store={store}>
     <SafeAreaProvider>
       <AppModalHost />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={
+          keyboardAwareScreens.has(currentScreen) &&
+          !screensWithTheirOwnKeyboardAvoider.has(currentScreen)
+            ? (Platform.OS === 'ios' ? 'padding' : 'height')
+            : undefined
+        }
+        keyboardVerticalOffset={0}
+      >
       {currentScreen === 'intro' ? (
         <IntroScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'login' ? (
@@ -407,6 +434,7 @@ function App() {
       ) : (
         <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
       )}
+      </KeyboardAvoidingView>
     </SafeAreaProvider>
     </Provider>
   );
