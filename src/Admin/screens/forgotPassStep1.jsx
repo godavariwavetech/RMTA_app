@@ -19,6 +19,7 @@ import {
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { sendForgotOtp } from '../../redux/slices/authSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../utils/mobileValidation';
 
 export default function ForgotPassStep1({ onNavigate }) {
   const dispatch = useDispatch();
@@ -34,8 +35,8 @@ export default function ForgotPassStep1({ onNavigate }) {
   const handleSendVerificationCode = async () => {
     if (!onNavigate) return;
     const mobile = mobileNumber.replace(/\D/g, '');
-    if (mobile.length < 10) {
-      alert('Please enter a valid mobile number');
+    if (!isValidIndianMobileNumber(mobile)) {
+      alert('Please enter a valid 10-digit Indian mobile number');
       return;
     }
 
@@ -110,8 +111,8 @@ export default function ForgotPassStep1({ onNavigate }) {
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                   value={mobileNumber}
-                  onChangeText={setMobileNumber}
-                  maxLength={14}
+                  onChangeText={text => setMobileNumber(normalizeMobileNumber(text))}
+                  maxLength={10}
                 />
               </View>
             </View>

@@ -24,6 +24,7 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updatePurchaseDraft, createPurchaseCustomer } from '../../../redux/slices/purchaseSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 export default function PurchaseEntryStep1({ onNavigate }) {
   const dispatch = useDispatch();
@@ -57,9 +58,9 @@ export default function PurchaseEntryStep1({ onNavigate }) {
       return;
     }
 
-    const mobileDigits = formData.sellerMobile.replace(/\D/g, '');
-    if (mobileDigits.length !== 10) {
-      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+    const mobileDigits = normalizeMobileNumber(formData.sellerMobile);
+    if (!isValidIndianMobileNumber(mobileDigits)) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
@@ -99,7 +100,11 @@ export default function PurchaseEntryStep1({ onNavigate }) {
         result.payload.seller_id ||
         result.payload.customer_id ||
         result.payload.id);
-    const seller = { ...formData, customer_id: customerId };
+    const seller = {
+      ...formData,
+      sellerMobile: mobileDigits,
+      customer_id: customerId,
+    };
 
     console.log('[Purchase][Step1] seller captured →', seller);
     dispatch(updatePurchaseDraft({ seller }));
@@ -214,10 +219,10 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="+91 98765 43210"
+              placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
               value={formData.sellerMobile}
-              onChangeText={(value) => handleInputChange('sellerMobile', value)}
+              onChangeText={(value) => handleInputChange('sellerMobile', normalizeMobileNumber(value))}
               keyboardType="phone-pad"
               maxLength={10}
             />

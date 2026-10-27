@@ -24,6 +24,7 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updateSaleDraft, createSaleCustomer } from '../../../redux/slices/saleSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 export default function SaleEntryStep1({ onNavigate }) {
   const dispatch = useDispatch();
@@ -57,9 +58,9 @@ export default function SaleEntryStep1({ onNavigate }) {
       return;
     }
 
-    const mobileDigits = formData.buyerMobile.replace(/\D/g, '');
-    if (mobileDigits.length !== 10) {
-      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+    const mobileDigits = normalizeMobileNumber(formData.buyerMobile);
+    if (!isValidIndianMobileNumber(mobileDigits)) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
@@ -97,7 +98,11 @@ export default function SaleEntryStep1({ onNavigate }) {
         result.payload.buyer_id ||
         result.payload.customer_id ||
         result.payload.id);
-    const buyer = { ...formData, customer_id: customerId };
+    const buyer = {
+      ...formData,
+      buyerMobile: mobileDigits,
+      customer_id: customerId,
+    };
 
     console.log('[Sale][Step1] buyer captured →', buyer);
     dispatch(updateSaleDraft({ buyer }));
@@ -212,10 +217,10 @@ export default function SaleEntryStep1({ onNavigate }) {
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="+91 98765 43210"
+              placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
               value={formData.buyerMobile}
-              onChangeText={(value) => handleInputChange('buyerMobile', value)}
+              onChangeText={(value) => handleInputChange('buyerMobile', normalizeMobileNumber(value))}
               keyboardType="phone-pad"
               maxLength={10}
             />

@@ -28,6 +28,7 @@ import {
   resetJobDraft,
   createJobSheetCustomer,
 } from '../../../redux/slices/jobSheetSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   const dispatch = useDispatch();
@@ -121,15 +122,15 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
       return;
     }
 
-    const mobileDigits = mobileNumber.replace(/\D/g, '');
-    if (mobileDigits.length !== 10) {
-      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+    const mobileDigits = normalizeMobileNumber(mobileNumber);
+    if (!isValidIndianMobileNumber(mobileDigits)) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
     const alternateDigits = alternateNumber.replace(/\D/g, '');
-    if (alternateDigits && alternateDigits.length !== 10) {
-      Alert.alert('Invalid alternate number', 'Please enter a valid 10-digit alternate number.');
+    if (alternateDigits && !isValidIndianMobileNumber(alternateDigits)) {
+      Alert.alert('Invalid alternate number', 'Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
@@ -171,8 +172,8 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
     const customer = {
       customer_id: customerId,
       full_name: customerName.trim(),
-      mobile: mobileNumber,
-      alternate_mobile: alternateNumber,
+      mobile: normalizeMobileNumber(mobileNumber),
+      alternate_mobile: normalizeMobileNumber(alternateNumber),
       aadhaar_last4: aadharNumber.replace(/\D/g, '').slice(-4),
       // Keep the full value + photo preview uri so revisiting this step can
       // restore exactly what the technician entered (the backend uses
@@ -252,7 +253,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   placeholder="Enter mobile number"
                   placeholderTextColor="#D1D5DB"
                   value={mobileNumber}
-                  onChangeText={setMobileNumber}
+                  onChangeText={text => setMobileNumber(normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
                   maxLength={10}
                 />
@@ -266,7 +267,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   placeholder="Optional"
                   placeholderTextColor="#D1D5DB"
                   value={alternateNumber}
-                  onChangeText={setAlternateNumber}
+                  onChangeText={text => setAlternateNumber(normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
                   maxLength={10}
                 />

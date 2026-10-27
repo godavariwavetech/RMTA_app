@@ -2,6 +2,44 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { BASE_URL, ENDPOINTS, REQUEST_TIMEOUT } from '../../Constants/config';
 import { saveUser, clearUser } from '../../utils/authStorage';
 
+// Keep response handling consistent across endpoints. Some API errors arrive
+// with HTTP 200 and a string status, while proxy/server failures can be plain
+// text instead of JSON; neither should be interpreted as a successful result.
+export function parseApiResponseBody(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (error) {
+    return {
+      success: false,
+      message: String(raw || '').trim().slice(0, 500) || 'The server returned an invalid response.',
+    };
+  }
+
+  if (Array.isArray(data)) {
+    return { success: true, data };
+  }
+  if (!data || typeof data !== 'object') {
+    return { success: false, message: 'The server returned an invalid response.' };
+  }
+
+  const status = String(data.status || '').toLowerCase();
+  const successValue = String(data.success).toLowerCase();
+  const numericStatus = Number(data.status);
+  const statusFailed = ['error', 'failed', 'failure', 'false'].includes(status);
+  const successFailed = ['false', '0'].includes(successValue);
+  const httpLikeStatusFailed = numericStatus >= 400 && numericStatus < 600;
+
+  if (data.success === false || statusFailed || successFailed || httpLikeStatusFailed) {
+    return {
+      ...data,
+      success: false,
+      message: data.message || 'The request could not be completed.',
+    };
+  }
+  return data;
+}
+
 // Shared POST helper: builds the URL, applies a timeout, parses JSON, and
 // returns { response, data }. Throws a tagged Error on network/timeout failure.
 export async function postJson(endpoint, payload) {
@@ -17,12 +55,7 @@ export async function postJson(endpoint, payload) {
     });
     clearTimeout(timeoutId);
     const raw = await response.text();
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (e) {
-      data = raw;
-    }
+    const data = parseApiResponseBody(raw);
     return { response, data };
   } catch (err) {
     clearTimeout(timeoutId);
@@ -149,13 +182,11 @@ export const registerMember = createAsyncThunk(
       clearTimeout(timeoutId);
 
       const raw = await response.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch (e) {
-        data = raw;
-      }
-      console.log(`✅ Reached backend — HTTP ${response.status}`, data);
+      const data = parseApiResponseBody(raw);
+      console.log(`[API] Registration response HTTP ${response.status}`, {
+        success: data && data.success,
+        status: data && data.status,
+      });
 
       // Duplicate (409) or server error (500) → surface the server's message.
       if (!response.ok || (data && data.success === false)) {
@@ -206,15 +237,24 @@ export const loginUser = createAsyncThunk(
       clearTimeout(timeoutId);
 
       const raw = await response.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch (e) {
-        data = raw;
-      }
-      console.log(`✅ Reached backend — HTTP ${response.status}`, data);
+      const data = parseApiResponseBody(raw);
+      console.log(`[API] Login response HTTP ${response.status}`, {
+        success: data && data.success,
+        status: data && data.status,
+        recordCount: Array.isArray(data && data.data) ? data.data.length : undefined,
+      });
 
-      if (!response.ok || (data && data.success === false)) {
+      const responseData = data && data.data;
+      const responseUser = Array.isArray(responseData)
+        ? responseData[0]
+        : responseData || (data && data.user) || data;
+      if (
+        !response.ok ||
+        !data ||
+        data.success === false ||
+        !responseUser ||
+        !(responseUser.user_id || responseUser.id)
+      ) {
         return rejectWithValue({
           status: response.status,
           code: data && data.code,
@@ -223,25 +263,31 @@ export const loginUser = createAsyncThunk(
         });
       }
 
-      // Success → persist the session, then return the user/member object.
-      // The backend wraps it in a single-element array ([{ ...member }]) —
-      // unwrap it so callers get the plain object.
-      const responseData = data.data || data;
-      const record = Array.isArray(responseData) ? responseData[0] : responseData;
+      const rawMembershipStatus = String(
+        responseUser.membership_status ?? '',
+      ).toLowerCase();
+      const membershipStatus =
+        rawMembershipStatus === '1' || rawMembershipStatus === 'active'
+          ? 'active'
+          : rawMembershipStatus === '0'
+            ? 'inactive'
+            : rawMembershipStatus;
+      const safeUser = { ...responseUser };
+      delete safeUser.password;
+      delete safeUser.qr_token_hash;
+      const user = {
+        ...safeUser,
+        user_id: responseUser.user_id ?? responseUser.id,
+        member_id: responseUser.member_id ?? responseUser.id,
+        // The selected login type is authoritative. Some API records omit
+        // role or return a legacy role label that the app cannot route on.
+        role: Number(payload.user_ind) === 1 ? 'admin' : 'technician',
+        user_ind: Number(payload.user_ind) === 1 ? 1 : 0,
+        membership_status: membershipStatus,
+      };
 
-      // The backend's record only has `id` (no user_id/member_id) and no
-      // `role` at all — fill those in from what we know client-side
-      // (which tab the person logged in from) so the rest of the app
-      // (profile fetches, job counts, admin checks) can rely on them.
-      const user = record
-        ? {
-            ...record,
-            user_id: record.user_id ?? record.id,
-            member_id: record.member_id ?? record.id,
-            role: record.role ?? (payload.user_ind === 1 ? 'admin' : 'technician'),
-          }
-        : record;
-
+      // Persist only the normalized session fields; never store credentials
+      // returned by the API in Redux or local storage.
       await saveUser(user);
       return user;
     } catch (err) {

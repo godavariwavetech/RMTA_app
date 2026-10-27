@@ -22,6 +22,7 @@ import {
 import { Colors } from '../../../Constants/Colors';
 import { useDispatch } from 'react-redux';
 import { registerMember } from '../../../redux/slices/authSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 // Base URL + endpoint paths now live in src/Constants/config.js and the API
 // call lives in the auth slice (redux/slices/authSlice.js).
@@ -120,8 +121,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       return;
     }
 
-    if (mobileNumber.replace(/\D/g, '').length !== 10) {
-      alert('Please enter a valid 10-digit mobile number');
+    if (!isValidIndianMobileNumber(mobileNumber)) {
+      alert('Please enter a valid 10-digit Indian mobile number');
       return;
     }
 
@@ -154,7 +155,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
     // accepts: POST /public_app/member_registertion reads only these keys.
     const registrationData = {
       full_name: fullName.trim(),
-      mobile: mobileNumber.trim(),
+      mobile: normalizeMobileNumber(mobileNumber),
       shop_name: shopName.trim(),
       address: shopAddress.trim(),
       city: city.trim(),
@@ -289,10 +290,10 @@ export default function RegisterScreen({ onNavigate, userInd }) {
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
-                  placeholder="+91 98765 43210"
+                  placeholder="98765 43210"
                   placeholderTextColor="#999999"
                   value={form.mobileNumber}
-                  onChangeText={text => updateField('mobileNumber', text)}
+                  onChangeText={text => updateField('mobileNumber', normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
                   maxLength={10}
                 />

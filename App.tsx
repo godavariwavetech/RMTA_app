@@ -1,4 +1,5 @@
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { BackHandler } from 'react-native';
 import { Provider } from 'react-redux';
 import { useState, useEffect } from 'react';
 import { store } from './src/redux/store';
@@ -84,14 +85,24 @@ function App() {
     (async () => {
       const user = await loadUser();
       if (user) {
-        // Only auto-restore a session that's still active (membership_status
-        // 1). Otherwise the persisted session is stale (deactivated/rejected
-        // since last login) — drop it and let them sign in again, so they
-        // hit the same "contact the administrator" gate as a fresh login.
-        if (Number(user.membership_status) === 1) {
-          store.dispatch(hydrateUser(user));
-          setCurrentScreen('home');
-          setNavigationHistory(['home']);
+        const active =
+          Number(user.membership_status) === 1 ||
+          String(user.membership_status).toLowerCase() === 'active';
+        if (active) {
+          const storedRole = String(user.role || '').toLowerCase();
+          const isAdmin =
+            Number(user.user_ind) === 1 ||
+            storedRole === 'admin' ||
+            storedRole === 'administrator' ||
+            storedRole === '1';
+          const normalizedUser = {
+            ...user,
+            role: isAdmin ? 'admin' : 'technician',
+          };
+          store.dispatch(hydrateUser(normalizedUser));
+          const home = isAdmin ? 'adminHome' : 'home';
+          setCurrentScreen(home);
+          setNavigationHistory([home]);
         } else {
           await clearUser();
         }
@@ -99,6 +110,24 @@ function App() {
       setBooting(false);
     })();
   }, []);
+
+  // The app uses a custom screen stack instead of a navigation library, so
+  // Android's system back gesture must pop that stack explicitly.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigationHistory.length <= 1) {
+        return false;
+      }
+
+      const previousHistory = navigationHistory.slice(0, -1);
+      setNavigationHistory(previousHistory);
+      setCurrentScreen(previousHistory[previousHistory.length - 1]);
+      setNavigationParams({});
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [navigationHistory]);
 
   const handleScreenNavigation = (screen: string, params?: any) => {
     console.log('🔄 Navigation called:', screen, params);

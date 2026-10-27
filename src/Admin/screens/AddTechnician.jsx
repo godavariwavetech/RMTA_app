@@ -21,6 +21,7 @@ import {
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { addTechnician } from '../../redux/slices/techniciansSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../utils/mobileValidation';
 
 // Admin-only screen to add a technician. Collects the same profile details as
 // admin registration (RegisterScreen) plus an active/inactive status. Posts to
@@ -84,8 +85,8 @@ export default function AddTechnician({ onNavigate }) {
     }
 
     const mobile = mobileNumber.replace(/\D/g, '');
-    if (mobile.length < 10) {
-      alert('Please enter a valid mobile number');
+    if (!isValidIndianMobileNumber(mobile)) {
+      alert('Please enter a valid 10-digit Indian mobile number');
       return;
     }
     if (password.length < 6) {
@@ -183,12 +184,12 @@ export default function AddTechnician({ onNavigate }) {
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
-                  placeholder="+91 98765 43210"
+                  placeholder="98765 43210"
                   placeholderTextColor="#999999"
                   value={form.mobileNumber}
-                  onChangeText={text => updateField('mobileNumber', text)}
+                  onChangeText={text => updateField('mobileNumber', normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
-                  maxLength={14}
+                  maxLength={10}
                 />
               </View>
             </View>
