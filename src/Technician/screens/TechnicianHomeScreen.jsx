@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
+  Animated,
   StyleSheet,
   Text,
   View,
@@ -111,15 +112,24 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     .toUpperCase();
   const techShop = d.shop_name || '—';
   const techLocation = [d.city, d.state].filter(Boolean).join(', ') || '—';
-  const techRmtaId = d.member_code || '—';
-  const techValidUntil = d.valid_until;
+  const tickerTranslateX = useRef(new Animated.Value(0)).current;
+  const [tickerContentWidth, setTickerContentWidth] = useState(0);
+  const tickerMessage =
+    'RMTA update: Keep member details up to date  •  Welcome to the RMTA member portal  •  Check your job, purchase and sale records regularly  •  Contact your association office for assistance  •  ';
 
-  // Active/Inactive, shown on the ID card badge only (display-only — no
-  // self-toggle on this screen). Admins have no technician_status — their
-  // status comes from membership_status (1 = active) instead.
-  const isActive = isAdmin
-    ? Number(user && user.membership_status) === 1
-    : (user && user.technician_status) === 'active';
+  useEffect(() => {
+    if (!tickerContentWidth) return undefined;
+    const distance = tickerContentWidth / 2;
+    const animation = Animated.loop(
+      Animated.timing(tickerTranslateX, {
+        toValue: -distance,
+        duration: Math.max(12000, distance * 28),
+        useNativeDriver: true,
+      }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [tickerContentWidth, tickerTranslateX]);
 
   const handleNavigation = (screen, params) => {
     setSelectedNavItem(screen);
@@ -140,7 +150,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     { id: 5, icon: require('../../Assets/icons/quickActions5.png'), label: 'Digital ID' },
     { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC / QR scan' },
     { id: 8, icon: require('../../Assets/icons/quickActions8.png'), label: 'Reports' },
-    { id: 9, icon: require('../../Assets/icons/helpIcon.png'), label: 'Support' },
+    { id: 9, icon: require('../../Assets/icons/profile.png'), label: 'User list' },
   ];
 
   // Format a count as a 2-digit string (e.g. 3 → "03").
@@ -243,57 +253,22 @@ export default function TechnicianHomeScreen({ onNavigate }) {
           </View>
         </View>
 
-        {/* ID Card Section */}
-        <TouchableOpacity
-          style={styles.idCard}
-          onPress={() => handleNavigation('myDigitalId')}
-        >
-          <View style={styles.idCardContent}>
-
-            <View style={styles.idCardHeader}>
-              <View style={{display: 'flex', flexDirection: 'row', gap: wp('5%'), justifyContent: 'center'}}>
-                <Image source={require('../../Assets/images/appLogo.png')} style={styles.appLogo} />
-                <View style={{marginTop: hp('0.6%')}}>
-                  <Text style={styles.idName}>RMTA</Text>
-                  <Text style={styles.idDetail}>Digital Member</Text>
-                </View>
-              </View>
-
-              <View style={[styles.idBadge, !isActive && styles.idBadgeInactive]}>
-                {isActive && <Text style={styles.idBadgeCheckmark}>✓</Text>}
-                <Text
-                  style={[
-                    styles.idBadgeText,
-                    !isActive && styles.idBadgeTextInactive,
-                  ]}
-                >
-                  {isActive ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
-
-            </View>
-
-            <View style={styles.idCardBody}>
-              <View style={{marginTop: hp('0.6%')}}>
-                <Text style={styles.idName}>{techName}</Text>
-                <Text style={styles.idDetail}>{techRmtaId}</Text>
-                {techValidUntil ? (
-                  <Text style={styles.idDate}>
-                    Valid until {techValidUntil}
-                  </Text>
-                ) : null}
-              </View>
-
-              <View style={styles.qrCode}>
-                <Image source={require('../../Assets/images/qrCode.png')} style={styles.qrImage} />
-              </View>
-
-            </View>
-
-
+        {/* Scrolling announcement ticker */}
+        <View style={styles.ticker}>
+          <Text style={styles.tickerLabel}>NEWS</Text>
+          <View style={styles.tickerViewport}>
+            <Animated.View
+              onLayout={event => setTickerContentWidth(event.nativeEvent.layout.width)}
+              style={[
+                styles.tickerTrack,
+                { transform: [{ translateX: tickerTranslateX }] },
+              ]}
+            >
+              <Text style={styles.tickerText}>{tickerMessage}</Text>
+              <Text style={styles.tickerText}>{tickerMessage}</Text>
+            </Animated.View>
           </View>
-
-        </TouchableOpacity>
+        </View>
 
         {/* Featured Banner */}
         <View style={styles.bannerContainer}>
@@ -561,115 +536,52 @@ const styles = StyleSheet.create({
     height: wp('4%'),
     width: wp('4%'),
   },
-
-  idCard: {
-    backgroundColor: '#FFFFFF',
+  ticker: {
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 8,
+    paddingHorizontal: 10,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    // position: 'relative',
-    // top: hp('-10%'),
-    marginHorizontal: wp('3%'),
-    marginTop: hp('-10%'),
-    marginBottom: hp('2%')
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4EAF3',
   },
-  idCardContent: {
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    // marginBottom: 12,
-  },
-  idCardHeader : {
-    display:'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: wp('88%'),
-  },
-  idCardLeft: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  appLogo : {
-    height: wp('12%'),
-    width: wp('12%')
-  },
-
-  idCardBody :{
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: wp('88%'),
-    paddingVertical: hp('2%'),
-  },
-  // idAvatar: {
-  //   width: 40,
-  //   height: 40,
-  //   borderRadius: 20,
-  //   backgroundColor: '#6B7280',
-  //   justifyContent: 'center',
-  //   alignItems: 'center',
-  //   marginRight: 12,
-  // },
-  // idAvatarText: {
-  //   color: '#FFFFFF',
-  //   fontSize: 14,
-  //   fontWeight: '600',
-  // },
-  idName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  idDetail: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  idDate: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  qrCode: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  qrImage: {
-    width: 80,
-    height: 80,
-    resizeMode: 'contain',
-  },
-  idBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 12,
+  tickerLabel: {
+    zIndex: 1,
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    paddingHorizontal: 9,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 7,
+    overflow: 'hidden',
+    backgroundColor: Colors.primary,
+  },
+  tickerViewport: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginLeft: 10,
+  },
+  tickerTrack: {
+    flexDirection: 'row',
     alignSelf: 'flex-start',
+    flexShrink: 0,
+    alignItems: 'center',
   },
-  idBadgeCheckmark: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  idBadgeText: {
+  tickerText: {
+    flexShrink: 0,
+    color: '#26364D',
     fontSize: 12,
-    fontWeight: '600',
-    color: '#15803D',
-    marginLeft: 4,
-  },
-  idBadgeInactive: {
-    backgroundColor: '#F3F4F6',
-  },
-  idBadgeTextInactive: {
-    color: '#6B7280',
-    marginLeft: 0,
+    fontWeight: '500',
+    includeFontPadding: false,
+    paddingRight: 28,
   },
   statusToggleCard: {
     flexDirection: 'row',
