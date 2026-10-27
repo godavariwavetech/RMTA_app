@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  Share,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,10 +17,11 @@ import {
 
 import { useSelector } from 'react-redux';
 
-import { Colors } from '../../../Constants/Colors';
-import BottomNav from '../../../Components/BottomNav';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
+import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import Share from 'react-native-share';
+import { showAppModal } from '../../../utils/appModal';
 
 export default function ReportsScreen({ onNavigate }) {
   const user = useSelector(state => state.auth.user) || {};
@@ -62,26 +61,16 @@ export default function ReportsScreen({ onNavigate }) {
   // Share the current report as text via the native share sheet.
   const handleExportReport = async () => {
     try {
-      const lines = [
-        'RMTA — Repair Report',
-        user.shop_name ? `Shop: ${user.shop_name}` : null,
-        `Period: ${reportData.period}`,
-        '',
-        `Repair revenue: ${reportData.repairRevenue}`,
-        `Jobs closed: ${reportData.jobsClosed}`,
-        '',
-        'Repairs this week:',
-        ...reportData.weekRepairs.map(r => `  ${r.day}: ${r.value}`),
-        '',
-        `${reportData.repairsCompleted} repairs completed · ${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}% this week`,
-      ].filter(l => l !== null);
-
-      await Share.share({
-        message: lines.join('\n'),
-        title: 'RMTA Repair Report',
+      const chartRows = reportData.weekRepairs.map(r => `<tr><td>${r.day}</td><td>${r.value}</td></tr>`).join('');
+      const file = await RNHTMLtoPDF.convert({
+        fileName: `RMTA_Repair_Report_${Date.now()}`,
+        base64: false,
+        html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Repair Report</h1><p>${user.shop_name || 'RMTA'} - ${reportData.period}</p><h2>Summary</h2><p>Repair revenue: ${reportData.repairRevenue}</p><p>Jobs closed: ${reportData.jobsClosed}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${chartRows}</table></body></html>`,
       });
+      if (!file?.filePath) throw new Error('PDF file was not created.');
+      await Share.open({ title: 'RMTA Repair Report', url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`, type: 'application/pdf', failOnCancel: false });
     } catch (e) {
-      Alert.alert('Export failed', 'Could not share the report. Please try again.');
+      if (e?.message !== 'User did not share') showAppModal('Export failed', e?.message || 'Could not create or share the report. Please try again.');
     }
   };
 

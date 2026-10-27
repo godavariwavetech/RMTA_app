@@ -437,7 +437,7 @@ function App() {
       ) : currentScreen === 'scanQR' ? (
         <ScanQR onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'validQR' ? (
-        <ValidQR onNavigate={handleScreenNavigation} />
+        <ValidQR onNavigate={handleScreenNavigation} scannedCode={navigationParams.scannedCode} />
       ) : currentScreen === 'invalidQR' ? (
         <InvalidQR onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'deviceVerification' ? (

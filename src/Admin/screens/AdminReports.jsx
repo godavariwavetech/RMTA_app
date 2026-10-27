@@ -18,6 +18,9 @@ import {
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import Share from 'react-native-share';
+import { showAppModal } from '../../utils/appModal';
 
 export default function AdminReports({ onNavigate }) {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
@@ -43,9 +46,18 @@ export default function AdminReports({ onNavigate }) {
     };
   }, [selectedPeriod]);
 
-  const handleExportReport = () => {
-    if (onNavigate) {
-      onNavigate('exportReport');
+  const handleExportReport = async () => {
+    try {
+      const rows = reportData.weekRepairs.map(row => `<tr><td>${row.day}</td><td>${row.value}</td></tr>`).join('');
+      const file = await RNHTMLtoPDF.convert({
+        fileName: `RMTA_Admin_Repair_Report_${Date.now()}`,
+        base64: false,
+        html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Association Repair Report</h1><p>${reportData.period}</p><h2>Summary</h2><p>Repair revenue: ${reportData.repairRevenue}</p><p>Jobs closed: ${reportData.jobsClosed}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${rows}</table></body></html>`,
+      });
+      if (!file?.filePath) throw new Error('PDF file was not created.');
+      await Share.open({ title: 'RMTA Association Repair Report', url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`, type: 'application/pdf', failOnCancel: false });
+    } catch (error) {
+      if (error?.message !== 'User did not share') showAppModal('Export failed', error?.message || 'Could not create or share the report. Please try again.');
     }
   };
 

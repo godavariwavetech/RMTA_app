@@ -5,15 +5,14 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   Share,
   Alert,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import FileShare from 'react-native-share';
 
 import {
   widthPercentageToDP as wp,
@@ -76,10 +75,11 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
       try {
         // Best-effort share sheet (works reliably on iOS; some Android
         // versions restrict sharing raw file:// paths).
-        await Share.share({
+        await FileShare.open({
           title: `Sale Invoice ${invoiceId}`,
-          url: Platform.OS === 'ios' ? file.filePath : `file://${file.filePath}`,
-          message: Platform.OS === 'android' ? `Invoice saved to ${file.filePath}` : undefined,
+          url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`,
+          type: 'application/pdf',
+          failOnCancel: false,
         });
       } catch (shareErr) {
         Alert.alert('PDF saved', `Saved to:\n${file.filePath}`);
@@ -123,10 +123,11 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
     try {
       const file = await generateInvoicePdf();
       try {
-        await Share.share({
+        await FileShare.open({
           title: `Print Invoice ${invoiceId}`,
-          url: Platform.OS === 'ios' ? file.filePath : `file://${file.filePath}`,
-          message: Platform.OS === 'android' ? `Open this PDF and choose Print: ${file.filePath}` : undefined,
+          url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`,
+          type: 'application/pdf',
+          failOnCancel: false,
         });
       } catch (shareErr) {
         Alert.alert('PDF saved', `Open this file and print from there:\n${file.filePath}`);
