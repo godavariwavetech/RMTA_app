@@ -21,6 +21,7 @@ import BottomNav from '../../Components/BottomNav';
 import { postJson } from '../../redux/slices/authSlice';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
 import { ENDPOINTS } from '../../Constants/config';
+import { showAppModal } from '../../utils/appModal';
 
 export default function TechnicianHomeScreen({ onNavigate }) {
   const [selectedNavItem, setSelectedNavItem] = useState('home');
@@ -137,8 +138,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     { id: 3, icon: require('../../Assets/icons/quickActions3.png'), label: 'Sale' },
     { id: 4, icon: require('../../Assets/icons/quickActions4.png'), label: 'CEIR / IMEI' },
     { id: 5, icon: require('../../Assets/icons/quickActions5.png'), label: 'Digital ID' },
-    { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC card' },
-    { id: 7, icon: require('../../Assets/icons/quickActions7.png'), label: 'Scan QR' },
+    { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC / QR scan' },
     { id: 8, icon: require('../../Assets/icons/quickActions8.png'), label: 'Reports' },
   ];
 
@@ -332,9 +332,11 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                   } else if (action.id === 5) {
                     handleNavigation('myDigitalId');
                   } else if (action.id === 6) {
-                    handleNavigation('scanNFC');
-                  } else if (action.id === 7) {
-                    handleNavigation('scanQR');
+                    showAppModal('Choose a scan type', 'Select how you want to scan.', [
+                      { text: 'NFC card', onPress: () => handleNavigation('scanNFC') },
+                      { text: 'QR code', onPress: () => handleNavigation('scanQR') },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]);
                   } else if (action.id === 8) {
                     handleNavigation('reports');
                   }

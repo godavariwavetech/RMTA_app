@@ -1,5 +1,6 @@
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BackHandler } from 'react-native';
+import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider } from 'react-redux';
 import { useState, useEffect } from 'react';
 import { store } from './src/redux/store';
@@ -71,6 +72,8 @@ import InvalidQR from './src/Technician/screens/ScanQrScreens/InvalidQR';
 import DeviceVerification from './src/Technician/screens/DeviceVerification/DeviceVerification';
 import IMEIResult from './src/Technician/screens/DeviceVerification/IMEIResult';
 import CEIRResult from './src/Technician/screens/DeviceVerification/CEIRResult';
+
+installAppModalAlerts();
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('intro');
@@ -233,6 +236,7 @@ function App() {
   return (
     <Provider store={store}>
     <SafeAreaProvider>
+      <AppModalHost />
       {currentScreen === 'intro' ? (
         <IntroScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'login' ? (
