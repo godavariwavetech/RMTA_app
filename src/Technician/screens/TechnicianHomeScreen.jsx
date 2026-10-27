@@ -21,7 +21,7 @@ import BottomNav from '../../Components/BottomNav';
 import { postJson } from '../../redux/slices/authSlice';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
 import { ENDPOINTS } from '../../Constants/config';
-import { showAppActionSheet, showAppModal } from '../../utils/appModal';
+import { showAppActionSheet } from '../../utils/appModal';
 
 export default function TechnicianHomeScreen({ onNavigate }) {
   const [selectedNavItem, setSelectedNavItem] = useState('home');
@@ -350,10 +350,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                   } else if (action.id === 8) {
                     handleNavigation('reports');
                   } else if (action.id === 9) {
-                    showAppModal(
-                      'Help & support',
-                      'For assistance, contact the RMTA association office.',
-                    );
+                    handleNavigation('supportUsers');
                   }
                 }}
               >

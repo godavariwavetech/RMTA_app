@@ -72,6 +72,7 @@ import InvalidQR from './src/Technician/screens/ScanQrScreens/InvalidQR';
 import DeviceVerification from './src/Technician/screens/DeviceVerification/DeviceVerification';
 import IMEIResult from './src/Technician/screens/DeviceVerification/IMEIResult';
 import CEIRResult from './src/Technician/screens/DeviceVerification/CEIRResult';
+import SupportUsersScreen from './src/Technician/screens/SupportUsersScreen';
 
 installAppModalAlerts();
 
@@ -212,6 +213,7 @@ function App() {
       deviceVerification: 'deviceVerification',
       imeiResult: 'imeiResult',
       ceirResult: 'ceirResult',
+      supportUsers: 'supportUsers',
     };
     if (params) {
       setNavigationParams(params);
@@ -400,6 +402,8 @@ function App() {
         <IMEIResult onNavigate={handleScreenNavigation} imeiNumber={navigationParams.imeiNumber} />
       ) : currentScreen === 'ceirResult' ? (
         <CEIRResult onNavigate={handleScreenNavigation} imeiNumber={navigationParams.imeiNumber} />
+      ) : currentScreen === 'supportUsers' ? (
+        <SupportUsersScreen onNavigate={handleScreenNavigation} />
       ) : (
         <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
       )}
