@@ -17,13 +17,15 @@ import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
 import { SkeletonUserList } from '../../Components/Skeleton';
 
-// Customer directory built from this member's own records: the customers on
-// their job sheets, sales (buyers) and purchases (sellers), merged by mobile
-// number. No separate customer-list API is needed.
-const SOURCES = [
-  { key: 'jobs', endpoint: ENDPOINTS.GET_JOB_SHEETS, label: 'Jobs' },
-  { key: 'sales', endpoint: ENDPOINTS.GET_SALES_SHEETS, label: 'Sales' },
-  { key: 'purchases', endpoint: ENDPOINTS.GET_PURCHASE_SHEETS, label: 'Purchases' },
+// Customer directory with three tabs, each with its own call (all POST
+// { member_id }): Jobs -> /public_app/getjobsdata, Sales ->
+// /public_app/getsalescustomersdata, Purchases -> /public_app/getpurchasedata.
+// Each tab lists the customers on that kind of record, merged by mobile
+// number, with how many records each one has.
+const TABS = [
+  { key: 'jobs', label: 'Jobs', noun: 'job', match: /job/i },
+  { key: 'sales', label: 'Sales', noun: 'sale', match: /sale/i },
+  { key: 'purchases', label: 'Purchases', noun: 'purchase', match: /purchase/i },
 ];
 
 const first = (row, keys) => {
@@ -42,9 +44,30 @@ const mobileOf = r =>
     .replace(/\D/g, '')
     .slice(-10);
 
+// Splits the response into { jobs, sales, purchases }. Accepts an object whose
+// keys name the lists (jobs / job_sheets, sales / sales_sheets, purchases ...)
+// or a flat array of rows that carry a `type` field.
+function toBuckets(payload) {
+  const out = { jobs: [], sales: [], purchases: [] };
+  if (Array.isArray(payload)) {
+    payload.forEach(row => {
+      const t = String((row && (row.type || row.record_type || row.source)) || '');
+      const tab = TABS.find(x => x.match.test(t));
+      if (tab) out[tab.key].push(row);
+    });
+    return out;
+  }
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    const tab = TABS.find(x => x.match.test(key));
+    if (tab && Array.isArray(value)) out[tab.key] = value;
+  });
+  return out;
+}
+
 export default function CustomerDirectoryScreen({ onNavigate }) {
   const user = useSelector(state => state.auth?.user) || {};
-  const [customers, setCustomers] = useState([]);
+  const [buckets, setBuckets] = useState({ jobs: [], sales: [], purchases: [] });
+  const [tab, setTab] = useState('jobs');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -56,34 +79,33 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
     }
     setLoading(true);
     setError('');
-    const results = await Promise.all(
-      SOURCES.map(async s => {
-        try {
-          const { response, data } = await postJson(s.endpoint, { member_id: user.member_id });
-          return response.ok && data && Array.isArray(data.data) ? data.data : null;
-        } catch (e) {
-          return null;
+    const call = async endpoint => {
+      try {
+        const { response, data } = await postJson(endpoint, { member_id: user.member_id });
+        if (!response.ok || !data || data.success === false) {
+          return { error: (data && (data.message || data.msg)) || 'Could not load customers. Pull down to retry.' };
         }
-      }),
-    );
-    if (results.every(r => r === null)) {
-      setError('Could not load customers. Pull down to retry.');
-    }
-    const byKey = {};
-    results.forEach((rows, i) => {
-      (rows || []).forEach(row => {
-        const mobile = mobileOf(row);
-        const name = nameOf(row);
-        if (!mobile && !name) return;
-        const id = mobile || name.toLowerCase();
-        const c = byKey[id] || { id, name, mobile, jobs: 0, sales: 0, purchases: 0 };
-        if (!c.name) c.name = name;
-        if (!c.mobile) c.mobile = mobile;
-        c[SOURCES[i].key] += 1;
-        byKey[id] = c;
-      });
-    });
-    setCustomers(Object.values(byKey).sort((a, b) => (a.name || '~').localeCompare(b.name || '~')));
+        return { payload: data.data !== undefined ? data.data : data };
+      } catch (e) {
+        return { error: 'Could not load customers. Pull down to retry.' };
+      }
+    };
+    const [jobsData, salesData, purchaseData] = await Promise.all([
+      call(ENDPOINTS.GET_JOBS_DATA),
+      call(ENDPOINTS.GET_SALES_CUSTOMERS_DATA),
+      call(ENDPOINTS.GET_PURCHASE_DATA),
+    ]);
+    const next = jobsData.payload ? toBuckets(jobsData.payload) : { jobs: [], sales: [], purchases: [] };
+    // The sales and purchase endpoints return a plain list of rows, or wrap
+    // them under a key such as `sales` / `purchases`.
+    const rowsFrom = (result, tabKey) => {
+      if (!result.payload) return null;
+      return Array.isArray(result.payload) ? result.payload : toBuckets(result.payload)[tabKey];
+    };
+    next.sales = rowsFrom(salesData, 'sales') || next.sales;
+    next.purchases = rowsFrom(purchaseData, 'purchases') || next.purchases;
+    setBuckets(next);
+    if (jobsData.error && salesData.error && purchaseData.error) setError(jobsData.error);
     setLoading(false);
   }, [user.member_id]);
 
@@ -91,10 +113,32 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
     load();
   }, [load]);
 
+  // Customers per tab: rows merged by mobile number (or name when there is none).
+  const byTab = useMemo(() => {
+    const result = {};
+    TABS.forEach(t => {
+      const byKey = {};
+      (buckets[t.key] || []).forEach(row => {
+        const mobile = mobileOf(row);
+        const name = nameOf(row);
+        if (!mobile && !name) return;
+        const id = mobile || name.toLowerCase();
+        const c = byKey[id] || { id, name, mobile, count: 0 };
+        if (!c.name) c.name = name;
+        if (!c.mobile) c.mobile = mobile;
+        c.count += 1;
+        byKey[id] = c;
+      });
+      result[t.key] = Object.values(byKey).sort((a, b) => (a.name || '~').localeCompare(b.name || '~'));
+    });
+    return result;
+  }, [buckets]);
+
+  const active = TABS.find(t => t.key === tab);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return customers.filter(c => !q || `${c.name} ${c.mobile}`.toLowerCase().includes(q));
-  }, [customers, query]);
+    return byTab[tab].filter(c => !q || `${c.name} ${c.mobile}`.toLowerCase().includes(q));
+  }, [byTab, tab, query]);
 
   return (
     <>
@@ -105,7 +149,21 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Customer directory</Text>
-          <Text style={styles.count}>{customers.length}</Text>
+          <Text style={styles.count}>{byTab[tab].length}</Text>
+        </View>
+        <View style={styles.tabs}>
+          {TABS.map(t => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]}
+              onPress={() => setTab(t.key)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>
+                {t.label} ({byTab[t.key].length})
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
         <View style={styles.searchWrap}>
           <TextInput
@@ -116,7 +174,7 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
             placeholderTextColor="#94A3B8"
           />
         </View>
-        {loading && !customers.length ? (
+        {loading && !byTab[tab].length ? (
           <SkeletonUserList />
         ) : (
           <FlatList
@@ -125,7 +183,9 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
             contentContainerStyle={styles.list}
             refreshing={loading}
             onRefresh={load}
-            ListEmptyComponent={<Text style={styles.empty}>{error || 'No customers yet.'}</Text>}
+            ListEmptyComponent={
+              <Text style={styles.empty}>{error || `No ${active.label.toLowerCase()} customers yet.`}</Text>
+            }
             renderItem={({ item }) => (
               <View style={styles.row}>
                 <View style={styles.avatar}>
@@ -137,11 +197,10 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
                   </Text>
                   {!!item.mobile && <Text style={styles.mobile}>{item.mobile}</Text>}
                   <View style={styles.tags}>
-                    {SOURCES.filter(s => item[s.key] > 0).map(s => (
-                      <Text key={s.key} style={styles.tag}>
-                        {s.label} {item[s.key]}
-                      </Text>
-                    ))}
+                    <Text style={styles.tag}>
+                      {item.count} {active.noun}
+                      {item.count === 1 ? '' : 's'}
+                    </Text>
                   </View>
                 </View>
                 {!!item.mobile && (
@@ -179,6 +238,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECF3',
+  },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabBtnActive: { borderBottomColor: Colors.secondary },
+  tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  tabTextActive: { color: Colors.secondary, fontWeight: '800' },
   searchWrap: { paddingHorizontal: 14, paddingTop: 12 },
   search: {
     backgroundColor: '#FFFFFF',

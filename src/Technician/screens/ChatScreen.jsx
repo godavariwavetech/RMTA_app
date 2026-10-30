@@ -224,6 +224,7 @@ function Conversation({ peer, me, meName, chat }) {
   // Tell the other side we've read their messages and clear our unread badge.
   const unreadMine = Number(chat?.unread?.[me]) || 0;
   const myReadMs = chat?.readAtMs?.[me] || 0;
+  const peerReadMs = chat?.readAtMs?.[peer.id] || 0;
   const lastPeerMsgMs = messages.reduce((t, m) => (m.from !== me ? Math.max(t, m.time) : t), 0);
   useEffect(() => {
     if (!loaded || (!unreadMine && lastPeerMsgMs <= myReadMs)) return;
@@ -259,6 +260,11 @@ function Conversation({ peer, me, meName, chat }) {
               <Text style={[styles.msg, mine && styles.msgMine]}>{item.text}</Text>
               <Text style={[styles.time, mine && styles.timeMine]}>
                 {item.pending ? 'Sending…' : fmtTime(item.time)}
+                {mine && !item.pending && (
+                  <Text style={item.time <= peerReadMs ? styles.tickRead : undefined}>
+                    {item.time <= peerReadMs ? '  ✓✓' : '  ✓'}
+                  </Text>
+                )}
               </Text>
             </View>
           );
@@ -356,6 +362,7 @@ const styles = StyleSheet.create({
   msgMine: { color: '#FFFFFF' },
   time: { fontSize: 10, color: '#94A3B8', marginTop: 3, alignSelf: 'flex-end' },
   timeMine: { color: 'rgba(255,255,255,0.75)' },
+  tickRead: { color: '#7DD3FC', fontWeight: '700' },
   composer: { flexDirection: 'row', alignItems: 'flex-end', padding: 10, backgroundColor: '#FFFFFF' },
   input: {
     flex: 1,
