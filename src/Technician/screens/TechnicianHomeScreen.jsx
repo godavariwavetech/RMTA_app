@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
@@ -78,7 +78,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
             .map((row, i) => {
               const v = String(imageOf(row)).trim();
               const uri = /^https?:\/\//.test(v) ? v : `${BASE_URL}${v.replace(/^\//, '')}`;
-              return { id: `api-${row.id ?? i}`, image: { uri } };
+              return { id: `api-${row.id ?? i}`, image: { uri, cache: 'force-cache' } };
             });
         // Only replace what's on screen when the list really changed.
         const same =
@@ -86,6 +86,8 @@ export default function TechnicianHomeScreen({ onNavigate }) {
           bannerCache.length === next.length &&
           bannerCache.every((b, i) => b.id === next[i].id && b.image.uri === next[i].image.uri);
         bannerCache = next;
+        // Warm the image cache so reopening Home shows the pictures at once.
+        next.forEach(b => Image.prefetch(b.image.uri).catch(() => {}));
         if (!same) setApiBanners(next);
         setBannersLoaded(true);
       } catch (e) {

@@ -3,13 +3,18 @@ import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 
 const AUTO_SCROLL_MS = 4500;
 
+// Last measured width, kept across mounts: the carousel is rebuilt every time the
+// Home screen is opened, and starting from width 0 meant an empty frame (the banners
+// vanishing and reappearing) until onLayout reported the width again.
+let lastWidth = 0;
+
 // Swipeable banner strip with dots that also advances by itself. Each slide is
 //   { id, image }                          – a picture banner, or
 //   { id, title, subtitle, color }         – a text banner on a coloured card
 // plus an optional `onPress`.
 export default function BannerCarousel({ slides }) {
   const scrollRef = useRef(null);
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState(lastWidth);
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
   const touching = useRef(false);
@@ -34,7 +39,11 @@ export default function BannerCarousel({ slides }) {
   }, [width, slides.length]);
 
   return (
-    <View style={styles.container} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+    <View style={styles.container} onLayout={e => {
+        const w = e.nativeEvent.layout.width;
+        lastWidth = w;
+        setWidth(prev => (prev === w ? prev : w));
+      }}>
       {width > 0 && (
         <ScrollView
           ref={scrollRef}

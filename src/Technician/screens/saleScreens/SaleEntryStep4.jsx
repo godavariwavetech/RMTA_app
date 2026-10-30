@@ -18,7 +18,7 @@ import FileShare from 'react-native-share';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';

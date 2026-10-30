@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { addTechnician } from '../../redux/slices/techniciansSlice';

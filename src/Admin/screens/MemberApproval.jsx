@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { Colors } from '../../Constants/Colors';
 
 export default function MemberApproval({ onNavigate }) {

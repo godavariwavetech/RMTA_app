@@ -17,7 +17,7 @@ import { chooseImageSource } from '../../../utils/imagePicker';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
@@ -190,12 +190,12 @@ export default function PurchaseEntryStep1({ onNavigate }) {
 
         {/* Step Indicator */}
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepText}>STEP {completedSteps} OF 8 · SELLER</Text>
+          <Text style={styles.stepText}>STEP {completedSteps} OF 7 · SELLER</Text>
         </View>
 
         {/* Progress Bar */}
         <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: '12.5%' }]} />
+          <View style={[styles.progressBar, { width: '14.3%' }]} />
         </View>
 
         {/* Form Content */}

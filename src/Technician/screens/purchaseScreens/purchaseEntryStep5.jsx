@@ -15,7 +15,7 @@ import { chooseImageSource } from '../../../utils/imagePicker';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
@@ -48,6 +48,27 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
           .map(p => ({ uri: p.uri || null, base64: p.base64 }))
       : [],
   );
+
+  // Photo of the bill / receipt: { uri, base64 }, sent as create_purchase's
+  // `billimage` next to the front and back images.
+  const draftBillImage = useSelector(state => state.purchase.draft.billImage);
+  const [billImage, setBillImage] = useState(draftBillImage || null);
+
+  const handlePickBill = () => {
+    chooseImageSource(
+      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
+          return;
+        }
+        const asset = response.assets && response.assets[0];
+        if (!asset || !asset.base64) return;
+        setBillImage({ uri: asset.uri, base64: asset.base64 });
+      },
+    );
+  };
 
   const handleConditionSelect = (category, value) => {
     setCondition(prev => ({
@@ -89,7 +110,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
   const handleContinue = () => {
     const conditionPhotos = buildConditionPhotos();
-    dispatch(updatePurchaseDraft({ condition: condition, conditionPhotos: conditionPhotos }));
+    dispatch(updatePurchaseDraft({ condition: condition, conditionPhotos: conditionPhotos, billImage }));
     if (onNavigate) {
       onNavigate('purchaseEntryStep6', {
         sellerData: sellerData,
@@ -103,14 +124,14 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
   const handleBackPress = () => {
     dispatch(
-      updatePurchaseDraft({ condition: condition, conditionPhotos: buildConditionPhotos() }),
+      updatePurchaseDraft({ condition: condition, conditionPhotos: buildConditionPhotos(), billImage }),
     );
     if (onNavigate) {
       onNavigate('goBack');
     }
   };
 
-  const completedSteps = 5;
+  const completedSteps = 4;
 
   const screenOptions = ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'];
   const bodyOptions = ['Good', 'Scratched', 'Damaged'];
@@ -138,12 +159,12 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · CONDITION</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · CONDITION</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '62.5%' }]} />
+            <View style={[styles.progressBar, { width: '57.1%' }]} />
           </View>
 
           {/* Form Content */}
@@ -348,6 +369,34 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
                   <Text style={styles.photoUploadSubtitle}>
                     JPG or PNG · up to {MAX_PHOTOS} photos
                   </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Bill image */}
+            <View style={styles.conditionGroup}>
+              <Text style={styles.conditionLabel}>Bill image</Text>
+
+              {billImage ? (
+                <View style={styles.thumbRow}>
+                  <View style={styles.thumbWrapper}>
+                    <Image source={{ uri: billImage.uri }} style={styles.thumb} />
+                    <TouchableOpacity
+                      style={styles.thumbRemove}
+                      onPress={() => setBillImage(null)}
+                    >
+                      <Text style={styles.thumbRemoveText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.photoUploadContainer} onPress={handlePickBill}>
+                  <Image
+                    source={require('../../../Assets/icons/camera.png')}
+                    style={styles.cameraIcon}
+                  />
+                  <Text style={styles.photoUploadTitle}>Add bill photo</Text>
+                  <Text style={styles.photoUploadSubtitle}>JPG or PNG</Text>
                 </TouchableOpacity>
               )}
             </View>

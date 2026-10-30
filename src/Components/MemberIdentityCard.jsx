@@ -3,7 +3,7 @@ import { Image, Linking, StyleSheet, Text, View } from 'react-native';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../utils/responsive';
 
 import { Colors } from '../Constants/Colors';
 import { BASE_URL } from '../Constants/config';

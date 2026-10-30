@@ -18,7 +18,7 @@ import { useSelector } from 'react-redux';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 
 import { Colors } from '../../Constants/Colors';
 import { useI18n } from '../../i18n';

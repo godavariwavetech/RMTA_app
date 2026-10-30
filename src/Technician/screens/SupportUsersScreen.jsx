@@ -15,7 +15,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { SkeletonUserList } from '../../Components/Skeleton';
 import { fetchSupporters } from '../../redux/slices/supportersSlice';
 import { BASE_URL } from '../../Constants/config';

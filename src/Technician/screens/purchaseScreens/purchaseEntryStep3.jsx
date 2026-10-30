@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  Linking,
   StyleSheet,
   Text,
   View,
@@ -14,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
@@ -22,6 +24,10 @@ import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
 import ImeiScannerModal from '../../../Components/ImeiScannerModal';
 import { isValidImei } from '../../../utils/imeiValidation';
 import StepNav from '../../../Components/StepNav';
+
+// Official government pages for checking an IMEI (same as the Device Verification screen).
+const KYM_URL = 'https://ceir.sancharsaathi.gov.in/Device/SancharSaathiKym.jsp';
+const CEIR_URL = 'https://ceir.sancharsaathi.gov.in/Device/CeirImeiVerification.jsp';
 
 export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData }) {
   const dispatch = useDispatch();
@@ -31,6 +37,28 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   const [imei, setImei] = useState(draftImei.imei || '');
   const [imeiVerified, setImeiVerified] = useState(draftImeiValid);
   const [scannerOpen, setScannerOpen] = useState(false);
+  // Which IMEI field the open scanner fills: 1 or 2.
+  const [scanTarget, setScanTarget] = useState(1);
+  // IMEI 2 is optional, but when entered it must be a valid, different IMEI.
+  const [imei2, setImei2] = useState(draftImei.imei2 || '');
+  let imei2Error = '';
+  if (imei2.length > 0 && imei2.length < 15) {
+    imei2Error = `${imei2.length}/15 digits`;
+  } else if (imei2.length === 15 && !isValidImei(imei2)) {
+    imei2Error = 'Not a valid IMEI number';
+  } else if (imei2.length > 0 && imei2 === imei) {
+    imei2Error = 'IMEI 2 must be different from IMEI 1';
+  }
+  const imei2Ok = imei2.length === 0 || imei2Error === '';
+  // The technician ticks this after checking the IMEI on Sanchar Saathi.
+  const draftCeirVerified = useSelector(state => state.purchase.draft.ceirVerified);
+  const [sancharChecked, setSancharChecked] = useState(!!draftCeirVerified);
+
+  const openLink = url => {
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Could not open the link', 'Please open it in a browser: ' + url),
+    );
+  };
   const [imeiStatus, setImeiStatus] = useState(
     draftImeiValid
       ? `Valid 15-digit format · ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`
@@ -38,12 +66,19 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   );
 
   const handleScanIMEI = () => {
+    setScanTarget(1);
+    setScannerOpen(true);
+  };
+
+  const handleScanIMEI2 = () => {
+    setScanTarget(2);
     setScannerOpen(true);
   };
 
   const handleImeiChange = (value) => {
     setImei(value);
     setImeiVerified(false);
+    setSancharChecked(false);
     setImeiStatus('');
   };
 
@@ -58,19 +93,25 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   };
 
   const handleContinue = () => {
-    const imeiData = { imei: imei, verified: imeiVerified };
-    dispatch(updatePurchaseDraft({ imei: imeiData }));
+    const imeiData = { imei: imei, imei2: imei2, verified: imeiVerified };
+    dispatch(updatePurchaseDraft({ imei: imeiData, ceirVerified: sancharChecked }));
     if (onNavigate) {
-      onNavigate('purchaseEnterStep4', {
+      onNavigate('purchaseEntryStep5', {
         sellerData: sellerData,
         deviceData: deviceData,
         imeiData: imeiData,
+        ceirVerified: sancharChecked,
       });
     }
   };
 
   const handleBackPress = () => {
-    dispatch(updatePurchaseDraft({ imei: { imei: imei, verified: imeiVerified } }));
+    dispatch(
+      updatePurchaseDraft({
+        imei: { imei: imei, imei2: imei2, verified: imeiVerified },
+        ceirVerified: sancharChecked,
+      }),
+    );
     if (onNavigate) {
       onNavigate('goBack');
     }
@@ -99,12 +140,12 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · IMEI</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · IMEI</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '37.5%' }]} />
+            <View style={[styles.progressBar, { width: '42.9%' }]} />
           </View>
 
           {/* Form Content */}
@@ -139,6 +180,25 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
               <Text style={styles.scanButtonText}>Scan device IMEI</Text>
             </TouchableOpacity>
 
+            {/* IMEI 2 (optional) */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>IMEI 2 (optional)</Text>
+              <TextInput
+                style={[styles.input, !!imei2Error && styles.inputError]}
+                placeholder="Enter or scan IMEI 2"
+                placeholderTextColor="#9CA3AF"
+                value={imei2}
+                onChangeText={value => setImei2(value.replace(/\D/g, ''))}
+                keyboardType="numeric"
+                maxLength={15}
+              />
+              {!!imei2Error && <Text style={styles.imei2Error}>{imei2Error}</Text>}
+            </View>
+
+            <TouchableOpacity style={styles.scanButton} onPress={handleScanIMEI2}>
+              <Text style={styles.scanButtonText}>Scan IMEI 2</Text>
+            </TouchableOpacity>
+
             {/* Verification Status */}
             {imeiVerified && (
               <View style={styles.statusContainer}>
@@ -150,6 +210,35 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
                   <Text style={styles.statusTitle}>IMEI verified</Text>
                   <Text style={styles.statusSubtitle}>{imeiStatus}</Text>
                 </View>
+              </View>
+            )}
+
+            {/* Sanchar Saathi checks + confirmation, once the IMEI is valid */}
+            {imeiVerified && (
+              <View style={styles.sancharCard}>
+                <Text style={styles.sancharHeading}>Check this IMEI on Sanchar Saathi</Text>
+                <TouchableOpacity style={styles.sancharLink} onPress={() => openLink(KYM_URL)}>
+                  <Text style={styles.sancharLinkText}>Know Your Mobile (KYM)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sancharLink, styles.sancharLinkSecond]}
+                  onPress={() => openLink(CEIR_URL)}
+                >
+                  <Text style={styles.sancharLinkText}>CEIR IMEI verification</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.checkRow, sancharChecked && styles.checkRowDone]}
+                  onPress={() => setSancharChecked(prev => !prev)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.checkBox, sancharChecked && styles.checkBoxDone]}>
+                    {sancharChecked && <Text style={styles.checkMark}>✓</Text>}
+                  </View>
+                  <Text style={[styles.checkText, sancharChecked && styles.checkTextDone]}>
+                    IMEI verified on Sanchar Saathi
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -181,6 +270,11 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
           visible={scannerOpen}
           onClose={() => setScannerOpen(false)}
           onScanned={scannedImei => {
+            if (scanTarget === 2) {
+              setImei2(scannedImei);
+              setScannerOpen(false);
+              return;
+            }
             setImei(scannedImei);
             const valid = isValidImei(scannedImei);
             setImeiVerified(valid);
@@ -199,10 +293,10 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
           <TouchableOpacity
             style={[
               styles.continueButton,
-              !imeiVerified && styles.continueButtonDisabled,
+              (!imeiVerified || !imei2Ok) && styles.continueButtonDisabled,
             ]}
             onPress={handleContinue}
-            disabled={!imeiVerified}
+            disabled={!imeiVerified || !imei2Ok}
           >
             <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
@@ -214,6 +308,87 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  imei2Error: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 4,
+  },
+  sancharCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: wp('3%'),
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: wp('4%'),
+    marginTop: hp('2%'),
+  },
+  sancharHeading: {
+    fontSize: wp('3.6%'),
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: hp('1.2%'),
+  },
+  sancharLink: {
+    backgroundColor: '#EAF1FF',
+    borderRadius: wp('2.5%'),
+    paddingVertical: hp('1.5%'),
+    alignItems: 'center',
+  },
+  sancharLinkSecond: {
+    marginTop: hp('1%'),
+  },
+  sancharLinkText: {
+    color: '#2F5DDC',
+    fontSize: wp('3.6%'),
+    fontWeight: '700',
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: hp('1.8%'),
+    paddingVertical: hp('1.3%'),
+    paddingHorizontal: wp('3%'),
+    borderRadius: wp('2.5%'),
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  checkRowDone: {
+    borderColor: '#16A34A',
+    backgroundColor: '#DCFCE7',
+  },
+  checkBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#9CA3AF',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: wp('3%'),
+  },
+  checkBoxDone: {
+    borderColor: '#16A34A',
+    backgroundColor: '#16A34A',
+  },
+  checkMark: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  checkText: {
+    flex: 1,
+    fontSize: wp('3.6%'),
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  checkTextDone: {
+    color: '#15803D',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

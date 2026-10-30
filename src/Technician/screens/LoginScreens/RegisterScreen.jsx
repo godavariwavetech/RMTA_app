@@ -19,7 +19,7 @@ import { chooseImageSource } from '../../../utils/imagePicker';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { Colors } from '../../../Constants/Colors';
 import { useDispatch } from 'react-redux';
 import { registerMember } from '../../../redux/slices/authSlice';

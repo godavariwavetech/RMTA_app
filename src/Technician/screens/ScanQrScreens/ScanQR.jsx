@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, CameraType } from 'react-native-camera-kit';
 import { check, openSettings, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../../utils/responsive';
 import { Colors } from '../../../Constants/Colors';
 import { showAppModal } from '../../../utils/appModal';
 

@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
@@ -58,7 +58,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
     }
   };
 
-  const completedSteps = 6;
+  const completedSteps = 5;
 
   return (
     <>
@@ -81,12 +81,12 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · PRICE</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · PRICE</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '75%' }]} />
+            <View style={[styles.progressBar, { width: '71.4%' }]} />
           </View>
 
           {/* Form Content */}

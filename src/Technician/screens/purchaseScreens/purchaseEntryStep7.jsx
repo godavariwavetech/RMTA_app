@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
@@ -28,6 +28,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
+  const draftBillImage = useSelector(state => state.purchase.draft.billImage);
   const [submitting, setSubmitting] = useState(false);
 
   // Collapse all the screens' data into the flat payload create_purchase expects.
@@ -40,7 +41,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       device_brand: deviceData?.deviceBrand || '',
       device_model: deviceData?.deviceModel || '',
       imei1: imeiData?.imei || '',
-      imei2: '',
+      imei2: imeiData?.imei2 || '',
       color: deviceData?.color || '',
       storage: deviceData?.storage || '',
       screen: conditionData?.screen || '',
@@ -55,6 +56,8 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       frontimage: (deviceData?.devicePhoto && deviceData.devicePhoto.base64) || null,
       backimage: (conditionPhotos[0] && conditionPhotos[0].base64) || null,
       condition_images: conditionPhotos.map(photo => photo.base64).filter(Boolean),
+      // Photo of the bill / receipt added on step 6, raw base64.
+      billimage: (draftBillImage && draftBillImage.base64) || null,
       purchaseprice: priceData?.purchasePrice || '0',
       paymentmode: priceData?.paymentMode || 'Cash',
       transactionid: priceData?.transactionId || '',
@@ -98,7 +101,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
     }
   };
 
-  const completedSteps = 7;
+  const completedSteps = 6;
 
   // Prepare display data
   const deviceBrand = deviceData?.deviceBrand || 'Device';
@@ -138,12 +141,12 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · REVIEW</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · REVIEW</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '87.5%' }]} />
+            <View style={[styles.progressBar, { width: '85.7%' }]} />
           </View>
 
           {/* Device Image Section */}
@@ -190,6 +193,13 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
                 <Text style={styles.summaryLabel}>IMEI</Text>
                 <Text style={styles.summaryValue}>{imei}</Text>
               </View>
+
+              {!!imeiData?.imei2 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>IMEI 2</Text>
+                  <Text style={styles.summaryValue}>{imeiData.imei2}</Text>
+                </View>
+              )}
 
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Purchase price</Text>

@@ -1,6 +1,7 @@
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Alert, AppState, BackHandler, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { Alert, AppState, BackHandler, KeyboardAvoidingView, Platform, View, useWindowDimensions } from 'react-native';
 import { Colors } from './src/Constants/Colors';
+import { APP_MAX_WIDTH } from './src/utils/responsive';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
@@ -50,7 +51,6 @@ import PurchaseEntryStep1 from './src/Technician/screens/purchaseScreens/purchas
 import VerifySellerMobileNumber from './src/Technician/screens/purchaseScreens/VerifySellerMobileNumber';
 import PurchaseEntryStep2 from './src/Technician/screens/purchaseScreens/purchaseEntryStep2';
 import PurchaseEntryStep3 from './src/Technician/screens/purchaseScreens/purchaseEntryStep3';
-import PurchaseEnterStep4 from './src/Technician/screens/purchaseScreens/purchaseEnterStep4';
 import PurchaseEntryStep5 from './src/Technician/screens/purchaseScreens/purchaseEntryStep5';
 import PurchaseEntryStep6 from './src/Technician/screens/purchaseScreens/purchaseEntryStep6';
 import PurchaseEntryStep7 from './src/Technician/screens/purchaseScreens/purchaseEntryStep7';
@@ -90,7 +90,7 @@ const keyboardAwareScreens = new Set([
   'createJobSheetStep4', 'createJobSheetStep5',
   'createJobSheetStep7', 'createJobSheetStep8', 'verifyMobileNumber',
   'purchaseEntryStep1', 'verifySellerMobileNumber', 'purchaseEntryStep2',
-  'purchaseEntryStep3', 'purchaseEnterStep4', 'purchaseEntryStep5',
+  'purchaseEntryStep3', 'purchaseEntryStep5',
   'purchaseEntryStep6', 'purchaseEntryStep7', 'purchaseEntryStep8',
   'saleEntryStep1', 'verifyBuyerMobileNumber', 'saleEntryStep2',
   'saleEntryStep3', 'saleEntryStep4', 'buyerConfirmationOTP',
@@ -222,6 +222,10 @@ function LoginStatusWatcher({ onLogout, isHome }: { onLogout: () => void; isHome
 
 function AppContent() {
   const { ready: i18nReady } = useI18n();
+  // Tablets: draw the app in a centred phone-width column instead of stretching
+  // every screen across the whole display.
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isTabletScreen = Math.min(windowWidth, windowHeight) >= 600;
   const [currentScreen, setCurrentScreen] = useState<string>('intro');
   const [navigationParams, setNavigationParams] = useState<any>({});
   const [navigationHistory, setNavigationHistory] = useState<string[]>(['intro']);
@@ -349,7 +353,6 @@ function AppContent() {
       verifySellerMobileNumber: 'verifySellerMobileNumber',
       purchaseEntryStep2: 'purchaseEntryStep2',
       purchaseEntryStep3: 'purchaseEntryStep3',
-      purchaseEnterStep4: 'purchaseEnterStep4',
       purchaseEntryStep5: 'purchaseEntryStep5',
       purchaseEntryStep6: 'purchaseEntryStep6',
       purchaseEntryStep7: 'purchaseEntryStep7',
@@ -444,6 +447,8 @@ function AppContent() {
     <Provider store={store}>
     <SafeAreaProvider>
       <AppModalHost />
+      <View style={{ flex: 1, alignItems: 'center', backgroundColor: isTabletScreen ? '#E5E9F0' : undefined }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: isTabletScreen ? APP_MAX_WIDTH : undefined, overflow: 'hidden' }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={
@@ -557,8 +562,6 @@ function AppContent() {
         <PurchaseEntryStep2 onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} />
       ) : currentScreen === 'purchaseEntryStep3' ? (
         <PurchaseEntryStep3 onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} deviceData={navigationParams.deviceData} />
-      ) : currentScreen === 'purchaseEnterStep4' ? (
-        <PurchaseEnterStep4 onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} deviceData={navigationParams.deviceData} imeiData={navigationParams.imeiData} />
       ) : currentScreen === 'purchaseEntryStep5' ? (
         <PurchaseEntryStep5 onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} deviceData={navigationParams.deviceData} imeiData={navigationParams.imeiData} ceirVerified={navigationParams.ceirVerified} />
       ) : currentScreen === 'purchaseEntryStep6' ? (
@@ -627,6 +630,8 @@ function AppContent() {
         <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
       )}
       </KeyboardAvoidingView>
+      </View>
+      </View>
       <StatusBarBackdrop />
       <PlayerIdSync />
       <LoginStatusWatcher onLogout={() => handleScreenNavigation('logout')} isHome={currentScreen === 'home'} />
