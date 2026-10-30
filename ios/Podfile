@@ -14,9 +14,10 @@ platform :ios, min_ios_version_supported
 prepare_react_native_project!
 setup_permissions(['Camera', 'PhotoLibrary'])
 
-# React Native Firebase (app/messaging/firestore) needs static frameworks.
-$RNFirebaseAsStaticFramework = true
-linkage = ENV['USE_FRAMEWORKS'] || 'static'
+# React Native Firebase (app/messaging/firestore) resolves Firebase through SPM,
+# which only works with dynamic frameworks (static linkage = duplicate symbols).
+# See https://rnfirebase.io/ios-spm
+linkage = ENV['USE_FRAMEWORKS'] || 'dynamic'
 Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
 use_frameworks! :linkage => linkage.to_sym
 
