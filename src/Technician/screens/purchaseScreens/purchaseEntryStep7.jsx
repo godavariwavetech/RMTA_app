@@ -22,6 +22,7 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { resetPurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData }) {
   const dispatch = useDispatch();
@@ -226,6 +227,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
         {/* Complete Purchase Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.completeButton}
             onPress={handleCompletePurchase}
@@ -237,6 +239,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
               <Text style={styles.completeButtonText}>Complete purchase</Text>
             )}
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

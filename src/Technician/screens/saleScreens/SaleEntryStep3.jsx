@@ -24,6 +24,7 @@ import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updateSaleDraft, resetSaleDraft } from '../../../redux/slices/saleSlice';
 import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   const nav = useFieldNav();
@@ -287,6 +288,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
 
         {/* Create Invoice Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={[
               styles.createInvoiceButton,
@@ -301,6 +303,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
               <Text style={styles.createInvoiceButtonText}>Create invoice</Text>
             )}
           </TouchableOpacity>
+          </StepNav>
         </View>
       <FieldNavBar nav={nav} />
       </SafeAreaView>

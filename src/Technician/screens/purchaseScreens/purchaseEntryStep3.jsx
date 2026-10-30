@@ -21,6 +21,7 @@ import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
 import ImeiScannerModal from '../../../Components/ImeiScannerModal';
 import { isValidImei } from '../../../utils/imeiValidation';
+import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData }) {
   const dispatch = useDispatch();
@@ -194,6 +195,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={[
               styles.continueButton,
@@ -202,8 +204,9 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
             onPress={handleContinue}
             disabled={!imeiVerified}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

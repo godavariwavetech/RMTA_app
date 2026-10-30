@@ -22,9 +22,11 @@ import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
 import DatePickerModal, { formatDisplayDate } from '../../../Components/DatePickerModal';
 import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function CreateJobSheetStep4({ onNavigate }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftRepair = useSelector(state => state.jobSheet.draft.repair) || {};
@@ -58,6 +60,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
   };
 
   const handleContinue = () => {
+    setTried(true);
     // All fields are required before moving on.
     if (
       !selectedCategory ||
@@ -117,7 +120,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Repair Category */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Repair Category</Text>
+              <Text style={styles.label}>Repair Category <Text style={styles.required}>*</Text></Text>
               <View style={styles.categoryContainer}>
                 {repairCategories.map((category) => (
                   <TouchableOpacity
@@ -143,9 +146,9 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Problem Description */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Problem Description</Text>
+              <Text style={styles.label}>Problem Description <Text style={styles.required}>*</Text></Text>
               <TextInput {...nav.props(0)}
-                style={[styles.input, styles.descriptionInput]}
+                style={[styles.input, styles.descriptionInput, tried && !String(problemDescription).trim() && styles.inputError]}
                 placeholder="Describe the problem"
                 placeholderTextColor="#D1D5DB"
                 value={problemDescription}
@@ -157,9 +160,9 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Estimated Repair Cost */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Estimated Repair Cost</Text>
+              <Text style={styles.label}>Estimated Repair Cost <Text style={styles.required}>*</Text></Text>
               <TextInput {...nav.props(1)}
-                style={styles.input}
+                style={[styles.input, tried && !String(estimatedCost).trim() && styles.inputError]}
                 placeholder="Enter estimated cost"
                 placeholderTextColor="#D1D5DB"
                 value={estimatedCost}
@@ -170,7 +173,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Estimated Delivery */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Estimated Delivery</Text>
+              <Text style={styles.label}>Estimated Delivery <Text style={styles.required}>*</Text></Text>
               <TouchableOpacity
                 style={[styles.input, styles.dateInput]}
                 activeOpacity={0.7}
@@ -202,9 +205,11 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       <FieldNavBar nav={nav} />
       </SafeAreaView>
@@ -213,6 +218,12 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

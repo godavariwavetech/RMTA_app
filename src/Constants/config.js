@@ -34,6 +34,8 @@ export const ENDPOINTS = {
   JOB_COUNTS: 'public_app/getcounts',
   GET_SCROLL: 'public_app/getscroll',
   GET_BANNERS: 'public_app/getbanners',
+  POST_PLAYER_ID: 'public_app/postplayer_id',
+  LOGIN_STATUS_DATA: 'public_app/loginstatusdata',
   GET_JOBS_DATA: 'public_app/getjobsdata',
   GET_PURCHASE_DATA: 'public_app/getpurchasedata',
   GET_SALES_CUSTOMERS_DATA: 'public_app/getsalescustomersdata',

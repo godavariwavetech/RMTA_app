@@ -22,6 +22,7 @@ import {
 import { useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
+import StepNav from '../../../Components/StepNav';
 
 export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, saleData, sale: saleResult }) {
   const user = useSelector(state => state.auth.user) || {};
@@ -305,12 +306,14 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
 
         {/* Complete Sale Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.confirmButton}
             onPress={handleComplete}
           >
             <Text style={styles.confirmButtonText}>Complete sale</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
         <PdfSizeModal
           visible={pdfAction !== null}

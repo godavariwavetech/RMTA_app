@@ -27,6 +27,7 @@ import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function PurchaseEntryStep1({ onNavigate }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
@@ -48,6 +49,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
   };
 
   const handleContinue = async () => {
+    setTried(true);
     if (!formData.sellerName.trim() || !formData.sellerMobile.trim() || !formData.address.trim()) {
       Alert.alert('Missing details', 'Please enter the seller name, mobile number and address.');
       return;
@@ -67,6 +69,22 @@ export default function PurchaseEntryStep1({ onNavigate }) {
     const aadharDigits = formData.aadhaarNumber.replace(/\D/g, '');
     if (aadharDigits && aadharDigits.length !== 12) {
       Alert.alert('Invalid Aadhaar number', 'Please enter a valid 12-digit Aadhaar number.');
+      return;
+    }
+
+    // Returning to this step with nothing changed: reuse the saved seller
+    // instead of creating a duplicate customer record.
+    const unchanged =
+      draftSeller.customer_id &&
+      (draftSeller.sellerName || '').trim() === formData.sellerName.trim() &&
+      draftSeller.sellerMobile === mobileDigits &&
+      (draftSeller.address || '').trim() === formData.address.trim() &&
+      (draftSeller.aadhaarNumber || '').replace(/\D/g, '') === aadharDigits &&
+      ((draftSeller.sellerPhoto && draftSeller.sellerPhoto.uri) || null) ===
+        ((formData.sellerPhoto && formData.sellerPhoto.uri) || null) &&
+      !(formData.sellerPhoto && formData.sellerPhoto.base64);
+    if (unchanged) {
+      if (onNavigate) onNavigate('verifySellerMobileNumber', { sellerData: draftSeller });
       return;
     }
 
@@ -195,7 +213,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               Seller Name <Text style={styles.required}>*</Text>
             </Text>
             <TextInput {...nav.props(0)}
-              style={styles.input}
+              style={[styles.input, tried && !String(formData.sellerName).trim() && styles.inputError]}
               placeholder="Enter seller name"
               placeholderTextColor="#9CA3AF"
               value={formData.sellerName}
@@ -210,7 +228,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               Seller Mobile <Text style={styles.required}>*</Text>
             </Text>
             <TextInput {...nav.props(1)}
-              style={styles.input}
+              style={[styles.input, tried && !String(formData.sellerMobile).trim() && styles.inputError]}
               placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
               value={formData.sellerMobile}
@@ -280,7 +298,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               style={[
                 styles.input,
                 styles.textArea,
-              ]}
+              tried && !String(formData.address).trim() && styles.inputError]}
               placeholder="Enter seller address"
               placeholderTextColor="#9CA3AF"
               value={formData.address}
@@ -315,6 +333,9 @@ export default function PurchaseEntryStep1({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

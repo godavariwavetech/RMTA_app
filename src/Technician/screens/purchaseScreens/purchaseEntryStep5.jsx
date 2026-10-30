@@ -20,6 +20,7 @@ import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import StepNav from '../../../Components/StepNav';
 
 const MAX_PHOTOS = 3;
 
@@ -357,12 +358,14 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

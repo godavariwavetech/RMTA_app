@@ -21,6 +21,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
+import StepNav from '../../../Components/StepNav';
 
 // 3x3 pattern-lock geometry (fixed size so we can compute dot centres without
 // measuring layout). Index layout: 0 1 2 / 3 4 5 / 6 7 8.
@@ -257,9 +258,11 @@ export default function CreateJobSheetStep5({ onNavigate }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
 
         {/* Pattern lock modal */}

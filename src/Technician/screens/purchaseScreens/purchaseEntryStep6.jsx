@@ -19,6 +19,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
 import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData }) {
   const nav = useFieldNav();
@@ -157,12 +158,14 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       <FieldNavBar nav={nav} />
       </SafeAreaView>

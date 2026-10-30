@@ -20,6 +20,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
+import StepNav from '../../../Components/StepNav';
 
 // One photo per category; create_job_sheets takes them as raw base64.
 const PHOTO_CATEGORIES = [
@@ -293,9 +294,11 @@ export default function CreateJobSheetStep3({ onNavigate }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

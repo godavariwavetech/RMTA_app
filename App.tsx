@@ -1,12 +1,14 @@
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BackHandler, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { Alert, AppState, BackHandler, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Colors } from './src/Constants/Colors';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
-import { Provider } from 'react-redux';
+import { Provider, useDispatch, useSelector } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
 import LanguageScreen from './src/Technician/screens/LanguageScreen';
 import { useState, useEffect, useRef } from 'react';
-import { initNotifications } from './src/services/notifications';
+import { initNotifications, getFcmToken, onFcmTokenRefresh } from './src/services/notifications';
+import { ENDPOINTS } from './src/Constants/config';
+import { postJson, logoutUser } from './src/redux/slices/authSlice';
 import { store } from './src/redux/store';
 import { hydrateUser } from './src/redux/slices/authSlice';
 import { loadUser, clearUser } from './src/utils/authStorage';
@@ -123,6 +125,100 @@ function StatusBarBackdrop() {
   );
 }
 
+
+// Registers this device for push notifications on the server: every time the
+// app opens with a logged-in member (restored session or fresh login), and again
+// whenever Firebase issues a new token, send { player_id, member_id }.
+function PlayerIdSync() {
+  const memberId = useSelector((state: any) => state.auth?.user?.member_id);
+
+  useEffect(() => {
+    if (!memberId) {
+      return undefined;
+    }
+    const send = async (token?: string) => {
+      const playerId = token || (await getFcmToken());
+      if (!playerId) {
+        return;
+      }
+      try {
+        await postJson(ENDPOINTS.POST_PLAYER_ID, { player_id: playerId, member_id: memberId });
+      } catch (e: any) {
+        console.warn('[FCM] player id sync failed', e?.message);
+      }
+    };
+    send();
+    const off = onFcmTokenRefresh(send);
+    return () => off();
+  }, [memberId]);
+
+  return null;
+}
+
+// Account status check: POST { member_id } to loginstatusdata every time the Home
+// screen is shown (app open, login, coming back from any other screen) and every
+// time the app returns to the foreground.
+// A status of 0 or 2 means the account is no longer allowed in, so the session is
+// cleared and the member is sent to the login screen.
+function pickStatus(data: any) {
+  const row = Array.isArray(data?.data) ? data.data[0] : data?.data ?? data;
+  const value = row?.status ?? row?.login_status ?? row?.membership_status ?? row?.member_status;
+  if (value === undefined || value === null || value === '' || typeof value === 'boolean') {
+    return undefined;
+  }
+  const n = Number(value);
+  return Number.isNaN(n) ? undefined : n;
+}
+
+function LoginStatusWatcher({ onLogout, isHome }: { onLogout: () => void; isHome: boolean }) {
+  const dispatch = useDispatch<any>();
+  const memberId = useSelector((state: any) => state.auth?.user?.member_id);
+  const logoutRef = useRef(onLogout);
+  logoutRef.current = onLogout;
+
+  useEffect(() => {
+    if (!memberId) {
+      return undefined;
+    }
+    let loggingOut = false;
+    const check = async () => {
+      if (loggingOut) {
+        return;
+      }
+      try {
+        const { response, data } = await postJson(ENDPOINTS.LOGIN_STATUS_DATA, { member_id: memberId });
+        if (!response.ok) {
+          return;
+        }
+        const status = pickStatus(data);
+        console.log('[loginStatus] status →', status);
+        if (status === 0 || status === 2) {
+          loggingOut = true;
+          await dispatch(logoutUser());
+          logoutRef.current();
+          Alert.alert(
+            'Signed out',
+            'Your account is not active right now, so you have been logged out. Please contact your admin.',
+          );
+        }
+      } catch (e: any) {
+        // offline or server error: keep the session and try again next time
+        console.warn('[loginStatus] check failed', e?.message);
+      }
+    };
+    if (isHome) {
+      check();
+    }
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        check();
+      }
+    });
+    return () => sub.remove();
+  }, [memberId, dispatch, isHome]);
+
+  return null;
+}
 
 function AppContent() {
   const { ready: i18nReady } = useI18n();
@@ -532,6 +628,8 @@ function AppContent() {
       )}
       </KeyboardAvoidingView>
       <StatusBarBackdrop />
+      <PlayerIdSync />
+      <LoginStatusWatcher onLogout={() => handleScreenNavigation('logout')} isHome={currentScreen === 'home'} />
     </SafeAreaProvider>
     </Provider>
   );

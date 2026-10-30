@@ -21,6 +21,7 @@ import {
 } from 'react-native-responsive-screen';
 
 import { Colors } from '../../../Constants/Colors';
+import StepNav from '../../../Components/StepNav';
 
 const esc = v =>
   String(v == null ? '' : v)
@@ -228,6 +229,7 @@ export default function CreateJobSheetStep8({ onNavigate, job, summary, pdfOnly 
 
         {/* View Job Details Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.shareButton}
             onPress={() => setSizeModalVisible(true)}
@@ -244,6 +246,7 @@ export default function CreateJobSheetStep8({ onNavigate, job, summary, pdfOnly 
               <Text style={styles.viewDetailsButtonText}>View job details</Text>
             </TouchableOpacity>
           )}
+          </StepNav>
         </View>
         <PdfSizeModal
           visible={sizeModalVisible}

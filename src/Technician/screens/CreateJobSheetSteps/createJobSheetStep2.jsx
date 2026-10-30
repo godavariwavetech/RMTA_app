@@ -22,9 +22,11 @@ import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
 import { isValidImei } from '../../../utils/imeiValidation';
 import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function CreateJobSheetStep2({ onNavigate }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftDevice = useSelector(state => state.jobSheet.draft.device) || {};
@@ -53,6 +55,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
   };
 
   const handleContinue = () => {
+    setTried(true);
     // Device brand, model and IMEI 1 are required.
     if (!deviceBrand.trim() || !deviceModel.trim() || !imei1.trim()) {
       Alert.alert(
@@ -126,7 +129,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                   Device Brand <Text style={styles.required}>*</Text>
                 </Text>
                 <TextInput {...nav.props(0)}
-                  style={styles.input}
+                  style={[styles.input, tried && !String(deviceBrand).trim() && styles.inputError]}
                   placeholder="Enter device brand"
                   placeholderTextColor="#D1D5DB"
                   value={deviceBrand}
@@ -140,7 +143,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                   Device Model <Text style={styles.required}>*</Text>
                 </Text>
                 <TextInput {...nav.props(1)}
-                  style={styles.input}
+                  style={[styles.input, tried && !String(deviceModel).trim() && styles.inputError]}
                   placeholder="Enter device model"
                   placeholderTextColor="#D1D5DB"
                   value={deviceModel}
@@ -154,7 +157,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                   IMEI 1 <Text style={styles.required}>*</Text>
                 </Text>
                 <TextInput {...nav.props(2)}
-                  style={styles.input}
+                  style={[styles.input, tried && !String(imei1).trim() && styles.inputError]}
                   placeholder="Enter IMEI number"
                   placeholderTextColor="#D1D5DB"
                   value={imei1}
@@ -224,9 +227,11 @@ export default function CreateJobSheetStep2({ onNavigate }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       <FieldNavBar nav={nav} />
       </SafeAreaView>
@@ -235,6 +240,9 @@ export default function CreateJobSheetStep2({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   imeiError: {
     fontSize: 12,
     color: '#DC2626',

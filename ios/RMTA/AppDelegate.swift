@@ -35,6 +35,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       launchOptions: launchOptions
     )
 
+    // Same colour as the launch screen (#071A3D) so there is no white flash
+    // between the splash and the first React Native frame.
+    let launchColor = UIColor(red: 7.0 / 255.0, green: 26.0 / 255.0, blue: 61.0 / 255.0, alpha: 1.0)
+    window?.backgroundColor = launchColor
+    window?.rootViewController?.view.backgroundColor = launchColor
+
     return true
   }
 }

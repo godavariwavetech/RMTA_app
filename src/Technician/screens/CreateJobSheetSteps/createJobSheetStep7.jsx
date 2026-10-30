@@ -20,6 +20,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { formatDisplayDate } from '../../../Components/DatePickerModal';
 import { Colors } from '../../../Constants/Colors';
 import { createJobSheet } from '../../../redux/slices/jobSheetSlice';
+import StepNav from '../../../Components/StepNav';
 
 export default function CreateJobSheetStep7({ onNavigate }) {
   const dispatch = useDispatch();
@@ -213,6 +214,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
         {/* Create Job Sheet Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.createButton}
             onPress={handleCreateJobSheet}
@@ -224,6 +226,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
               <Text style={styles.createButtonText}>Create job sheet</Text>
             )}
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

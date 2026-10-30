@@ -31,9 +31,11 @@ import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const draftCustomer = useSelector(state => state.jobSheet.draft.customer) || {};
+  const draftConsentOtp = useSelector(state => state.jobSheet.draft.consent_otp);
 
   // Pre-fill from the saved draft so returning here (e.g. "Use another number"
   // on the verify screen, or "Edit details" from the review step) keeps
@@ -97,6 +99,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   };
 
   const handleContinue = async () => {
+    setTried(true);
     if (!customerName.trim() || !mobileNumber.trim()) {
       Alert.alert('Missing details', 'Please enter the customer name and mobile number.');
       return;
@@ -122,6 +125,21 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
     const aadharDigits = aadharNumber.replace(/\D/g, '');
     if (aadharDigits && aadharDigits.length !== 12) {
       Alert.alert('Invalid Aadhar number', 'Please enter a valid 12-digit Aadhar number.');
+      return;
+    }
+
+    // Returning to this step with nothing changed: keep the saved customer
+    // (no duplicate record) and skip the OTP if it was already verified.
+    const unchanged =
+      draftCustomer.customer_id &&
+      draftCustomer.full_name === customerName.trim() &&
+      draftCustomer.mobile === mobileDigits &&
+      (draftCustomer.alternate_mobile || '') === normalizeMobileNumber(alternateNumber) &&
+      (draftCustomer.aadhaar_number || '').replace(/\D/g, '') === aadharDigits &&
+      (draftCustomer.photo_uri || null) === ((photo && photo.uri) || null) &&
+      !(photo && photo.base64 && !draftCustomer.photo_base64);
+    if (unchanged) {
+      if (onNavigate) onNavigate(draftConsentOtp ? 'createJobSheetStep2' : 'verifyMobileNumber');
       return;
     }
 
@@ -226,7 +244,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   Customer Name <Text style={styles.required}>*</Text>
                 </Text>
                 <TextInput {...nav.props(0)}
-                  style={styles.input}
+                  style={[styles.input, tried && !String(customerName).trim() && styles.inputError]}
                   placeholder="Enter customer name"
                   placeholderTextColor="#D1D5DB"
                   value={customerName}
@@ -241,7 +259,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   Mobile Number <Text style={styles.required}>*</Text>
                 </Text>
                 <TextInput {...nav.props(1)}
-                  style={styles.input}
+                  style={[styles.input, tried && !String(mobileNumber).trim() && styles.inputError]}
                   placeholder="Enter mobile number"
                   placeholderTextColor="#D1D5DB"
                   value={mobileNumber}
@@ -349,6 +367,9 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

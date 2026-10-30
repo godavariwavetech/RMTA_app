@@ -284,7 +284,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>{t('mobileNumber')}</Text>
+              <Text style={styles.fieldLabel}>{t('mobileNumber')} <Text style={styles.required}>*</Text></Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -311,7 +311,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>{t('password')}</Text>
+              <Text style={styles.fieldLabel}>{t('password')} <Text style={styles.required}>*</Text></Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   ref={passwordInput}
@@ -439,6 +439,9 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',

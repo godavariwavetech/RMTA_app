@@ -19,6 +19,7 @@ import { Colors } from '../../../Constants/Colors';
 
 import { useDispatch } from 'react-redux';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEnterStep4({ onNavigate, sellerData, deviceData, imeiData }) {
   const dispatch = useDispatch();
@@ -152,12 +153,14 @@ export default function PurchaseEnterStep4({ onNavigate, sellerData, deviceData,
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

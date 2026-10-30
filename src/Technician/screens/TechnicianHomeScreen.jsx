@@ -200,7 +200,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{techInitials}</Text>
+              <Image source={require('../../Assets/images/appLogo.png')} style={styles.avatarImage} />
             </View>
             <View style={styles.headerInfo}>
               <Text style={styles.title}>{t('welcomeBackComma')}</Text>
@@ -386,12 +386,17 @@ const styles = StyleSheet.create({
     width: wp('12%'),
     height: wp('12%'),
     borderRadius: wp('20%'),
-    backgroundColor: '#2F5DDC',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: wp('3%'),
     borderWidth: 1.3,
     borderColor: '#ffff'
+  },
+  avatarImage: {
+    width: wp('8%'),
+    height: wp('8%'),
+    resizeMode: 'contain',
   },
   avatarText: {
     color: '#FFFFFF',

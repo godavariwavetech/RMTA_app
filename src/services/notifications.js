@@ -57,6 +57,25 @@ export function registerBackgroundHandlers() {
   notifee.onBackgroundEvent(async () => {});
 }
 
+// The device's FCM token: a fresh one when Firebase can give it, otherwise the
+// last one saved on this device.
+export async function getFcmToken() {
+  try {
+    const token = await getToken(getMessaging());
+    if (token) {
+      await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+      return token;
+    }
+  } catch (e) {
+    console.warn('[FCM] token failed', e?.message);
+  }
+  return AsyncStorage.getItem(FCM_TOKEN_KEY);
+}
+
+export function onFcmTokenRefresh(callback) {
+  return onTokenRefresh(getMessaging(), callback);
+}
+
 // Call once after login. Returns an unsubscribe function.
 // `onOpen(data)` fires when the user taps a notification.
 export async function initNotifications({ onOpen, onToken } = {}) {

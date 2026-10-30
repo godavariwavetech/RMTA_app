@@ -22,6 +22,7 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updateSaleDraft } from '../../../redux/slices/saleSlice';
+import StepNav from '../../../Components/StepNav';
 
 const sampleImage = require('../../../Assets/images/sampleMobileImg.png');
 
@@ -309,6 +310,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={[
               styles.continueButton,
@@ -317,8 +319,9 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
             onPress={handleContinue}
             disabled={!selectedDevice}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>

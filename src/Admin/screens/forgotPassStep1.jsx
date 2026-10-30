@@ -104,7 +104,7 @@ export default function ForgotPassStep1({ onNavigate }) {
 
             {/* Mobile Number Input */}
             <View style={styles.mobileSection}>
-              <Text style={styles.mobileLabel}>Registered mobile number</Text>
+              <Text style={styles.mobileLabel}>Registered mobile number <Text style={styles.required}>*</Text></Text>
               <View style={styles.mobileNumberContainer}>
                 <TextInput
                   style={styles.mobileNumber}
@@ -150,6 +150,9 @@ export default function ForgotPassStep1({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
