@@ -37,6 +37,7 @@ export const ENDPOINTS = {
   POST_PLAYER_ID: 'public_app/postplayer_id',
   LOGIN_STATUS_DATA: 'public_app/loginstatusdata',
   GET_JOBS_DATA: 'public_app/getjobsdata',
+  CREATE_TECHNICIANS_DATA: 'public_app/createtechniciansdata',
   GET_PURCHASE_DATA: 'public_app/getpurchasedata',
   GET_SALES_CUSTOMERS_DATA: 'public_app/getsalescustomersdata',
   CREATE_NOTES: 'public_app/createnotes',

@@ -17,6 +17,7 @@ import { SkeletonDetails } from '../../Components/Skeleton';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson, logoutUser } from '../../redux/slices/authSlice';
+import { confirmAction, showAppModal } from '../../utils/appModal';
 
 // Shows the full admin profile captured at registration. Fetches fresh data
 // from POST /public_app/admin_details using the logged-in admin's user_id.
@@ -68,6 +69,32 @@ export default function AdminProfileScreen({ onNavigate }) {
   const handleLogout = async () => {
     await dispatch(logoutUser()); // clear the persisted session
     if (onNavigate) onNavigate('logout');
+  };
+
+  // Account deletion (App Store requirement). Placeholder for now: confirms,
+  // shows a dummy result, then signs out and returns to the login screen.
+  const handleDeleteAccount = () => {
+    confirmAction({
+      title: 'Delete account?',
+      message: 'This will permanently delete your account and its data. This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: () =>
+        showAppModal(
+          'Account deleted',
+          'Your account has been deleted. You will now be signed out.',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                await dispatch(logoutUser());
+                if (onNavigate) onNavigate('logout');
+              },
+            },
+          ],
+          { type: 'success' },
+        ),
+    });
   };
 
   // Fall back to the logged-in user object while the fetch is in flight.
@@ -151,6 +178,9 @@ export default function AdminProfileScreen({ onNavigate }) {
         <View style={styles.footer}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Log out</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+            <Text style={styles.deleteButtonText}>Delete account</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -291,6 +321,20 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     fontSize: wp('4.2%'),
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  deleteButton: {
+    marginTop: hp('1.2%'),
+    paddingVertical: hp('1.6%'),
+    borderRadius: wp('3%'),
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    fontSize: wp('4%'),
     fontWeight: '700',
     color: '#DC2626',
   },

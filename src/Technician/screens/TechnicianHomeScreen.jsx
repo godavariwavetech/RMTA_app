@@ -33,7 +33,7 @@ import { ENDPOINTS, BASE_URL } from '../../Constants/config';
 // built-in banners (or nothing) until the request finishes again.
 let bannerCache = null;
 
-export default function TechnicianHomeScreen({ onNavigate }) {
+export default function TechnicianHomeScreen({ onNavigate, active: screenActive = true }) {
   const { t } = useI18n();
   const [selectedNavItem, setSelectedNavItem] = useState('home');
 
@@ -46,11 +46,15 @@ export default function TechnicianHomeScreen({ onNavigate }) {
   // Today's summary counts (jobs/sales/purchases for this member today).
   const counts = useSelector(state => state.jobSheet.counts);
 
+  // Home is kept mounted while other screens are open, so refresh the counts (and
+  // reset the bottom-nav highlight) each time it is shown again, not only on mount.
   useEffect(() => {
+    if (!screenActive) return;
+    setSelectedNavItem('home');
     if (user && user.member_id) {
       dispatch(fetchJobCounts({ member_id: user.member_id }));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user, screenActive]);
 
   // Home banners from GET /public_app/getbanners. Each row's picture URL may be
   // absolute or relative to the server; rows flagged deleted (d_in) are skipped.
@@ -60,6 +64,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
   const [bannersLoaded, setBannersLoaded] = useState(bannerCache !== null);
 
   useEffect(() => {
+    if (!screenActive) return undefined;
     let active = true;
     (async () => {
       try {
@@ -98,7 +103,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [screenActive]);
 
   // View model: start from the cached login user (always has the basics),
   // then layer the freshly fetched profile on top — but only its non-empty
@@ -165,7 +170,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
   ];
 
   // Pastel tile behind each quick-action icon, by action id.
-  const ACTION_TINTS = {7: '#FEF3C7', 1: '#DBEAFE', 2: '#D1FAE5', 3: '#FFEDD5', 4: '#E0E7FF', 5: '#DBEAFE', 6: '#EDE9FE', 8: '#FEE2E2', 9: '#CFFAFE', 10: '#DCFCE7', 11: '#FEF3C7'};
+  const ACTION_TINTS = {7: '#FEF3C7', 1: '#DBEAFE', 2: '#D1FAE5', 3: '#FFEDD5', 4: '#E0E7FF', 5: '#DBEAFE', 6: '#EDE9FE', 8: '#FEE2E2', 9: '#CFFAFE', 10: '#DCFCE7', 11: '#FEF3C7', 12: '#E0E7FF'};
   const quickActions = [
     { id: 7, icon: require('../../Assets/icons/qa_notes.png'), label: t('qaNotes') },
     { id: 1, icon: require('../../Assets/icons/qa_job.png'), label: t('qaNewJobSheet') },
@@ -178,6 +183,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     { id: 11, emoji: '📒', label: 'Customer directory' },
     { id: 9, icon: require('../../Assets/icons/qa_supporters.png'), label: t('qaSupporters') },
     { id: 10, emoji: '💬', label: 'Chat' },
+    { id: 12, emoji: '🧑‍🔧', label: 'Staff' },
   ];
 
   const fmt = n => String(n || 0);
@@ -282,6 +288,8 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                     handleNavigation('chat');
                   } else if (action.id === 11) {
                     handleNavigation('customerDirectory');
+                  } else if (action.id === 12) {
+                    handleNavigation('staff');
                   }
                 }}
               >

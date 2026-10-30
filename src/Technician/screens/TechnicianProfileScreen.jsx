@@ -21,6 +21,7 @@ import { useI18n, LANGUAGES } from '../../i18n';
 import useAccountProfile from '../../utils/useAccountProfile';
 import BottomNav from '../../Components/BottomNav';
 import { logoutUser } from '../../redux/slices/authSlice';
+import { confirmAction, showAppModal } from '../../utils/appModal';
 
 export default function TechnicianProfileScreen({ onNavigate }) {
   const { t, language } = useI18n();
@@ -56,6 +57,32 @@ export default function TechnicianProfileScreen({ onNavigate }) {
     if (onNavigate) {
       onNavigate('logout');
     }
+  };
+
+  // Account deletion (App Store requirement). Placeholder for now: confirms,
+  // shows a dummy result, then signs out and returns to the login screen.
+  const handleDeleteAccount = () => {
+    confirmAction({
+      title: 'Delete account?',
+      message: 'This will permanently delete your account and its data. This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: () =>
+        showAppModal(
+          'Account deleted',
+          'Your account has been deleted. You will now be signed out.',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                await dispatch(logoutUser());
+                if (onNavigate) onNavigate('logout');
+              },
+            },
+          ],
+          { type: 'success' },
+        ),
+    });
   };
 
   const profileMenuItems = [
@@ -199,6 +226,9 @@ export default function TechnicianProfileScreen({ onNavigate }) {
               onPress={handleLogout}
             >
               <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+              <Text style={styles.deleteButtonText}>Delete account</Text>
             </TouchableOpacity>
           </View>
 
@@ -413,6 +443,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  deleteButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    paddingVertical: hp('1.6%'),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   bottomSpacer: {
     height: 120,

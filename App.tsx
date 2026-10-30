@@ -79,6 +79,7 @@ import DeviceVerification from './src/Technician/screens/DeviceVerification/Devi
 import IMEIResult from './src/Technician/screens/DeviceVerification/IMEIResult';
 import CEIRResult from './src/Technician/screens/DeviceVerification/CEIRResult';
 import SupportUsersScreen from './src/Technician/screens/SupportUsersScreen';
+import StaffScreen from './src/Technician/screens/StaffScreen';
 import NotesScreen from './src/Technician/screens/NotesScreen';
 import ChatScreen from './src/Technician/screens/ChatScreen';
 import CustomerDirectoryScreen from './src/Technician/screens/CustomerDirectoryScreen';
@@ -94,7 +95,7 @@ const keyboardAwareScreens = new Set([
   'purchaseEntryStep6', 'purchaseEntryStep7', 'purchaseEntryStep8',
   'saleEntryStep1', 'verifyBuyerMobileNumber', 'saleEntryStep2',
   'saleEntryStep3', 'saleEntryStep4', 'buyerConfirmationOTP',
-  'deviceVerification', 'supportUsers', 'notes', 'chat', 'customerDirectory',
+  'deviceVerification', 'supportUsers', 'notes', 'chat', 'customerDirectory', 'staff',
 ]);
 
 const screensWithTheirOwnKeyboardAvoider = new Set([
@@ -229,6 +230,18 @@ function AppContent() {
   const [currentScreen, setCurrentScreen] = useState<string>('intro');
   const [navigationParams, setNavigationParams] = useState<any>({});
   const [navigationHistory, setNavigationHistory] = useState<string[]>(['intro']);
+  // Home stays mounted (hidden) while other screens are open, so its banners,
+  // counts and scroll position are exactly as left when you come back, instead of
+  // being rebuilt and reloaded every time. It is dropped again on logout.
+  const [homeKept, setHomeKept] = useState<boolean>(false);
+  useEffect(() => {
+    if (currentScreen === 'home') {
+      setHomeKept(true);
+    } else if (currentScreen === 'login' || currentScreen === 'intro' || currentScreen === 'register') {
+      setHomeKept(false);
+    }
+  }, [currentScreen]);
+  const showHomeLayer = currentScreen === 'home' || (homeKept && !['login', 'intro', 'register'].includes(currentScreen));
   // Params each screen in the history was opened with, by history index, so
   // Back returns to the screen exactly as it was (e.g. Sales vs Purchases).
   const savedParams = useRef<Record<number, any>>({});
@@ -384,6 +397,7 @@ function AppContent() {
       notes: 'notes',
       chat: 'chat',
       customerDirectory: 'customerDirectory',
+      staff: 'staff',
     };
     const newScreen = screenMap[screen] || 'home';
     const isPush =
@@ -459,6 +473,11 @@ function AppContent() {
         }
         keyboardVerticalOffset={0}
       >
+      {showHomeLayer && (
+        <View style={currentScreen === 'home' ? { flex: 1 } : { display: 'none' }}>
+          <TechnicianHomeScreen onNavigate={handleScreenNavigation} active={currentScreen === 'home'} />
+        </View>
+      )}
       {currentScreen === 'language' ? (
         <LanguageScreen onNavigate={handleScreenNavigation} fromSettings={!!navigationParams.fromSettings} />
       ) : currentScreen === 'intro' ? (
@@ -489,7 +508,7 @@ function AppContent() {
           otp={navigationParams.otp}
         />
       ) : currentScreen === 'home' ? (
-        <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
+        null
       ) : currentScreen === 'technicianList' ? (
         <TechnicianList onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'addTechnician' ? (
@@ -618,6 +637,8 @@ function AppContent() {
         <IMEIResult onNavigate={handleScreenNavigation} imeiNumber={navigationParams.imeiNumber} />
       ) : currentScreen === 'ceirResult' ? (
         <CEIRResult onNavigate={handleScreenNavigation} imeiNumber={navigationParams.imeiNumber} />
+      ) : currentScreen === 'staff' ? (
+        <StaffScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'customerDirectory' ? (
         <CustomerDirectoryScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'chat' ? (
@@ -626,9 +647,7 @@ function AppContent() {
         <NotesScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'supportUsers' ? (
         <SupportUsersScreen onNavigate={handleScreenNavigation} />
-      ) : (
-        <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
-      )}
+      ) : null}
       </KeyboardAvoidingView>
       </View>
       </View>
