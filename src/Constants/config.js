@@ -33,6 +33,7 @@ export const ENDPOINTS = {
   CREATE_JOB_SHEET: 'public_app/create_job_sheets',
   JOB_COUNTS: 'public_app/getcounts',
   GET_SCROLL: 'public_app/getscroll',
+  GET_BANNERS: 'public_app/getbanners',
   CREATE_NOTES: 'public_app/createnotes',
   GET_NOTES: 'public_app/getnotes',
   EDIT_NOTES: 'public_app/editnotes',

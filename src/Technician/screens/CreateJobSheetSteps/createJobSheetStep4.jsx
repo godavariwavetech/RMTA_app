@@ -21,8 +21,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
 import DatePickerModal, { formatDisplayDate } from '../../../Components/DatePickerModal';
+import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function CreateJobSheetStep4({ onNavigate }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftRepair = useSelector(state => state.jobSheet.draft.repair) || {};
@@ -142,7 +144,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
             {/* Problem Description */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Problem Description</Text>
-              <TextInput
+              <TextInput {...nav.props(0)}
                 style={[styles.input, styles.descriptionInput]}
                 placeholder="Describe the problem"
                 placeholderTextColor="#D1D5DB"
@@ -156,12 +158,13 @@ export default function CreateJobSheetStep4({ onNavigate }) {
             {/* Estimated Repair Cost */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Estimated Repair Cost</Text>
-              <TextInput
+              <TextInput {...nav.props(1)}
                 style={styles.input}
                 placeholder="Enter estimated cost"
                 placeholderTextColor="#D1D5DB"
                 value={estimatedCost}
-                onChangeText={setEstimatedCost}
+                onChangeText={t => setEstimatedCost(sanitizeAmount(t))}
+                keyboardType="decimal-pad"
               />
             </View>
 
@@ -203,6 +206,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
             <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

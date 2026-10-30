@@ -20,7 +20,7 @@ import { Colors } from '../../../Constants/Colors';
 export default function SaleCompleted({ onNavigate, buyerData, deviceData, saleData, invoiceId }) {
   const handleViewSaleHistory = () => {
     if (onNavigate) {
-      onNavigate('viewSaleHistory');
+      onNavigate('replaceStack', { target: 'viewSaleHistory' });
     }
   };
 

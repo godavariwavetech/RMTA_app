@@ -71,6 +71,20 @@ const pickCount = (obj, keys) => {
 // the getscroll response format isn't documented yet.
 const normalizeCounts = raw => {
   const row = Array.isArray(raw) ? raw[0] || {} : raw || {};
+  // getcounts reports today's jobs by stage: inserted (new), pending, working,
+  // completed and delivered. Jobs today = everything created today; delivered
+  // counts as completed, and working counts as still pending.
+  const hasStages = ['today_inserted', 'today_pending', 'today_working', 'today_completed', 'today_delivered']
+    .some(k => row[k] !== undefined);
+  if (hasStages) {
+    return {
+      jobs_today: pickCount(row, ['today_inserted']),
+      completed: pickCount(row, ['today_completed']) + pickCount(row, ['today_delivered']),
+      pending: pickCount(row, ['today_pending']) + pickCount(row, ['today_working']),
+      sales: pickCount(row, ['today_sales', 'today_sale', 'sales', 'sales_count']),
+      purchases: pickCount(row, ['today_purchase', 'today_purchases', 'purchases', 'purchase_count']),
+    };
+  }
   return {
     jobs_today: pickCount(row, ['jobs_today', 'today_jobs', 'jobs', 'job_count', 'total_jobs']),
     completed: pickCount(row, ['completed', 'completed_jobs', 'completed_count', 'complete']),

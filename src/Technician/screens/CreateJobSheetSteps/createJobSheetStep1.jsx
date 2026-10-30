@@ -27,8 +27,10 @@ import {
   createJobSheetCustomer,
 } from '../../../redux/slices/jobSheetSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function CreateJobSheetStep1({ onNavigate, fresh }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const draftCustomer = useSelector(state => state.jobSheet.draft.customer) || {};
@@ -223,7 +225,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                 <Text style={styles.label}>
                   Customer Name <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
+                <TextInput {...nav.props(0)}
                   style={styles.input}
                   placeholder="Enter customer name"
                   placeholderTextColor="#D1D5DB"
@@ -238,7 +240,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                 <Text style={styles.label}>
                   Mobile Number <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
+                <TextInput {...nav.props(1)}
                   style={styles.input}
                   placeholder="Enter mobile number"
                   placeholderTextColor="#D1D5DB"
@@ -252,7 +254,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
               {/* Alternate Number */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Alternate Number</Text>
-                <TextInput
+                <TextInput {...nav.props(2)}
                   style={styles.input}
                   placeholder="Optional"
                   placeholderTextColor="#D1D5DB"
@@ -266,7 +268,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
               {/* Aadhar Number */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Aadhar Number</Text>
-                <TextInput
+                <TextInput {...nav.props(3)}
                   style={styles.input}
                   placeholder="Enter aadhar number"
                   placeholderTextColor="#D1D5DB"
@@ -340,6 +342,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
             )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

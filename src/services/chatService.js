@@ -8,13 +8,15 @@ import {
   query,
   orderBy,
   where,
+  increment,
   serverTimestamp,
 } from '@react-native-firebase/firestore';
 
 // Firestore layout
 //   users/{memberId}                  { name, fcmToken, updatedAt }
 //   chats/{chatId}                    { participants: [a, b], names: {a, b},
-//                                       lastMessage, lastFrom, lastAt }
+//                                       lastMessage, lastFrom, lastAt,
+//                                       unread: {id: count}, readAt: {id: ts} }
 //   chats/{chatId}/messages/{autoId}  { from, text, createdAt }
 // chatId is the two member ids sorted and joined, so both sides share one doc.
 const db = () => getFirestore();
@@ -41,7 +43,14 @@ export function subscribeChats(me, onData, onError) {
     snap =>
       onData(
         snap.docs
-          .map(d => ({ id: d.id, ...d.data(), lastAtMs: toMillis(d.data().lastAt) }))
+          .map(d => {
+            const data = d.data();
+            const readAtMs = {};
+            Object.entries(data.readAt || {}).forEach(([id, ts]) => {
+              readAtMs[id] = toMillis(ts);
+            });
+            return { id: d.id, ...data, lastAtMs: toMillis(data.lastAt), readAtMs };
+          })
           .sort((x, y) => y.lastAtMs - x.lastAtMs),
       ),
     err => onError && onError(err),
@@ -74,6 +83,8 @@ export async function sendMessage({ me, meName, peer, peerName, text }) {
       lastMessage: text,
       lastFrom: String(me),
       lastAt: serverTimestamp(),
+      // Peer's unread badge goes up by one for every message we send.
+      unread: { [String(peer)]: increment(1) },
     },
     { merge: true },
   );
@@ -82,4 +93,14 @@ export async function sendMessage({ me, meName, peer, peerName, text }) {
     text,
     createdAt: serverTimestamp(),
   });
+}
+
+// Marks the conversation as read by `me`: clears the unread badge and stamps
+// the time the other side uses to show "Read" under their messages.
+export function markRead(chatId, me) {
+  return setDoc(
+    doc(db(), 'chats', chatId),
+    { unread: { [String(me)]: 0 }, readAt: { [String(me)]: serverTimestamp() } },
+    { merge: true },
+  );
 }

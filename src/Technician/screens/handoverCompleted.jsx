@@ -28,13 +28,13 @@ export default function HandoverCompleted({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('jobs');
+      onNavigate('replaceStack', { target: 'jobs' });
     }
   };
 
   const handleBackToJobSheets = () => {
     if (onNavigate) {
-      onNavigate('jobs');
+      onNavigate('replaceStack', { target: 'jobs' });
     }
   };
 

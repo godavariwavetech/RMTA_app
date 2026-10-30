@@ -22,6 +22,8 @@ import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
 import { setActiveJob } from '../../redux/slices/jobSheetSlice';
+import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../Components/FieldNav';
+import { confirmAction } from '../../utils/appModal';
 
 const STATUS_LABELS = {
   open: 'Active',
@@ -33,6 +35,7 @@ const STATUS_LABELS = {
 };
 
 export default function RepairProgressScreen({ onNavigate, initialTab = 'repair' }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   const activeJob = useSelector(state => state.jobSheet.activeJob) || {};
   const user = useSelector(state => state.auth.user) || {};
@@ -204,7 +207,7 @@ export default function RepairProgressScreen({ onNavigate, initialTab = 'repair'
             {/* Technician Notes */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Technician notes</Text>
-              <TextInput
+              <TextInput {...nav.props(0)}
                 style={[styles.input, styles.notesInput]}
                 placeholder="Add notes about the repair"
                 placeholderTextColor="#D1D5DB"
@@ -218,12 +221,13 @@ export default function RepairProgressScreen({ onNavigate, initialTab = 'repair'
             {/* Final Repair Cost */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Final repair cost</Text>
-              <TextInput
+              <TextInput {...nav.props(1)}
                 style={styles.input}
                 placeholder="Enter final cost"
                 placeholderTextColor="#D1D5DB"
                 value={finalCost}
-                onChangeText={setFinalCost}
+                onChangeText={t => setFinalCost(sanitizeAmount(t))}
+                keyboardType="decimal-pad"
               />
             </View>
 
@@ -235,7 +239,14 @@ export default function RepairProgressScreen({ onNavigate, initialTab = 'repair'
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.qualityCheckButton}
-            onPress={handleSubmitProgress}
+            onPress={() =>
+              confirmAction({
+                title: 'Submit repair progress?',
+                message: 'The job will be updated with the status, notes and final cost you entered.',
+                confirmText: 'Submit',
+                onConfirm: handleSubmitProgress,
+              })
+            }
             disabled={submitting}
           >
             {submitting ? (
@@ -245,6 +256,7 @@ export default function RepairProgressScreen({ onNavigate, initialTab = 'repair'
             )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

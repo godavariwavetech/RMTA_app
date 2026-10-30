@@ -19,14 +19,19 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { useI18n } from '../../i18n';
 import BottomNav from '../../Components/BottomNav';
-import { postJson } from '../../redux/slices/authSlice';
 import ScrollTicker from '../../Components/ScrollTicker';
 import BannerCarousel from '../../Components/BannerCarousel';
 import useAccountProfile from '../../utils/useAccountProfile';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
-import { ENDPOINTS } from '../../Constants/config';
+import { getJson } from '../../redux/slices/authSlice';
+import { ENDPOINTS, BASE_URL } from '../../Constants/config';
 // Re-enable together with the NFC option in the QR tile below.
 // import { showAppActionSheet } from '../../utils/appModal';
+
+// Banners survive leaving and reopening the screen: the last fetched list is
+// kept here so the carousel renders it immediately instead of flashing the
+// built-in banners (or nothing) until the request finishes again.
+let bannerCache = null;
 
 export default function TechnicianHomeScreen({ onNavigate }) {
   const { t } = useI18n();
@@ -47,29 +52,51 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     }
   }, [dispatch, user]);
 
-  // Recent activity: latest job sheet created, IMEI verified, and phone sold.
-  // Any action that never happened comes back null and is simply omitted.
-  const [recent, setRecent] = useState({ job: null, imei: null, sale: null });
+  // Home banners from GET /public_app/getbanners. Each row's picture URL may be
+  // absolute or relative to the server; rows flagged deleted (d_in) are skipped.
+  // While loading, or if the call fails or returns nothing, the built-in
+  // banners below are shown instead.
+  const [apiBanners, setApiBanners] = useState(bannerCache || []);
+  const [bannersLoaded, setBannersLoaded] = useState(bannerCache !== null);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      if (!user || !user.member_id) return;
       try {
-        const { response, data } = await postJson(ENDPOINTS.RECENT_ACTIVITY, {
-          member_id: user.member_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          setRecent(data.data || { job: null, imei: null, sale: null });
+        const { response, data } = await getJson(ENDPOINTS.GET_BANNERS, undefined, 10000);
+        const rows = Array.isArray(data) ? data : data && (data.data || data.banners);
+        if (!active) return;
+        if (!response.ok || !Array.isArray(rows)) {
+          setBannersLoaded(true);
+          return;
         }
+        const imageOf = row =>
+          row.image || row.image_url || row.banner || row.banner_url || row.banner_image ||
+          row.photo || row.file || row.path || row.url || '';
+        const next = rows
+            .filter(row => row && !Number(row.d_in) && String(imageOf(row)).trim())
+            .map((row, i) => {
+              const v = String(imageOf(row)).trim();
+              const uri = /^https?:\/\//.test(v) ? v : `${BASE_URL}${v.replace(/^\//, '')}`;
+              return { id: `api-${row.id ?? i}`, image: { uri } };
+            });
+        // Only replace what's on screen when the list really changed.
+        const same =
+          bannerCache &&
+          bannerCache.length === next.length &&
+          bannerCache.every((b, i) => b.id === next[i].id && b.image.uri === next[i].image.uri);
+        bannerCache = next;
+        if (!same) setApiBanners(next);
+        setBannersLoaded(true);
       } catch (e) {
-        // leave recent activity empty on failure
+        // keep the built-in banners
+        if (active) setBannersLoaded(true);
       }
     })();
     return () => {
       active = false;
     };
-  }, [user]);
+  }, []);
 
   // View model: start from the cached login user (always has the basics),
   // then layer the freshly fetched profile on top — but only its non-empty
@@ -160,53 +187,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     { id: 5, count: fmt(counts.purchases), label: t('purchases'), icon: require('../../Assets/icons/arrow-down-left.png'), color: '#EDE9FE', textColor: '#333333ff', borderColor: '#d5ccef9a' },
   ];
 
-  // Build the recent-activity list from whichever actions have happened,
-  // newest first. Each entry's subtitle shows the device and when it happened.
-  const fmtActivityTime = v => {
-    if (!v) return '';
-    const dt = new Date(v);
-    if (isNaN(dt.getTime())) return '';
-    return dt.toLocaleString('en-IN', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    });
-  };
-  const deviceLabel = (brand, model, fallback) =>
-    [brand, model].filter(Boolean).join(' ') || fallback;
-
-  const recentActivity = [];
-  if (recent.job) {
-    recentActivity.push({
-      id: 'job',
-      icon: require('../../Assets/icons/quickActions2.png'),
-      title: 'Job sheet created',
-      subtitle: `${deviceLabel(recent.job.device_brand, recent.job.device_model, 'Device')} · ${fmtActivityTime(recent.job.created_at)}`,
-      time: recent.job.created_at,
-      bgColor: '#DCFCE7',
-    });
-  }
-  if (recent.imei) {
-    recentActivity.push({
-      id: 'imei',
-      icon: require('../../Assets/icons/quickActions4.png'),
-      title: 'IMEI verified',
-      subtitle: `${deviceLabel(recent.imei.brand, recent.imei.model, 'Device check')} · ${fmtActivityTime(recent.imei.checked_at)}`,
-      time: recent.imei.checked_at,
-      bgColor: '#EDE9FE',
-    });
-  }
-  if (recent.sale) {
-    const saleTime = recent.sale.sold_at || recent.sale.created_at;
-    recentActivity.push({
-      id: 'sale',
-      icon: require('../../Assets/icons/quickActions3.png'),
-      title: 'Pre-owned phone sold',
-      subtitle: `${deviceLabel(recent.sale.device_brand, recent.sale.device_model, 'Device')} · ${fmtActivityTime(saleTime)}`,
-      time: saleTime,
-      bgColor: '#FEF3C7',
-    });
-  }
-  recentActivity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-
   return (
     <>
       <StatusBar
@@ -241,17 +221,26 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         </View>
 
         {/* Featured banners */}
-        <BannerCarousel slides={banners} />
+        {bannersLoaded || apiBanners.length ? (
+          <BannerCarousel slides={apiBanners.length ? apiBanners : banners} />
+        ) : (
+          <View style={styles.bannerPlaceholder} />
+        )}
 
         {/* Quick Actions Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
           <View style={styles.sectionUnderline} />
           <View style={styles.quickActionsGrid}>
-            {quickActions.map((action) => (
+            {quickActions.map((action, index) => (
               <TouchableOpacity
                 key={action.id}
-                style={styles.actionButton}
+                style={[
+                  styles.actionButton,
+                  // Full rows stay evenly spread (4 per row); a partial last row
+                  // fills from the left with the same column gaps.
+                  (index + 1) % 4 !== 0 && styles.actionButtonGap,
+                ]}
                 onPress={() => {
                   if (action.id === 1) {
                     handleNavigation('createJobSheetStep1', { fresh: true });
@@ -313,9 +302,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('todaysSummary')}</Text>
-            <TouchableOpacity onPress={() => handleNavigation('jobs')}>
-              <Text style={styles.viewAllText}>{t('viewAll')} {'>'}</Text>
-            </TouchableOpacity>
           </View>
           <View style={styles.statsGrid}>
             {todayStats.slice(0, 3).map((stat) => (
@@ -359,36 +345,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
           </View>
         </View>
 
-        {/* Recent Activity Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>{t('viewAll')} {'>'}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.activityList}>
-            {recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
-                <TouchableOpacity key={activity.id} style={styles.activityItem}>
-                  <View style={[styles.activityIcon, { backgroundColor: activity.bgColor }]}>
-                    <Image source={activity.icon} style={styles.activityIconImage} />
-                  </View>
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>{activity.title}</Text>
-                    <Text style={styles.activitySubtitle}>{activity.subtitle}</Text>
-                  </View>
-                  <Text style={styles.chevron}>›</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.activityEmptyText}>
-                {t('noRecentActivity')}
-              </Text>
-            )}
-          </View>
-        </View>
-
          <Text style={styles.bottomNavTitle}>{t('oneAssociation')}</Text>
 
         <View style={styles.bottomSpacer} />
@@ -402,6 +358,14 @@ export default function TechnicianHomeScreen({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  bannerPlaceholder: {
+    height: 178,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 8,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
@@ -531,8 +495,11 @@ const styles = StyleSheet.create({
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginTop: 12,
+  },
+  actionButtonGap: {
+    marginRight: '2.5%',
   },
   sectionUnderline: {
     width: 26,
@@ -559,19 +526,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   actionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
+    width: 58,
+    height: 58,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 6,
   },
   actionIconImage: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     resizeMode: 'contain',
   },
-  actionEmoji: { fontSize: 22 },
+  actionEmoji: { fontSize: 30 },
   actionLabel: {
     fontSize: 10,
     lineHeight: 13,

@@ -114,13 +114,6 @@ export default function CreateJobSheetStep7({ onNavigate }) {
     }
   };
 
-  const handleEditDetails = () => {
-    // Return to the existing step instead of adding a duplicate to history.
-    if (onNavigate) {
-      onNavigate('goBackTo', { target: 'createJobSheetStep1' });
-    }
-  };
-
   return (
     <>
       <StatusBar
@@ -213,11 +206,6 @@ export default function CreateJobSheetStep7({ onNavigate }) {
                 <Text style={styles.detailValue}>{delivery}</Text>
               </View>
             </View>
-
-            {/* Edit Details Button */}
-            <TouchableOpacity style={styles.editButton} onPress={handleEditDetails}>
-              <Text style={styles.editButtonText}>Edit customer details</Text>
-            </TouchableOpacity>
 
             <View style={styles.bottomSpacer} />
           </View>
@@ -422,27 +410,6 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#E5E7EB',
-  },
-  editButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#9CA3AF',
   },
   bottomSpacer: {
     height: 24,

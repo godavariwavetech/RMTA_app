@@ -20,7 +20,7 @@ import { Colors } from '../../../Constants/Colors';
 export default function PurchaseEntryStep8({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData }) {
   const handleViewPurchaseHistory = () => {
     if (onNavigate) {
-      onNavigate('viewPurchaseHistory');
+      onNavigate('replaceStack', { target: 'viewPurchaseHistory' });
     }
   };
 

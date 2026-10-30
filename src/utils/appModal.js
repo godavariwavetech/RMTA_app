@@ -17,17 +17,67 @@ function publishModal(nextModal) {
   listeners.forEach(listener => listener(activeModal));
 }
 
-export function showAppModal(title, message, buttons) {
+// Icon + accent colour per dialog type. The type is taken from the optional
+// 4th argument ({ type }) or guessed from the title/buttons, so the many
+// existing Alert.alert calls pick up the right look without changes.
+const TYPES = {
+  success: { glyph: '✓', color: '#16A34A', tint: '#DCFCE7' },
+  error: { glyph: '✕', color: '#DC2626', tint: '#FEE2E2' },
+  warning: { glyph: '!', color: '#D97706', tint: '#FEF3C7' },
+  confirm: { glyph: '?', color: '#1463D9', tint: '#DBEAFE' },
+  info: { glyph: 'i', color: '#1463D9', tint: '#DBEAFE' },
+};
+
+function inferType(title, actions, explicit) {
+  if (explicit && TYPES[explicit]) return explicit;
+  const t = String(title).toLowerCase();
+  if (actions.some(a => a.style === 'destructive')) return 'warning';
+  if (/could not|couldn't|failed|error|invalid|incorrect|denied|wrong|unable|not found|rejected/.test(t)) return 'error';
+  if (/incomplete|required|missing|no active|warning|limit|exceed|permission|not allowed/.test(t)) return 'warning';
+  if (actions.some(a => a.style === 'cancel')) return 'confirm';
+  if (/success|created|saved|sent|complete|verified|done|ready|updated|added|resent/.test(t)) return 'success';
+  return 'info';
+}
+
+// Two-button confirmation: Cancel + a confirm action.
+export function confirmAction({
+  title,
+  message,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  onConfirm,
+  type = 'confirm',
+  destructive = false,
+}) {
+  showAppModal(
+    title,
+    message,
+    [
+      { text: cancelText, style: 'cancel' },
+      { text: confirmText, style: destructive ? 'destructive' : undefined, onPress: onConfirm },
+    ],
+    { type: destructive ? 'warning' : type },
+  );
+}
+
+export function showAppModal(title, message, buttons, options) {
   // Keep Alert.alert's common calling convention so existing error and
   // confirmation flows are shown in the app's modal instead of a system alert.
   if (typeof message === 'function' || Array.isArray(message)) {
+    options = buttons;
     buttons = message;
     message = '';
   }
   const actions = Array.isArray(buttons) && buttons.length
     ? buttons
     : [{ text: 'OK' }];
-  publishModal({ title: String(title || 'Message'), message: String(message || ''), actions });
+  const safeTitle = String(title || 'Message');
+  publishModal({
+    title: safeTitle,
+    message: String(message || ''),
+    actions,
+    type: inferType(safeTitle, actions, options && options.type),
+  });
 }
 
 export function showAppActionSheet(title, message, actions) {
@@ -56,6 +106,7 @@ export function AppModalHost() {
 
   const close = () => publishModal(null);
   const isActionSheet = modal?.variant === 'actionSheet';
+  const theme = TYPES[modal?.type] || TYPES.info;
 
   return (
     <Modal
@@ -74,8 +125,17 @@ export function AppModalHost() {
           ]}
         >
           {isActionSheet && <View style={styles.grabber} />}
-          <Text style={styles.title}>{modal?.title}</Text>
-          {!!modal?.message && <Text style={styles.message}>{modal.message}</Text>}
+          {!isActionSheet && (
+            <View style={[styles.iconCircle, { backgroundColor: theme.tint }]}>
+              <View style={[styles.iconInner, { backgroundColor: theme.color }]}>
+                <Text style={styles.iconGlyph}>{theme.glyph}</Text>
+              </View>
+            </View>
+          )}
+          <Text style={[styles.title, !isActionSheet && styles.centerText]}>{modal?.title}</Text>
+          {!!modal?.message && (
+            <Text style={[styles.message, !isActionSheet && styles.centerText]}>{modal.message}</Text>
+          )}
           {isActionSheet ? (
             <View style={styles.sheetOptions}>
               {modal?.actions.map((action, index) => (
@@ -106,14 +166,16 @@ export function AppModalHost() {
               </Pressable>
             </View>
           ) : (
-            <View style={styles.actions}>
+            <View style={[styles.actions, modal?.actions.length === 2 && styles.actionsRow]}>
               {modal?.actions.map((action, index) => (
                 <Pressable
                   key={`${action.text}-${index}`}
-                  style={[
+                  style={({ pressed }) => [
                     styles.button,
+                    { backgroundColor: theme.color },
                     action.style === 'cancel' && styles.cancelButton,
                     action.style === 'destructive' && styles.destructiveButton,
+                    pressed && styles.buttonPressed,
                   ]}
                   onPress={() => {
                     close();
@@ -156,9 +218,11 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 420,
-    borderRadius: 18,
-    padding: 22,
+    maxWidth: 380,
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingTop: 26,
+    paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     elevation: 12,
   },
@@ -184,20 +248,47 @@ const styles = StyleSheet.create({
   title: {
     color: '#111827',
     fontSize: 19,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   message: {
-    marginTop: 10,
-    color: '#4B5563',
-    fontSize: 15,
-    lineHeight: 22,
+    marginTop: 8,
+    color: '#6B7280',
+    fontSize: 14.5,
+    lineHeight: 21,
   },
   actions: {
+    marginTop: 22,
+  },
+  actionsRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    marginTop: 20,
-    marginHorizontal: -4,
+  },
+  iconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  iconInner: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGlyph: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+    includeFontPadding: false,
+  },
+  centerText: {
+    textAlign: 'center',
+  },
+  buttonPressed: {
+    opacity: 0.85,
   },
   sheetOptions: {
     marginTop: 16,
@@ -259,21 +350,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   button: {
-    minHeight: 42,
-    minWidth: 76,
+    flex: 1,
+    minHeight: 46,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
     marginHorizontal: 4,
-    marginTop: 6,
-    backgroundColor: '#1463D9',
+    marginTop: 8,
   },
   cancelButton: {
     backgroundColor: '#F3F4F6',
   },
   destructiveButton: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#DC2626',
   },
   buttonText: {
     color: '#FFFFFF',
@@ -284,6 +374,6 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   destructiveText: {
-    color: '#B91C1C',
+    color: '#FFFFFF',
   },
 });

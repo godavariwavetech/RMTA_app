@@ -23,8 +23,10 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft, createPurchaseCustomer } from '../../../redux/slices/purchaseSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function PurchaseEntryStep1({ onNavigate }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
@@ -192,7 +194,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Seller Name <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(0)}
               style={styles.input}
               placeholder="Enter seller name"
               placeholderTextColor="#9CA3AF"
@@ -207,7 +209,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Seller Mobile <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(1)}
               style={styles.input}
               placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
@@ -257,7 +259,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
           {/* Aadhaar Number Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Aadhaar Number</Text>
-            <TextInput
+            <TextInput {...nav.props(2)}
               style={styles.input}
               placeholder="Enter Aadhaar number"
               placeholderTextColor="#9CA3AF"
@@ -274,7 +276,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Address <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(3)}
               style={[
                 styles.input,
                 styles.textArea,
@@ -306,6 +308,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,6 +21,7 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { resetSaleDraft } from '../../../redux/slices/saleSlice';
+import OtpInput from '../../../Components/OtpInput';
 
 export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData, saleData, invoiceId }) {
   const dispatch = useDispatch();
@@ -29,7 +29,6 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes
   const [submitting, setSubmitting] = useState(false);
-  const inputRefs = useRef([]);
 
   // Request a confirmation OTP for the buyer's mobile on arrival (dev: alert).
   const sendOtp = async () => {
@@ -77,27 +76,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
     }
   };
 
-  const handleOtpChange = (value, index) => {
-    // Only allow single digits
-    if (value.length > 1) {
-      return;
-    }
 
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Move to next input if digit is entered
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyPress = (event, index) => {
-    if (event.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
 
   const handleVerify = async () => {
     const fullOtp = otp.join('');
@@ -132,13 +111,16 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
       }
       dispatch(resetSaleDraft());
       if (onNavigate) {
-        onNavigate('saleCompleted', {
-          buyerData: buyerData,
-          deviceData: deviceData,
-          saleData: saleData,
-          invoiceId: invoiceId,
-          sale: data.data,
-          otpVerified: true,
+        onNavigate('replaceStack', {
+          target: 'saleCompleted',
+          screenParams: {
+            buyerData: buyerData,
+            deviceData: deviceData,
+            saleData: saleData,
+            invoiceId: invoiceId,
+            sale: data.data,
+            otpVerified: true,
+          },
         });
       }
     } catch (err) {
@@ -200,25 +182,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
             </Text>
 
             {/* OTP Input Fields */}
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={[
-                    styles.otpInput,
-                    digit && styles.otpInputFilled,
-                  ]}
-                  maxLength={1}
-                  keyboardType="numeric"
-                  value={digit}
-                  onChangeText={(value) => handleOtpChange(value, index)}
-                  onKeyPress={(event) => handleOtpKeyPress(event, index)}
-                  secureTextEntry={false}
-                  textAlign="center"
-                />
-              ))}
-            </View>
+            <OtpInput value={otp} onChange={setOtp} />
 
             {/* Resend Timer */}
             <View style={styles.timerContainer}>
@@ -353,29 +317,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 24,
-  },
-  otpInput: {
-    flex: 1,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.primary,
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-  },
-  otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F7F9FC',
-  },
+  },
   timerContainer: {
     alignItems: 'center',
     marginBottom: 24,

@@ -21,6 +21,7 @@ import { useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import { confirmAction } from '../../utils/appModal';
 
 export default function QualityCheckScreen({ onNavigate }) {
   const user = useSelector(state => state.auth.user) || {};
@@ -155,7 +156,14 @@ export default function QualityCheckScreen({ onNavigate }) {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.readyButton}
-            onPress={handleMarkReadyForHandover}
+            onPress={() =>
+              confirmAction({
+                title: 'Mark ready for handover?',
+                message: 'The quality check will be recorded and the customer is sent a handover OTP.',
+                confirmText: 'Mark ready',
+                onConfirm: handleMarkReadyForHandover,
+              })
+            }
             disabled={marking}
           >
             {marking ? (

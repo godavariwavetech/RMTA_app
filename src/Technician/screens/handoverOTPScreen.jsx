@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  TextInput,
   Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +19,8 @@ import { useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import OtpInput from '../../Components/OtpInput';
+import { confirmAction } from '../../utils/appModal';
 
 export default function HandoverOTPScreen({ onNavigate }) {
   const activeJob = useSelector(state => state.jobSheet.activeJob);
@@ -27,7 +28,6 @@ export default function HandoverOTPScreen({ onNavigate }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(300); // 5 minutes in seconds
   const [isResendDisabled, setIsResendDisabled] = useState(true);
-  const otpRefs = useRef([]);
 
   useEffect(() => {
     if (timer > 0) {
@@ -46,32 +46,12 @@ export default function HandoverOTPScreen({ onNavigate }) {
     }
   };
 
-  const handleOTPChange = (text, index) => {
-    const newOtp = [...otp];
-    newOtp[index] = text;
-    setOtp(newOtp);
-
-    // Auto move to next input
-    if (text && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyPress = (e, index) => {
-    // Handle backspace
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      const newOtp = [...otp];
-      newOtp[index - 1] = '';
-      setOtp(newOtp);
-    }
-  };
-
   const isOTPComplete = otp.every((digit) => digit !== '');
 
   const handleVerifyAndContinue = () => {
     if (isOTPComplete) {
       if (onNavigate) {
-        onNavigate('handoverCompleted');
+        onNavigate('replaceStack', { target: 'handoverCompleted', base: ['home', 'jobs'] });
       }
     }
   };
@@ -130,27 +110,7 @@ export default function HandoverOTPScreen({ onNavigate }) {
             </Text>
 
             {/* OTP Input Fields */}
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(el) => (otpRefs.current[index] = el)}
-                  style={[
-                    styles.otpInput,
-                    digit && styles.otpInputFilled,
-                    index === 0 && otp[0] && styles.otpInputActive,
-                  ]}
-                  maxLength={1}
-                  keyboardType="numeric"
-                  value={digit}
-                  onChangeText={(text) => handleOTPChange(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  secureTextEntry={!!digit}
-                  placeholder="•"
-                  placeholderTextColor="#E5E7EB"
-                />
-              ))}
-            </View>
+            <OtpInput value={otp} onChange={setOtp} />
 
             {/* Timer and Resend */}
             <View style={styles.timerContainer}>
@@ -182,7 +142,14 @@ export default function HandoverOTPScreen({ onNavigate }) {
               styles.verifyButton,
               !isOTPComplete && styles.verifyButtonDisabled,
             ]}
-            onPress={handleVerifyAndContinue}
+            onPress={() =>
+              confirmAction({
+                title: 'Confirm handover?',
+                message: 'Verify this OTP and hand the device over to the customer.',
+                confirmText: 'Verify & hand over',
+                onConfirm: handleVerifyAndContinue,
+              })
+            }
             disabled={!isOTPComplete}
           >
             <Text style={styles.verifyButtonText}>Verify & continue</Text>
@@ -255,33 +222,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-    justifyContent: 'space-between',
-  },
-  otpInput: {
-    flex: 1,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1F2937',
-    textAlign: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F0F4FF',
-  },
-  otpInputActive: {
-    borderColor: Colors.primary,
   },
   timerContainer: {
     marginBottom: 20,

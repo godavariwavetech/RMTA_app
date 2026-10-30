@@ -21,8 +21,10 @@ import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
   const draftDevice = useSelector(state => state.purchase.draft.device) || {};
@@ -116,7 +118,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             {/* Device Brand Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Device brand</Text>
-              <TextInput
+              <TextInput {...nav.props(0)}
                 style={styles.input}
                 placeholder="e.g., OnePlus, Samsung"
                 placeholderTextColor="#9CA3AF"
@@ -128,7 +130,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             {/* Device Model Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Device model</Text>
-              <TextInput
+              <TextInput {...nav.props(1)}
                 style={styles.input}
                 placeholder="e.g., 9R, S21"
                 placeholderTextColor="#9CA3AF"
@@ -140,7 +142,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             {/* Storage Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Storage</Text>
-              <TextInput
+              <TextInput {...nav.props(2)}
                 style={styles.input}
                 placeholder="e.g., 128 GB"
                 placeholderTextColor="#9CA3AF"
@@ -152,7 +154,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             {/* Color Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Color</Text>
-              <TextInput
+              <TextInput {...nav.props(3)}
                 style={styles.input}
                 placeholder="e.g., Lake Blue, Black"
                 placeholderTextColor="#9CA3AF"
@@ -204,6 +206,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

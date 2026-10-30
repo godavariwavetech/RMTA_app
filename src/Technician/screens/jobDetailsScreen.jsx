@@ -23,6 +23,7 @@ import { SkeletonDetails } from '../../Components/Skeleton';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS, BASE_URL } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import { confirmAction } from '../../utils/appModal';
 import { setActiveJob } from '../../redux/slices/jobSheetSlice';
 
 const STATUS_META = {
@@ -229,14 +230,48 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     }
     setOtpError('');
     setOtpVisible(false);
-    console.log('[handoverOtp] OTP matched → submitting final status 3');
-    await handleAdvanceStatus(3);
+    console.log('[handoverOtp] OTP matched → asking to confirm final status 3');
+    confirmAction({
+      title: 'Complete handover?',
+      message: 'The OTP matched. Confirm the device has been handed over to the customer.',
+      confirmText: 'Complete handover',
+      onConfirm: () => handleAdvanceStatus(3),
+    });
   };
 
   const closeOtp = () => {
     setOtpVisible(false);
     setEnteredOtp('');
     setOtpError('');
+  };
+
+  // Each step of the job process asks for confirmation before it is sent.
+  const STAGE_CONFIRM = {
+    0: {
+      title: 'Start repair?',
+      message: 'The job will be marked as in progress and the repair timer starts.',
+      confirmText: 'Start repair',
+    },
+    1: {
+      title: 'Mark repair as completed?',
+      message: 'Confirm the repair work on this device is finished.',
+      confirmText: 'Yes, completed',
+    },
+    2: {
+      title: 'Start handover?',
+      message: 'An OTP will be generated for the customer to confirm the device handover.',
+      confirmText: 'Start handover',
+    },
+  };
+
+  const confirmStage = () => {
+    const stage = REPAIR_STAGES[repairStatus];
+    const copy = STAGE_CONFIRM[repairStatus];
+    if (!stage || !copy) return;
+    confirmAction({
+      ...copy,
+      onConfirm: () => (repairStatus === 2 ? handleHandover() : handleAdvanceStatus(stage.next)),
+    });
   };
 
   const tabs = ['Overview', 'Repair', 'Timeline'];
@@ -528,11 +563,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
             <TouchableOpacity
               style={styles.startButton}
               disabled={starting}
-              onPress={() =>
-                repairStatus === 2
-                  ? handleHandover()
-                  : handleAdvanceStatus(REPAIR_STAGES[repairStatus].next)
-              }
+              onPress={confirmStage}
             >
               {starting ? (
                 <ActivityIndicator color="#FFFFFF" />

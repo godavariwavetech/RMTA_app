@@ -20,8 +20,11 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
+import { isValidImei } from '../../../utils/imeiValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function CreateJobSheetStep2({ onNavigate }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftDevice = useSelector(state => state.jobSheet.draft.device) || {};
@@ -56,6 +59,18 @@ export default function CreateJobSheetStep2({ onNavigate }) {
         'Incomplete',
         'Please enter the device brand, device model and IMEI 1.',
       );
+      return;
+    }
+    if (!isValidImei(imei1)) {
+      Alert.alert('Invalid IMEI', 'IMEI 1 must be a valid 15-digit IMEI number.');
+      return;
+    }
+    if (imei2.trim() && !isValidImei(imei2)) {
+      Alert.alert('Invalid IMEI', 'IMEI 2 must be a valid 15-digit IMEI number.');
+      return;
+    }
+    if (imei2.trim() && imei2 === imei1) {
+      Alert.alert('Invalid IMEI', 'IMEI 2 must be different from IMEI 1.');
       return;
     }
     // Save device details into the draft.
@@ -110,7 +125,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                 <Text style={styles.label}>
                   Device Brand <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
+                <TextInput {...nav.props(0)}
                   style={styles.input}
                   placeholder="Enter device brand"
                   placeholderTextColor="#D1D5DB"
@@ -124,7 +139,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                 <Text style={styles.label}>
                   Device Model <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
+                <TextInput {...nav.props(1)}
                   style={styles.input}
                   placeholder="Enter device model"
                   placeholderTextColor="#D1D5DB"
@@ -138,33 +153,45 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                 <Text style={styles.label}>
                   IMEI 1 <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
+                <TextInput {...nav.props(2)}
                   style={styles.input}
                   placeholder="Enter IMEI number"
                   placeholderTextColor="#D1D5DB"
                   value={imei1}
-                  onChangeText={setImei1}
-                  keyboardType="numeric"
+                  onChangeText={t => setImei1(t.replace(/\D/g, ''))}
+                  keyboardType="number-pad"
+                  maxLength={15}
                 />
+                {imei1.length > 0 && !isValidImei(imei1) && (
+                  <Text style={styles.imeiError}>
+                    {imei1.length < 15 ? `${imei1.length}/15 digits` : 'Not a valid IMEI number'}
+                  </Text>
+                )}
               </View>
 
               {/* IMEI 2 */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>IMEI 2</Text>
-                <TextInput
+                <TextInput {...nav.props(3)}
                   style={styles.input}
                   placeholder="Optional"
                   placeholderTextColor="#D1D5DB"
                   value={imei2}
-                  onChangeText={setImei2}
-                  keyboardType="numeric"
+                  onChangeText={t => setImei2(t.replace(/\D/g, ''))}
+                  keyboardType="number-pad"
+                  maxLength={15}
                 />
+                {imei2.length > 0 && !isValidImei(imei2) && (
+                  <Text style={styles.imeiError}>
+                    {imei2.length < 15 ? `${imei2.length}/15 digits` : 'Not a valid IMEI number'}
+                  </Text>
+                )}
               </View>
 
               {/* Color */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Color</Text>
-                <TextInput
+                <TextInput {...nav.props(4)}
                   style={styles.input}
                   placeholder="Enter color"
                   placeholderTextColor="#D1D5DB"
@@ -176,7 +203,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
               {/* Storage */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Storage</Text>
-                <TextInput
+                <TextInput {...nav.props(5)}
                   style={styles.input}
                   placeholder="Enter storage capacity"
                   placeholderTextColor="#D1D5DB"
@@ -201,12 +228,18 @@ export default function CreateJobSheetStep2({ onNavigate }) {
             <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  imeiError: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 4,
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

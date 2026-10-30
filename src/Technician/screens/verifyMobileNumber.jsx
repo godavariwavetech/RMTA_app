@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  TextInput,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -23,6 +22,7 @@ import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
 import { updateJobDraft } from '../../redux/slices/jobSheetSlice';
+import OtpInput from '../../Components/OtpInput';
 
 export default function VerifyMobileNumber({ onNavigate }) {
   const dispatch = useDispatch();
@@ -32,33 +32,10 @@ export default function VerifyMobileNumber({ onNavigate }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timeLeft, setTimeLeft] = useState(3030);
   const [verifying, setVerifying] = useState(false);
-  const inputRefs = useRef([]);
 
   const handleBackPress = () => {
     if (onNavigate) {
       onNavigate('goBack');
-    }
-  };
-
-  const handleOtpChange = (value, index) => {
-    // Only allow single digits
-    if (value.length > 1) {
-      return;
-    }
-
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Move to next input if digit is entered
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyPress = (event, index) => {
-    if (event.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
     }
   };
 
@@ -138,26 +115,7 @@ export default function VerifyMobileNumber({ onNavigate }) {
             </Text>
 
             {/* OTP Input Fields */}
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={[
-                    styles.otpInput,
-                    digit && styles.otpInputFilled,
-                  ]}
-                  maxLength={1}
-                  keyboardType="numeric"
-                  value={digit}
-                  onChangeText={(value) => handleOtpChange(value, index)}
-                  onKeyPress={(event) => handleOtpKeyPress(event, index)}
-                  placeholder=""
-                  secureTextEntry={true}
-                  textAlign="center"
-                />
-              ))}
-            </View>
+            <OtpInput value={otp} onChange={setOtp} />
 
             {/* Resend Timer */}
             <View style={styles.timerContainer}>
@@ -269,28 +227,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 24,
-  },
-  otpInput: {
-    flex: 1,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.primary,
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-  },
-  otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F7F9FC',
   },
   timerContainer: {
     alignItems: 'center',

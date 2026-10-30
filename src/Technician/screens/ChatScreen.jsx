@@ -21,6 +21,7 @@ import { SkeletonUserList } from '../../Components/Skeleton';
 import { FCM_TOKEN_KEY } from '../../services/notifications';
 import {
   chatIdFor,
+  markRead,
   saveUserProfile,
   sendMessage,
   subscribeChats,
@@ -131,7 +132,7 @@ export default function ChatScreen({ onNavigate }) {
         {!me ? (
           <Text style={styles.empty}>Log in to use chat.</Text>
         ) : active ? (
-          <Conversation peer={active} me={me} meName={meName} />
+          <Conversation peer={active} me={me} meName={meName} chat={chats[active.id]} />
         ) : (
           <>
             <View style={styles.searchWrap}>
@@ -156,6 +157,7 @@ export default function ChatScreen({ onNavigate }) {
                 ListEmptyComponent={<Text style={styles.empty}>{error || 'No users found.'}</Text>}
                 renderItem={({ item }) => {
                   const c = chats[item.id];
+                  const unread = Number(c?.unread?.[me]) || 0;
                   return (
                     <TouchableOpacity style={styles.userRow} onPress={() => setActive(item)} activeOpacity={0.8}>
                       <View style={styles.avatar}>
@@ -164,14 +166,23 @@ export default function ChatScreen({ onNavigate }) {
                         </Text>
                       </View>
                       <View style={styles.userText}>
-                        <Text style={styles.userName} numberOfLines={1}>
+                        <Text style={[styles.userName, unread > 0 && styles.userNameUnread]} numberOfLines={1}>
                           {item.name || 'Unnamed user'}
                         </Text>
-                        <Text style={styles.userSub} numberOfLines={1}>
+                        <Text style={[styles.userSub, unread > 0 && styles.userSubUnread]} numberOfLines={1}>
                           {c ? `${c.lastFrom === me ? 'You: ' : ''}${c.lastMessage}` : item.sub || 'Tap to start chatting'}
                         </Text>
                       </View>
-                      {c && <Text style={styles.rowTime}>{fmtTime(c.lastAtMs)}</Text>}
+                      {c && (
+                        <View style={styles.rowMeta}>
+                          <Text style={[styles.rowTime, unread > 0 && styles.rowTimeUnread]}>{fmtTime(c.lastAtMs)}</Text>
+                          {unread > 0 && (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 }}
@@ -184,7 +195,7 @@ export default function ChatScreen({ onNavigate }) {
   );
 }
 
-function Conversation({ peer, me, meName }) {
+function Conversation({ peer, me, meName, chat }) {
   const chatId = chatIdFor(me, peer.id);
   const [messages, setMessages] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -209,6 +220,15 @@ function Conversation({ peer, me, meName }) {
       ),
     [chatId],
   );
+
+  // Tell the other side we've read their messages and clear our unread badge.
+  const unreadMine = Number(chat?.unread?.[me]) || 0;
+  const myReadMs = chat?.readAtMs?.[me] || 0;
+  const lastPeerMsgMs = messages.reduce((t, m) => (m.from !== me ? Math.max(t, m.time) : t), 0);
+  useEffect(() => {
+    if (!loaded || (!unreadMine && lastPeerMsgMs <= myReadMs)) return;
+    markRead(chatId, me).catch(e => console.warn('[chat] markRead failed', e?.message));
+  }, [loaded, chatId, me, unreadMine, lastPeerMsgMs, myReadMs]);
 
   const send = async () => {
     const body = text.trim();
@@ -309,7 +329,22 @@ const styles = StyleSheet.create({
   userText: { flex: 1, marginHorizontal: 12 },
   userName: { fontSize: 15, fontWeight: '700', color: '#1F2937' },
   userSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  userNameUnread: { color: '#0F172A' },
+  userSubUnread: { color: '#1F2937', fontWeight: '600' },
+  rowMeta: { alignItems: 'flex-end' },
   rowTime: { fontSize: 11, color: '#94A3B8' },
+  rowTimeUnread: { color: Colors.secondary, fontWeight: '700' },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    marginTop: 4,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   empty: { textAlign: 'center', color: '#94A3B8', marginTop: 40, fontSize: 13 },
   errorBar: { backgroundColor: '#FEE2E2', color: '#B91C1C', fontSize: 12, padding: 8, textAlign: 'center' },
 

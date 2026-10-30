@@ -8,7 +8,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -18,13 +17,14 @@ import {
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { verifyForgotOtp, sendForgotOtp } from '../../redux/slices/authSlice';
+import OtpInput from '../../Components/OtpInput';
 
 export default function ForgotPassStep2({ onNavigate, mobile }) {
   const dispatch = useDispatch();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const otpBox = useRef(null);
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-  const otpInputs = useRef([]);
 
   // Timer for resend code
   useEffect(() => {
@@ -43,25 +43,6 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
     }
   };
 
-  const handleOtpChange = (index, value) => {
-    // Only allow numbers
-    const numericValue = value.replace(/[^0-9]/g, '');
-
-    // Update OTP array
-    const newOtp = [...otp];
-    newOtp[index] = numericValue;
-    setOtp(newOtp);
-
-    // Move to next input if value is entered
-    if (numericValue && index < 5) {
-      otpInputs.current[index + 1]?.focus();
-    }
-
-    // Move to previous input if value is deleted
-    if (!numericValue && index > 0) {
-      otpInputs.current[index - 1]?.focus();
-    }
-  };
 
   const handleVerifyAndContinue = async () => {
     const otpCode = otp.join('');
@@ -92,7 +73,7 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
     setOtp(['', '', '', '', '', '']);
     setResendTimer(30);
     setCanResend(false);
-    otpInputs.current[0]?.focus();
+    otpBox.current?.focus();
 
     const result = await dispatch(sendForgotOtp({ mobile }));
     if (sendForgotOtp.fulfilled.match(result)) {
@@ -146,24 +127,7 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
 
             {/* OTP Input Section */}
             <View style={styles.otpSection}>
-              <View style={styles.otpContainer}>
-                {otp.map((digit, index) => (
-                  <TextInput
-                    key={index}
-                    ref={(ref) => (otpInputs.current[index] = ref)}
-                    style={[
-                      styles.otpInput,
-                      digit && styles.otpInputFilled,
-                    ]}
-                    maxLength={1}
-                    keyboardType="number-pad"
-                    value={digit}
-                    onChangeText={(value) => handleOtpChange(index, value)}
-                    placeholder="•"
-                    placeholderTextColor="#D1D5DB"
-                  />
-                ))}
-              </View>
+              <OtpInput value={otp} onChange={setOtp} ref={otpBox} style={{ marginBottom: 0 }} />
             </View>
 
             {/* Resend Code — countdown while waiting, tappable once it elapses */}
@@ -292,28 +256,7 @@ const styles = StyleSheet.create({
   otpSection: {
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('3%'),
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: wp('2%'),
-  },
-  otpInput: {
-    flex: 1,
-    height: wp('14%'),
-    borderRadius: wp('3%'),
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-    fontSize: wp('5%'),
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  otpInputFilled: {
-    borderColor: Colors.secondary,
-    backgroundColor: '#FFFFFF',
-  },
+  },
 
   /* Resend Section */
   resendSection: {

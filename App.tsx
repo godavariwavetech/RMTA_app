@@ -1,5 +1,6 @@
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { BackHandler, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackHandler, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { Colors } from './src/Constants/Colors';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
@@ -98,6 +99,30 @@ const screensWithTheirOwnKeyboardAvoider = new Set([
   'login', 'register', 'forgotPassStep1', 'forgotPassStep2', 'forgotPassStep3',
   'addTechnician',
 ]);
+
+// Edge-to-edge: screens pad their content below the status bar, which leaves a
+// light strip behind the (white) status-bar icons. Paint that strip in the app's
+// header colour so the time/battery icons stay readable.
+function StatusBarBackdrop() {
+  const insets = useSafeAreaInsets();
+  if (!insets.top) {
+    return null;
+  }
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: insets.top,
+        backgroundColor: Colors.primary,
+      }}
+    />
+  );
+}
+
 
 function AppContent() {
   const { ready: i18nReady } = useI18n();
@@ -265,20 +290,29 @@ function AppContent() {
     const isPush =
       screen !== 'goBackTo' &&
       screen !== 'resetTo' &&
+      screen !== 'replaceStack' &&
       navigationHistory[navigationHistory.length - 1] !== newScreen;
     if (isPush) {
       // Remember the screen we're leaving, with the params it was opened with.
       savedParams.current[navigationHistory.length - 1] = navigationParams;
     }
     setNavigationParams(params || {});
-    if (screen === 'goBackTo' || screen === 'resetTo') {
+    if (screen === 'goBackTo' || screen === 'resetTo' || screen === 'replaceStack') {
       const targetScreen = screenMap[params?.target] || params?.target;
       if (!targetScreen) return;
       setCurrentScreen(targetScreen);
       setNavigationParams(params?.screenParams || {});
-      if (screen === 'resetTo') {
+      if (screen === 'replaceStack') {
+        // After submitting a form: drop the whole flow from history and keep
+        // only `base` (default Home) under the result screen, so Back never
+        // returns to the submitted form.
         savedParams.current = {};
-        setNavigationHistory([targetScreen]);
+        setNavigationHistory([...(params?.base || ['home']), targetScreen]);
+      } else if (screen === 'resetTo') {
+        savedParams.current = {};
+        // Keep Home underneath so Back from e.g. the job list goes Home
+        // instead of closing the app.
+        setNavigationHistory(targetScreen === 'home' ? [targetScreen] : ['home', targetScreen]);
       } else {
         const targetIndex = navigationHistory.lastIndexOf(targetScreen);
         setNavigationHistory(
@@ -497,6 +531,7 @@ function AppContent() {
         <TechnicianHomeScreen onNavigate={handleScreenNavigation} />
       )}
       </KeyboardAvoidingView>
+      <StatusBarBackdrop />
     </SafeAreaProvider>
     </Provider>
   );

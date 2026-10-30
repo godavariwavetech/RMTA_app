@@ -23,8 +23,10 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updateSaleDraft, resetSaleDraft } from '../../../redux/slices/saleSlice';
+import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Fall back to the Redux draft when buyerData/deviceData weren't passed in
@@ -168,13 +170,13 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
               </Text>
               <View style={styles.priceInputContainer}>
                 <Text style={styles.currencySymbol}>₹</Text>
-                <TextInput
+                <TextInput {...nav.props(0)}
                   style={styles.priceInput}
                   placeholder="21,000"
                   placeholderTextColor="#9CA3AF"
                   value={formData.salePrice}
-                  onChangeText={(value) => handleInputChange('salePrice', value)}
-                  keyboardType="numeric"
+                  onChangeText={(value) => handleInputChange('salePrice', sanitizeAmount(value))}
+                  keyboardType="decimal-pad"
                 />
               </View>
             </View>
@@ -244,7 +246,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
                 <Text style={styles.label}>
                   Transaction ID <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
+                <TextInput {...nav.props(1)}
                   style={styles.input}
                   placeholder={formData.paymentMode === 'upi' ? 'UPI Transaction ID' : 'Bank Reference Number'}
                   placeholderTextColor="#9CA3AF"
@@ -264,7 +266,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {/* Warranty / Sale Notes Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Warranty / sale notes</Text>
-              <TextInput
+              <TextInput {...nav.props(2)}
                 style={[
                   styles.input,
                   styles.textArea,
@@ -300,6 +302,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

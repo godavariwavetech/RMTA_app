@@ -23,8 +23,10 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { updateSaleDraft, createSaleCustomer } from '../../../redux/slices/saleSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function SaleEntryStep1({ onNavigate }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
@@ -190,7 +192,7 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Buyer Name <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(0)}
               style={styles.input}
               placeholder="Enter buyer name"
               placeholderTextColor="#9CA3AF"
@@ -205,7 +207,7 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Buyer Mobile <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(1)}
               style={styles.input}
               placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
@@ -252,7 +254,7 @@ export default function SaleEntryStep1({ onNavigate }) {
           {/* Aadhaar Number Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Aadhaar Number</Text>
-            <TextInput
+            <TextInput {...nav.props(2)}
               style={styles.input}
               placeholder="Enter Aadhaar number"
               placeholderTextColor="#9CA3AF"
@@ -269,7 +271,7 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Address <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(3)}
               style={[
                 styles.input,
                 styles.textArea,
@@ -301,6 +303,7 @@ export default function SaleEntryStep1({ onNavigate }) {
             )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

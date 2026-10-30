@@ -18,8 +18,10 @@ import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData }) {
+  const nav = useFieldNav();
   const dispatch = useDispatch();
   const draftPrice = useSelector(state => state.purchase.draft.price) || {};
   const [purchasePrice, setPurchasePrice] = useState(draftPrice.purchasePrice || '');
@@ -96,13 +98,13 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
               <Text style={styles.label}>Purchase Price</Text>
               <View style={styles.priceInputContainer}>
                 <Text style={styles.currencySymbol}>₹</Text>
-                <TextInput
+                <TextInput {...nav.props(0)}
                   style={styles.priceInput}
                   placeholder="Enter price"
                   placeholderTextColor="#9CA3AF"
                   value={purchasePrice}
-                  onChangeText={setPurchasePrice}
-                  keyboardType="numeric"
+                  onChangeText={t => setPurchasePrice(sanitizeAmount(t))}
+                  keyboardType="decimal-pad"
                 />
               </View>
             </View>
@@ -136,7 +138,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
             {/* Transaction ID Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Transaction ID</Text>
-              <TextInput
+              <TextInput {...nav.props(1)}
                 style={styles.input}
                 placeholder="Enter Transaction ID"
                 placeholderTextColor="#9CA3AF"
@@ -162,6 +164,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
             <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );

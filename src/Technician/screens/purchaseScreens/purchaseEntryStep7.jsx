@@ -77,9 +77,12 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       const purchase = Array.isArray(data.data) ? data.data[0] : data.data;
       dispatch(resetPurchaseDraft());
       if (onNavigate) {
-        onNavigate('purchaseEntryStep8', {
-          sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData,
-          purchase,
+        onNavigate('replaceStack', {
+          target: 'purchaseEntryStep8',
+          screenParams: {
+            sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData,
+            purchase,
+          },
         });
       }
     } catch (err) {

@@ -150,12 +150,15 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
   // shows the completion screen — no separate OTP confirmation call.
   const handleComplete = () => {
     if (onNavigate) {
-      onNavigate('saleCompleted', {
-        buyerData: buyer,
-        deviceData: device,
-        saleData: sale,
-        invoiceId: invoiceId,
-        sale: saleResult,
+      onNavigate('replaceStack', {
+        target: 'saleCompleted',
+        screenParams: {
+          buyerData: buyer,
+          deviceData: device,
+          saleData: sale,
+          invoiceId: invoiceId,
+          sale: saleResult,
+        },
       });
     }
   };
