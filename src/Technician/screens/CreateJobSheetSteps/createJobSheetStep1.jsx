@@ -21,8 +21,6 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import {
   updateJobDraft,
   resetJobDraft,
@@ -43,13 +41,13 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   const [alternateNumber, setAlternateNumber] = useState(draftCustomer.alternate_mobile || '');
   const [aadharNumber, setAadharNumber] = useState(draftCustomer.aadhaar_number || '');
 
-  // Customer photo: { uri, file_id, uploading }. Restore both the preview uri
-  // and the uploaded file_id so the thumbnail shows on revisit.
+  // Keep the photo locally and send its base64 with the customer record.
   const [photo, setPhoto] = useState(
     draftCustomer.photo_file_id || draftCustomer.photo_uri
       ? {
           uri: draftCustomer.photo_uri || null,
           file_id: draftCustomer.photo_file_id || null,
+          base64: draftCustomer.photo_base64 || null,
           uploading: false,
         }
       : null,
@@ -73,7 +71,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
 
   const handleCapturePhoto = () => {
     chooseImageSource(
-      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      { mediaType: 'photo', includeBase64: true, quality: 0.65, maxWidth: 1200, maxHeight: 1200 },
       async response => {
         if (response.didCancel) return;
         if (response.errorCode) {
@@ -83,24 +81,9 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setPhoto({ uri: asset.uri, uploading: true });
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'customer.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setPhoto({ uri: asset.uri, file_id: data.data.file_id, uploading: false });
-          } else {
-            setPhoto({ uri: asset.uri, uploading: false });
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setPhoto({ uri: asset.uri, uploading: false });
-          Alert.alert('Upload failed', err.message);
-        }
+        // The customer endpoint accepts the image as base64. Upload it with
+        // the customer form instead of sending a separate upload_file call.
+        setPhoto({ uri: asset.uri, base64: asset.base64, uploading: false });
       },
     );
   };
@@ -149,6 +132,11 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
         customer_number: mobileDigits,
         customer_alternatenumber: alternateDigits,
         member_id: user.member_id,
+        // Previously the photo was uploaded but never attached to the
+        // customer, and the Aadhaar number wasn't sent at all.
+        aadharnumber: aadharDigits,
+        customer_image: photo && photo.base64 ? photo.base64 : null,
+        photo_file_id: photo && photo.file_id ? photo.file_id : null,
       }),
     );
     setSubmitting(false);
@@ -181,6 +169,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
       aadhaar_number: aadharNumber,
       photo_file_id: photo && photo.file_id ? photo.file_id : null,
       photo_uri: photo && photo.uri ? photo.uri : null,
+      photo_base64: photo && photo.base64 ? photo.base64 : null,
       consent: true,
     };
     dispatch(updateJobDraft({ customer }));
@@ -211,12 +200,12 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 1 OF 8 · CUSTOMER</Text>
+            <Text style={styles.stepText}>STEP 1 OF 7 · CUSTOMER</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '12.5%' }]} />
+            <View style={[styles.progressBar, { width: '14.29%' }]} />
           </View>
 
           {/* Content Section */}
@@ -311,9 +300,9 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                       <ActivityIndicator size="small" color={Colors.primary} />
                       <Text style={styles.cameraSubtext}>Uploading…</Text>
                     </View>
-                  ) : photo && photo.file_id ? (
+                  ) : photo && (photo.file_id || photo.base64) ? (
                     <Text style={[styles.cameraSubtext, styles.photoUploaded]}>
-                      ✓ Uploaded
+                      ✓ Photo ready
                     </Text>
                   ) : (
                     <Text style={styles.cameraSubtext}>JPG or PNG - Up to 5 MB</Text>
@@ -389,6 +378,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

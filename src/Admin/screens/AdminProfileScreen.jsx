@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StatusBar,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -14,6 +13,7 @@ import {
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
 import { useDispatch, useSelector } from 'react-redux';
+import { SkeletonDetails } from '../../Components/Skeleton';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson, logoutUser } from '../../redux/slices/authSlice';
@@ -122,10 +122,7 @@ export default function AdminProfileScreen({ onNavigate }) {
           </View>
 
           {loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator color={Colors.secondary} />
-              <Text style={styles.loadingText}>Loading profile…</Text>
-            </View>
+            <SkeletonDetails rows={5} />
           ) : error ? (
             <View style={styles.loadingBox}>
               <Text style={styles.errorText}>{error}</Text>
@@ -183,6 +180,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: wp('10%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

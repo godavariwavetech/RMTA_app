@@ -169,9 +169,6 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       person_image: personImage ? personImage.base64 : null,
     };
 
-    console.log('📝 Register button pressed — registration data:');
-    console.log(JSON.stringify(registrationData, null, 2));
-
     // Dispatch the registration thunk (defined in redux/slices/authSlice.js).
     // It handles the fetch, timeout, duplicate/error responses, and stores the
     // result in redux. Here we just branch on fulfilled vs rejected.
@@ -181,7 +178,6 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       // Success means the mobile number did NOT already exist and the account
       // was created. Send them to Login (matching tab) to sign in with the
       // mobile + password they just set.
-      console.log('🟢 DB WRITE OK — record stored', result.payload);
       Alert.alert(
         'Registration successful',
         'You can now log in with your mobile number and password.',
@@ -588,6 +584,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: wp('10%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,37 +14,17 @@ import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
-import { useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
+import { BASE_URL } from '../../../Constants/config';
+import useAccountProfile from '../../../utils/useAccountProfile';
+import MemberIdentityCard from '../../../Components/MemberIdentityCard';
+
+const imageUrl = path =>
+  path ? (/^https?:\/\//.test(path) ? path : `${BASE_URL}${String(path).replace(/^\//, '')}`) : null;
 
 export default function MyDigitalId({ onNavigate }) {
-  const user = useSelector(state => state.auth.user) || {};
-  const [profile, setProfile] = useState(null);
-  const [showFullDetails, setShowFullDetails] = useState(false);
-
-  // Fetch the full member profile (same source as the home screen).
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!user.user_id) return;
-      try {
-        const { response, data } = await postJson(ENDPOINTS.TECHNICIAN_DETAILS, {
-          user_id: user.user_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          setProfile(data.data);
-        }
-      } catch (e) {
-        // fall back to the cached login user
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [user.user_id]);
+  const profile = useAccountProfile();
 
   const handleBack = () => {
     if (onNavigate) {
@@ -52,18 +32,15 @@ export default function MyDigitalId({ onNavigate }) {
     }
   };
 
-  const handleScanNFC = () => {
+  // The footer button opens the QR scanner.
+  const handleScanQR = () => {
     if (onNavigate) {
-      onNavigate('scanNFC');
+      onNavigate('scanQR');
     }
   };
 
-  const handleViewFullDetails = () => {
-    setShowFullDetails(!showFullDetails);
-  };
-
   // Prefer the freshly fetched profile, fall back to the cached login user.
-  const d = profile || user || {};
+  const d = profile || {};
   const fmtDate = v => {
     if (!v) return '—';
     const dt = new Date(v);
@@ -73,6 +50,30 @@ export default function MyDigitalId({ onNavigate }) {
   };
   const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
   const statusRaw = d.membership_status || '';
+
+  // The member's own QR image comes with the member_login data. Its field name
+  // isn't documented, so a few likely names are tried. The value may be a full
+  // URL, a server path, or base64; the built-in sample QR is the fallback.
+  const QR_KEYS = ['qr_image', 'qr_code', 'qr_code_image', 'qrcode', 'qr_url', 'qr'];
+  const qrKey = QR_KEYS.find(k => typeof d[k] === 'string' && d[k].trim() !== '');
+  let qrSource = require('../../../Assets/images/qrCode.png');
+  if (qrKey) {
+    const raw = d[qrKey].trim();
+    const uri = /^(https?:|data:)/.test(raw)
+      ? raw
+      : raw.length > 300
+      ? `data:image/png;base64,${raw}`
+      : imageUrl(raw);
+    qrSource = { uri };
+  }
+
+  useEffect(() => {
+    // Which login field supplied the QR image (value truncated).
+    console.log(
+      '[DigitalId] QR image →',
+      qrKey ? `${qrKey}: ${String(d[qrKey]).slice(0, 80)}` : 'none in the login data, using the sample QR',
+    );
+  }, [qrKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const userData = {
     name: d.full_name || 'Technician',
@@ -84,7 +85,7 @@ export default function MyDigitalId({ onNavigate }) {
     phone: d.mobile || '—',
     status: cap(statusRaw) || '—',
     isActive: statusRaw === 'active',
-    qrCode: require('../../../Assets/images/qrCode.png'),
+    qrCode: qrSource,
     profileBadge: require('../../../Assets/images/appLogo.png'),
   };
 
@@ -110,46 +111,6 @@ export default function MyDigitalId({ onNavigate }) {
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
         >
-          {/* Digital ID Card */}
-          <View style={styles.idCardContainer}>
-            {/* Card Background */}
-            <View style={styles.digitalIdCard}>
-              {/* Card Header - Logo and Badge */}
-              <View style={styles.cardHeader}>
-                <View style={styles.logoSection}>
-                  <Image
-                    source={userData.profileBadge}
-                    style={styles.cardLogo}
-                  />
-                  <View style={styles.logoText}>
-                    <Text style={styles.rmtaText}>RMTA</Text>
-                    <Text style={styles.memberText}>TECHNICIAN MEMBER</Text>
-                  </View>
-                </View>
-
-                {/* Status Badge */}
-                <View style={styles.activeBadge}>
-                  <View style={styles.activeDot} />
-                  <Text style={styles.activeText}>{userData.status}</Text>
-                </View>
-              </View>
-
-              {/* Card Body - Member Info */}
-              <View style={styles.cardBody}>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>{userData.name}</Text>
-                  <Text style={styles.memberId}>{userData.memberId}</Text>
-                  <Text style={styles.organization}>{userData.organization}</Text>
-                  <View style={styles.locationRow}>
-                    <Text style={styles.location}>
-                      {userData.location} · Valid till {userData.validUntil}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
-
           {/* Description Text */}
           <View style={styles.descriptionContainer}>
             <Text style={styles.descriptionTitle}>
@@ -169,79 +130,8 @@ export default function MyDigitalId({ onNavigate }) {
             </View>
           </View>
 
-          {/* View Full Details Button */}
-          <TouchableOpacity 
-            style={styles.secondaryButton}
-            onPress={handleViewFullDetails}
-          >
-            <Text style={styles.secondaryButtonText}>View full details</Text>
-          </TouchableOpacity>
-
-          {/* Full Details Section - Expandable */}
-          {showFullDetails && (
-            <View style={styles.fullDetailsContainer}>
-              <View style={styles.detailsCard}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Member Name</Text>
-                  <Text style={styles.detailValue}>{userData.name}</Text>
-                </View>
-
-                <View style={styles.detailDivider} />
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Member ID</Text>
-                  <Text style={styles.detailValue}>{userData.memberId}</Text>
-                </View>
-
-                <View style={styles.detailDivider} />
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Organization</Text>
-                  <Text style={styles.detailValue}>{userData.organization}</Text>
-                </View>
-
-                <View style={styles.detailDivider} />
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Location</Text>
-                  <Text style={styles.detailValue}>{userData.location}</Text>
-                </View>
-
-                <View style={styles.detailDivider} />
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Status</Text>
-                  <View style={styles.statusBadge}>
-                    <View style={[styles.statusDot, { backgroundColor: userData.isActive ? '#10B981' : '#9CA3AF' }]} />
-                    <Text style={[styles.statusText, { color: userData.isActive ? '#10B981' : '#9CA3AF' }]}>
-                      {userData.status}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.detailDivider} />
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Valid Until</Text>
-                  <Text style={styles.detailValue}>{userData.validUntil}</Text>
-                </View>
-
-                {/* Member Since */}
-                <View style={styles.detailDivider} />
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Member Since</Text>
-                  <Text style={styles.detailValue}>{userData.memberSince}</Text>
-                </View>
-
-                {/* Phone Number */}
-                <View style={styles.detailDivider} />
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Phone Number</Text>
-                  <Text style={styles.detailValue}>{userData.phone}</Text>
-                </View>
-              </View>
-            </View>
-          )}
+          {/* Member identity card (from the member_login data) */}
+          <MemberIdentityCard member={d} />
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -250,9 +140,9 @@ export default function MyDigitalId({ onNavigate }) {
         <View style={styles.footer}>
           <TouchableOpacity 
             style={styles.primaryButton}
-            onPress={handleScanNFC}
+            onPress={handleScanQR}
           >
-            <Text style={styles.primaryButtonText}>Scan an NFC Card</Text>
+            <Text style={styles.primaryButtonText}>Scan QR Code</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -292,6 +182,9 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: '#000',
@@ -312,107 +205,13 @@ const styles = StyleSheet.create({
   },
 
   /* Digital ID Card Styles */
-  idCardContainer: {
-    marginBottom: hp('2%'),
-  },
-  digitalIdCard: {
-    backgroundColor: Colors.primary,
-    borderRadius: wp('4%'),
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2.5%'),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: hp('2%'),
-  },
-  logoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: wp('3%'),
-  },
-  cardLogo: {
-    width: wp('12%'),
-    height: wp('12%'),
-    resizeMode: 'contain',
-  },
-  logoText: {
-    gap: 2,
-  },
-  rmtaText: {
-    color: '#FFFFFF',
-    fontSize: wp('3.8%'),
-    fontWeight: '700',
-  },
-  memberText: {
-    color: '#E5E7EB',
-    fontSize: wp('2.4%'),
-    fontWeight: '500',
-  },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FCD34D',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('0.6%'),
-    borderRadius: wp('4%'),
-    gap: wp('1.5%'),
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#DC2626',
-  },
-  activeText: {
-    color: '#D97706',
-    fontSize: wp('2.8%'),
-    fontWeight: '600',
-  },
 
   /* Card Body */
-  cardBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    gap: wp('3%'),
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
-    color: '#FFFFFF',
-    fontSize: wp('4%'),
-    fontWeight: '700',
-    marginBottom: hp('0.5%'),
-  },
   memberId: {
     color: '#D1D5DB',
     fontSize: wp('2.8%'),
     fontWeight: '600',
     marginBottom: hp('0.3%'),
-  },
-  organization: {
-    color: '#E5E7EB',
-    fontSize: wp('2.6%'),
-    fontWeight: '500',
-    marginBottom: hp('0.5%'),
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  location: {
-    color: '#B5C5DF',
-    fontSize: wp('2.4%'),
-    fontWeight: '400',
   },
 
   /* QR Code */
@@ -479,73 +278,8 @@ const styles = StyleSheet.create({
     fontSize: wp('3.2%'),
     fontWeight: '600',
   },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: hp('1.8%'),
-    paddingHorizontal: wp('4%'),
-    borderRadius: wp('2.5%'),
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: hp('2%'),
-  },
-  secondaryButtonText: {
-    color: '#6B7280',
-    fontSize: wp('3.2%'),
-    fontWeight: '600',
-  },
 
   /* Full Details Section */
-  fullDetailsContainer: {
-    marginBottom: hp('2%'),
-  },
-  detailsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: wp('3%'),
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('1.5%'),
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: hp('1.2%'),
-  },
-  detailLabel: {
-    color: '#6B7280',
-    fontSize: wp('3%'),
-    fontWeight: '500',
-  },
-  detailValue: {
-    color: '#1F2937',
-    fontSize: wp('3%'),
-    fontWeight: '600',
-    textAlign: 'right',
-    flex: 1,
-    marginLeft: wp('2%'),
-  },
-  detailDivider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginVertical: hp('0.5%'),
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: wp('1.5%'),
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: wp('3%'),
-    fontWeight: '600',
-  },
 
   /* Footer Styles */
   footer: {

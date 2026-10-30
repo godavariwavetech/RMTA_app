@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -17,47 +17,32 @@ import {
 
 import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
+import { useI18n, LANGUAGES } from '../../i18n';
+import useAccountProfile from '../../utils/useAccountProfile';
 import BottomNav from '../../Components/BottomNav';
-import { logoutUser, postJson } from '../../redux/slices/authSlice';
-import { ENDPOINTS } from '../../Constants/config';
+import { logoutUser } from '../../redux/slices/authSlice';
 
 export default function TechnicianProfileScreen({ onNavigate }) {
+  const { t, language } = useI18n();
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const [selectedNavItem, setSelectedNavItem] = useState('profile');
 
-  // Fetch the technician's full profile (details the admin entered at add time).
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!user.user_id) return;
-      try {
-        const { response, data } = await postJson(ENDPOINTS.TECHNICIAN_DETAILS, {
-          user_id: user.user_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          setProfile(data.data);
-        }
-      } catch (e) {
-        // Keep cached login details on failure.
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [user.user_id]);
+  // Full profile (admin_details for admins, technician_details for technicians).
+  const profile = useAccountProfile();
 
   // View model: fetched profile → cached login user → placeholders.
-  const d = profile || user;
+  const d = profile;
   const techName = d.full_name || 'Technician';
   const techMobile = d.mobile || '—';
   const techShop = d.shop_name || '—';
   const techLocation = [d.city, d.state].filter(Boolean).join(', ') || '—';
   const techRmtaId = d.member_code || '—';
   const techValidUntil = d.valid_until;
-  const isActive = user.technician_status === 'active';
+  const isAdmin = user.role === 'admin';
+  const isActive = isAdmin
+    ? String(d.account_status || '').toLowerCase() === 'active'
+    : user.technician_status === 'active';
 
   const handleNavigation = (screen) => {
     setSelectedNavItem(screen);
@@ -77,20 +62,26 @@ export default function TechnicianProfileScreen({ onNavigate }) {
     {
       id: 1,
       icon: require('../../Assets/icons/idCard.png'),
-      title: 'My digital ID',
-      subtitle: 'View membership and QR code',
+      title: t('myDigitalId'),
+      subtitle: t('myDigitalIdSub'),
     },
     {
       id: 2,
       icon: require('../../Assets/icons/settings.png'),
-      title: 'Settings',
-      subtitle: 'Security and notifications',
+      title: t('settings'),
+      subtitle: t('settingsSub'),
     },
     {
       id: 3,
       icon: require('../../Assets/icons/wallet.png'),
-      title: 'Purchase & sale history',
-      subtitle: 'Your transaction records',
+      title: t('purchaseSaleHistory'),
+      subtitle: t('purchaseSaleHistorySub'),
+    },
+    {
+      id: 4,
+      icon: require('../../Assets/icons/languageIcon.png'),
+      title: t('language'),
+      subtitle: LANGUAGES.find(l => l.code === language)?.native,
     },
   ];
 
@@ -105,7 +96,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Header Title */}
           <View style={styles.headerTitle}>
-            <Text style={styles.title}>Profile</Text>
+            <Text style={styles.title}>{t('profile')}</Text>
           </View>
 
           {/* Profile Card */}
@@ -118,11 +109,11 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                         <Text style={styles.rmtaLabel}>RMTA</Text>
                         <View style={[styles.activeBadge, !isActive && styles.inactiveBadge]}>
                             <Text style={[styles.activeBadgeText, !isActive && styles.inactiveBadgeText]}>
-                                {isActive ? '✓ Active' : 'Inactive'}
+                                {isActive ? `✓ ${t('active')}` : t('inactive')}
                             </Text>
                         </View>
                     </View>
-                    <Text style={[styles.memberTypeLabel, {color: '#F2B233'}]}>TECHNICIAN MEMBER</Text>
+                    <Text style={[styles.memberTypeLabel, {color: '#F2B233'}]}>{isAdmin ? t('adminMember') : t('technicianMember')}</Text>
                 </View>
 
                 <View style={styles.avatarCircle}>
@@ -139,7 +130,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                 <Text style={styles.shopName}>{techShop}</Text>
                 <Text style={styles.locationValidity}>
                   {techLocation}
-                  {techValidUntil ? ` · Valid till ${techValidUntil}` : ''}
+                  {techValidUntil ? ` · ${t('validTill')} ${techValidUntil}` : ''}
                 </Text>
               </View>
 
@@ -148,20 +139,20 @@ export default function TechnicianProfileScreen({ onNavigate }) {
 
           {/* Your Details Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your details</Text>
+            <Text style={styles.sectionTitle}>{t('yourDetails')}</Text>
             <View style={styles.detailsCard}>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Mobile</Text>
+                <Text style={styles.detailLabel}>{t('mobile')}</Text>
                 <Text style={styles.detailValue}>{techMobile}</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Shop</Text>
+                <Text style={styles.detailLabel}>{t('shop')}</Text>
                 <Text style={styles.detailValue}>{techShop}</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Location</Text>
+                <Text style={styles.detailLabel}>{t('location')}</Text>
                 <Text style={styles.detailValue}>{techLocation}</Text>
               </View>
             </View>
@@ -183,6 +174,9 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                   } else if (item.id === 3) {
                     // Purchase & sale history
                     onNavigate('purchaseAndSaleHistory');
+                  } else if (item.id === 4) {
+                    // Language
+                    onNavigate('language', { fromSettings: true });
                   }
                 }}
               >

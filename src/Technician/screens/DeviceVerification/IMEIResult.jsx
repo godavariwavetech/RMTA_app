@@ -197,6 +197,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: Colors.primary,

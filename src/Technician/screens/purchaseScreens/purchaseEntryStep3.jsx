@@ -19,45 +19,45 @@ import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import ImeiScannerModal from '../../../Components/ImeiScannerModal';
+import { isValidImei } from '../../../utils/imeiValidation';
 
 export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData }) {
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
   const draftImei = useSelector(state => state.purchase.draft.imei) || {};
+  const draftImeiValid = !!draftImei.verified && isValidImei(draftImei.imei || '');
   const [imei, setImei] = useState(draftImei.imei || '');
-  const [imeiVerified, setImeiVerified] = useState(!!draftImei.verified);
+  const [imeiVerified, setImeiVerified] = useState(draftImeiValid);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [imeiStatus, setImeiStatus] = useState(
-    draftImei.verified
+    draftImeiValid
       ? `Valid 15-digit format · ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`
       : '',
   );
 
   const handleScanIMEI = () => {
-    // This will be connected to barcode/IMEI scanner
-    console.log('Scan device IMEI clicked');
+    setScannerOpen(true);
   };
 
   const handleImeiChange = (value) => {
     setImei(value);
-    // Reset verification status when user changes IMEI
-    if (imeiVerified) {
-      setImeiVerified(false);
-      setImeiStatus('');
-    }
+    setImeiVerified(false);
+    setImeiStatus('');
   };
 
   const handleVerifyIMEI = () => {
-    // Basic IMEI validation (15 digits)
-    if (imei.length === 15 && /^\d+$/.test(imei)) {
-      setImeiVerified(true);
-      // Mock status - in real app this would come from an API
-      setImeiStatus(`Valid 15-digit format · ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`);
-    }
+    const valid = isValidImei(imei);
+    setImeiVerified(valid);
+    setImeiStatus(
+      valid
+        ? `Valid IMEI - ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`
+        : 'IMEI checksum is invalid. Check the number or scan again.',
+    );
   };
 
   const handleContinue = () => {
     const imeiData = { imei: imei, verified: imeiVerified };
-    console.log('[Purchase][Step3] imei captured →', imeiData);
     dispatch(updatePurchaseDraft({ imei: imeiData }));
     if (onNavigate) {
       onNavigate('purchaseEnterStep4', {
@@ -168,10 +168,29 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
                 <Text style={styles.verifyButtonText}>Verify IMEI</Text>
               </TouchableOpacity>
             )}
+            {!!imeiStatus && !imeiVerified && (
+              <Text style={styles.warningText}>{imeiStatus}</Text>
+            )}
 
             <View style={styles.bottomSpacer} />
           </View>
         </ScrollView>
+
+        <ImeiScannerModal
+          visible={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScanned={scannedImei => {
+            setImei(scannedImei);
+            const valid = isValidImei(scannedImei);
+            setImeiVerified(valid);
+            setImeiStatus(
+              valid
+                ? `Valid IMEI - ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`
+                : 'IMEI checksum is invalid. Check the number or scan again.',
+            );
+            setScannerOpen(false);
+          }}
+        />
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
@@ -221,6 +240,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

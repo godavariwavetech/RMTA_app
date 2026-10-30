@@ -19,7 +19,7 @@ import { useSelector } from 'react-redux';
 
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
-import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { showAppModal } from '../../../utils/appModal';
 
@@ -62,7 +62,7 @@ export default function ReportsScreen({ onNavigate }) {
   const handleExportReport = async () => {
     try {
       const chartRows = reportData.weekRepairs.map(r => `<tr><td>${r.day}</td><td>${r.value}</td></tr>`).join('');
-      const file = await RNHTMLtoPDF.convert({
+      const file = await generatePDF({
         fileName: `RMTA_Repair_Report_${Date.now()}`,
         base64: false,
         html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Repair Report</h1><p>${user.shop_name || 'RMTA'} - ${reportData.period}</p><h2>Summary</h2><p>Repair revenue: ${reportData.repairRevenue}</p><p>Jobs closed: ${reportData.jobsClosed}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${chartRows}</table></body></html>`,

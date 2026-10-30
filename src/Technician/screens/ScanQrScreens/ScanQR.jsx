@@ -52,7 +52,15 @@ export default function ScanQR({ onNavigate }) {
   const handleReadCode = ({ nativeEvent }) => {
     if (scanned.current) return;
     const code = nativeEvent?.codeStringValue?.trim();
+    // Log everything the scanner reports.
+    console.log('[QR scan] event →', JSON.stringify(nativeEvent));
     if (!code) return;
+    console.log('[QR scan] code →', code);
+    try {
+      console.log('[QR scan] parsed JSON →', JSON.stringify(JSON.parse(code)));
+    } catch (e) {
+      console.log('[QR scan] code is plain text (not JSON)');
+    }
     scanned.current = true;
     onNavigate?.('validQR', { scannedCode: code });
   };
@@ -71,7 +79,7 @@ export default function ScanQR({ onNavigate }) {
       </View>
       <View style={styles.content}>
         <Text style={styles.title}>Scan a code</Text>
-        <Text style={styles.subtitle}>Hold a QR code or barcode inside the frame.</Text>
+        <Text style={styles.subtitle}>Point the camera at a QR code or barcode. Keep it steady and well lit.</Text>
         <View style={styles.cameraFrame}>
           {hasPermission ? (
             <Camera
@@ -79,7 +87,12 @@ export default function ScanQR({ onNavigate }) {
               cameraType={CameraType.Back}
               scanBarcode
               allowedBarcodeTypes={['qr', 'code-128', 'code-39', 'ean-13', 'ean-8', 'upc-a', 'upc-e']}
-              showFrame
+              // showFrame is off on purpose: with it on, the camera library only
+              // reports codes that fit completely inside its small built-in
+              // frame, so most QR codes were never detected. The guide frame
+              // below is just a visual overlay.
+              scanThrottleDelay={500}
+              zoomMode="on"
               onReadCode={handleReadCode}
             />
           ) : (
@@ -90,6 +103,14 @@ export default function ScanQR({ onNavigate }) {
                 </TouchableOpacity>
               )}
               <Text style={styles.cameraHint}>{loading ? 'Starting camera…' : 'Camera permission is required to scan.'}</Text>
+            </View>
+          )}
+          {hasPermission && (
+            <View pointerEvents="none" style={styles.guide}>
+              <View style={[styles.corner, styles.cornerTL]} />
+              <View style={[styles.corner, styles.cornerTR]} />
+              <View style={[styles.corner, styles.cornerBL]} />
+              <View style={[styles.corner, styles.cornerBR]} />
             </View>
           )}
         </View>
@@ -110,6 +131,12 @@ const styles = StyleSheet.create({
   title: { fontSize: wp('5.5%'), fontWeight: '700', color: '#1F2937' },
   subtitle: { fontSize: wp('3.6%'), color: '#64748B', marginTop: hp('0.6%'), marginBottom: hp('2.5%') },
   cameraFrame: { height: hp('52%'), overflow: 'hidden', borderRadius: wp('4%'), backgroundColor: '#101827' },
+  guide: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: 34, height: 34, borderColor: '#FFFFFF' },
+  cornerTL: { top: '22%', left: '16%', borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 10 },
+  cornerTR: { top: '22%', right: '16%', borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 10 },
+  cornerBL: { bottom: '22%', left: '16%', borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 10 },
+  cornerBR: { bottom: '22%', right: '16%', borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 10 },
   permissionState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: wp('6%') },
   cameraHint: { color: '#E5E7EB', fontSize: wp('3.5%'), textAlign: 'center', marginTop: hp('2%') },
   retryButton: { borderRadius: wp('3%'), backgroundColor: Colors.primary, paddingHorizontal: wp('5%'), paddingVertical: hp('1.5%') },

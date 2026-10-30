@@ -2,7 +2,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BackHandler, KeyboardAvoidingView, Platform } from 'react-native';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider } from 'react-redux';
-import { useState, useEffect } from 'react';
+import { I18nProvider, useI18n } from './src/i18n';
+import LanguageScreen from './src/Technician/screens/LanguageScreen';
+import { useState, useEffect, useRef } from 'react';
+import { initNotifications } from './src/services/notifications';
 import { store } from './src/redux/store';
 import { hydrateUser } from './src/redux/slices/authSlice';
 import { loadUser, clearUser } from './src/utils/authStorage';
@@ -37,7 +40,6 @@ import CreateJobSheetStep2 from './src/Technician/screens/CreateJobSheetSteps/cr
 import CreateJobSheetStep3 from './src/Technician/screens/CreateJobSheetSteps/createJobSheetStep3';
 import CreateJobSheetStep4 from './src/Technician/screens/CreateJobSheetSteps/createJobSheetStep4';
 import CreateJobSheetStep5 from './src/Technician/screens/CreateJobSheetSteps/createJobSheetStep5';
-import CreateJobSheetStep6 from './src/Technician/screens/CreateJobSheetSteps/createJobSheetStep6';
 import CreateJobSheetStep7 from './src/Technician/screens/CreateJobSheetSteps/createJobSheetStep7';
 import CreateJobSheetStep8 from './src/Technician/screens/CreateJobSheetSteps/createJobSheetStep8';
 import JobTimelineScreen from './src/Technician/screens/jobTimeline';
@@ -51,6 +53,7 @@ import PurchaseEntryStep6 from './src/Technician/screens/purchaseScreens/purchas
 import PurchaseEntryStep7 from './src/Technician/screens/purchaseScreens/purchaseEntryStep7';
 import PurchaseEntryStep8 from './src/Technician/screens/purchaseScreens/purchaseEntryStep8';
 import PurchaseAndSaleHistory from './src/Technician/screens/purchaseScreens/PurchaseAndSaleHistory';
+import TransactionDetails from './src/Technician/screens/purchaseScreens/TransactionDetails';
 import SaleEntryStep1 from './src/Technician/screens/saleScreens/SaleEntryStep1';
 import VerifyBuyerMobileNumber from './src/Technician/screens/saleScreens/VerifyBuyerMobileNumber';
 import SaleEntryStep2 from './src/Technician/screens/saleScreens/SaleEntryStep2';
@@ -73,19 +76,22 @@ import DeviceVerification from './src/Technician/screens/DeviceVerification/Devi
 import IMEIResult from './src/Technician/screens/DeviceVerification/IMEIResult';
 import CEIRResult from './src/Technician/screens/DeviceVerification/CEIRResult';
 import SupportUsersScreen from './src/Technician/screens/SupportUsersScreen';
+import NotesScreen from './src/Technician/screens/NotesScreen';
+import ChatScreen from './src/Technician/screens/ChatScreen';
+import CustomerDirectoryScreen from './src/Technician/screens/CustomerDirectoryScreen';
 
 installAppModalAlerts();
 
 const keyboardAwareScreens = new Set([
   'createJobSheetStep1', 'createJobSheetStep2', 'createJobSheetStep3',
-  'createJobSheetStep4', 'createJobSheetStep5', 'createJobSheetStep6',
+  'createJobSheetStep4', 'createJobSheetStep5',
   'createJobSheetStep7', 'createJobSheetStep8', 'verifyMobileNumber',
   'purchaseEntryStep1', 'verifySellerMobileNumber', 'purchaseEntryStep2',
   'purchaseEntryStep3', 'purchaseEnterStep4', 'purchaseEntryStep5',
   'purchaseEntryStep6', 'purchaseEntryStep7', 'purchaseEntryStep8',
   'saleEntryStep1', 'verifyBuyerMobileNumber', 'saleEntryStep2',
   'saleEntryStep3', 'saleEntryStep4', 'buyerConfirmationOTP',
-  'deviceVerification', 'supportUsers',
+  'deviceVerification', 'supportUsers', 'notes', 'chat', 'customerDirectory',
 ]);
 
 const screensWithTheirOwnKeyboardAvoider = new Set([
@@ -93,10 +99,14 @@ const screensWithTheirOwnKeyboardAvoider = new Set([
   'addTechnician',
 ]);
 
-function App() {
+function AppContent() {
+  const { ready: i18nReady } = useI18n();
   const [currentScreen, setCurrentScreen] = useState<string>('intro');
   const [navigationParams, setNavigationParams] = useState<any>({});
   const [navigationHistory, setNavigationHistory] = useState<string[]>(['intro']);
+  // Params each screen in the history was opened with, by history index, so
+  // Back returns to the screen exactly as it was (e.g. Sales vs Purchases).
+  const savedParams = useRef<Record<number, any>>({});
   // Block the first render until we've checked for a persisted session, so we
   // don't flash the IntroScreen before restoring a logged-in admin/technician.
   const [booting, setBooting] = useState<boolean>(true);
@@ -121,6 +131,20 @@ function App() {
     })();
   }, []);
 
+  // Push notifications (FCM shown through notifee) once the session is restored.
+  useEffect(() => {
+    if (booting) return undefined;
+    let off: undefined | (() => void);
+    initNotifications({
+      onOpen: data => console.log('[FCM] notification opened', JSON.stringify(data)),
+    })
+      .then(fn => {
+        off = fn;
+      })
+      .catch(e => console.warn('[FCM] init failed', e?.message));
+    return () => off && off();
+  }, [booting]);
+
   // The app uses a custom screen stack instead of a navigation library, so
   // Android's system back gesture must pop that stack explicitly.
   useEffect(() => {
@@ -132,7 +156,7 @@ function App() {
       const previousHistory = navigationHistory.slice(0, -1);
       setNavigationHistory(previousHistory);
       setCurrentScreen(previousHistory[previousHistory.length - 1]);
-      setNavigationParams({});
+      setNavigationParams(savedParams.current[previousHistory.length - 1] || {});
       return true;
     });
 
@@ -156,12 +180,14 @@ function App() {
         const previousScreen = newHistory[newHistory.length - 1];
         setNavigationHistory(newHistory);
         setCurrentScreen(previousScreen);
+        setNavigationParams(savedParams.current[newHistory.length - 1] || {});
       }
       return;
     }
 
     const screenMap: Record<string, string> = {
       intro: 'intro',
+      language: 'language',
       login: 'login',
       register: 'register',
       statusPending: 'statusPending',
@@ -196,7 +222,6 @@ function App() {
       createJobSheetStep3: 'createJobSheetStep3',
       createJobSheetStep4: 'createJobSheetStep4',
       createJobSheetStep5: 'createJobSheetStep5',
-      createJobSheetStep6: 'createJobSheetStep6',
       createJobSheetStep7: 'createJobSheetStep7',
       createJobSheetStep8: 'createJobSheetStep8',
       purchaseEntryStep1: 'purchaseEntryStep1',
@@ -224,6 +249,7 @@ function App() {
       reportDetails: 'reportDetails',
       exportReport: 'exportReport',
       purchaseAndSaleHistory: 'purchaseAndSaleHistory',
+      transactionDetails: 'transactionDetails',
       scanQR: 'scanQR',
       validQR: 'validQR',
       invalidQR: 'invalidQR',
@@ -231,19 +257,27 @@ function App() {
       imeiResult: 'imeiResult',
       ceirResult: 'ceirResult',
       supportUsers: 'supportUsers',
+      notes: 'notes',
+      chat: 'chat',
+      customerDirectory: 'customerDirectory',
     };
-    if (params) {
-      setNavigationParams(params);
-    } else {
-      setNavigationParams({});
-    }
     const newScreen = screenMap[screen] || 'home';
+    const isPush =
+      screen !== 'goBackTo' &&
+      screen !== 'resetTo' &&
+      navigationHistory[navigationHistory.length - 1] !== newScreen;
+    if (isPush) {
+      // Remember the screen we're leaving, with the params it was opened with.
+      savedParams.current[navigationHistory.length - 1] = navigationParams;
+    }
+    setNavigationParams(params || {});
     if (screen === 'goBackTo' || screen === 'resetTo') {
       const targetScreen = screenMap[params?.target] || params?.target;
       if (!targetScreen) return;
       setCurrentScreen(targetScreen);
       setNavigationParams(params?.screenParams || {});
       if (screen === 'resetTo') {
+        savedParams.current = {};
         setNavigationHistory([targetScreen]);
       } else {
         const targetIndex = navigationHistory.lastIndexOf(targetScreen);
@@ -272,7 +306,7 @@ function App() {
   };
 
   // Wait for the session check before rendering any screen.
-  if (booting) {
+  if (booting || !i18nReady) {
     return null;
   }
 
@@ -290,7 +324,9 @@ function App() {
         }
         keyboardVerticalOffset={0}
       >
-      {currentScreen === 'intro' ? (
+      {currentScreen === 'language' ? (
+        <LanguageScreen onNavigate={handleScreenNavigation} fromSettings={!!navigationParams.fromSettings} />
+      ) : currentScreen === 'intro' ? (
         <IntroScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'login' ? (
         <LoginScreen
@@ -350,6 +386,7 @@ function App() {
         <JobDetailsScreen
           onNavigate={handleScreenNavigation}
           jobId={navigationParams.jobId}
+          jobSummary={navigationParams.jobSummary}
         />
       ) : currentScreen === 'repairProgress' ? (
         <RepairProgressScreen key={`repair-${navigationParams.initialTab}`} onNavigate={handleScreenNavigation} initialTab={navigationParams.initialTab} />
@@ -373,14 +410,14 @@ function App() {
         <CreateJobSheetStep4 onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'createJobSheetStep5' ? (
         <CreateJobSheetStep5 onNavigate={handleScreenNavigation} />
-      ) : currentScreen === 'createJobSheetStep6' ? (
-        <CreateJobSheetStep6 onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'createJobSheetStep7' ? (
         <CreateJobSheetStep7 onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'createJobSheetStep8' ? (
         <CreateJobSheetStep8
           onNavigate={handleScreenNavigation}
           job={navigationParams.job}
+          summary={navigationParams.summary}
+          pdfOnly={!!navigationParams.pdfOnly}
         />
       ) : currentScreen === 'purchaseEntryStep1' ? (
         <PurchaseEntryStep1 onNavigate={handleScreenNavigation} />
@@ -401,7 +438,7 @@ function App() {
       ) : currentScreen === 'purchaseEntryStep8' ? (
         <PurchaseEntryStep8 onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} deviceData={navigationParams.deviceData} imeiData={navigationParams.imeiData} ceirVerified={navigationParams.ceirVerified} conditionData={navigationParams.conditionData} priceData={navigationParams.priceData} />
       ) : currentScreen === 'viewPurchaseHistory' ? (
-        <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="purchases" />
+        <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="purchases" singleTab />
       ) : currentScreen === 'saleEntryStep1' ? (
         <SaleEntryStep1 onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'verifyBuyerMobileNumber' ? (
@@ -417,7 +454,7 @@ function App() {
       ) : currentScreen === 'saleCompleted' ? (
         <SaleCompleted onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} deviceData={navigationParams.deviceData} saleData={navigationParams.saleData} invoiceId={navigationParams.invoiceId} sale={navigationParams.sale} />
       ) : currentScreen === 'viewSaleHistory' ? (
-        <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="sales" />
+        <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="sales" singleTab />
       ) : currentScreen === 'myDigitalId' ? (
         <MyDigitalId onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'scanNFC' ? (
@@ -433,7 +470,9 @@ function App() {
       ) : currentScreen === 'exportReport' ? (
         <ExportReport onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'purchaseAndSaleHistory' ? (
-        <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab={navigationParams.initialTab || 'purchases'} />
+        <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab={navigationParams.initialTab || 'purchases'} singleTab={!!navigationParams.singleTab} />
+      ) : currentScreen === 'transactionDetails' ? (
+        <TransactionDetails onNavigate={handleScreenNavigation} type={navigationParams.type} item={navigationParams.item} />
       ) : currentScreen === 'scanQR' ? (
         <ScanQR onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'validQR' ? (
@@ -446,6 +485,12 @@ function App() {
         <IMEIResult onNavigate={handleScreenNavigation} imeiNumber={navigationParams.imeiNumber} />
       ) : currentScreen === 'ceirResult' ? (
         <CEIRResult onNavigate={handleScreenNavigation} imeiNumber={navigationParams.imeiNumber} />
+      ) : currentScreen === 'customerDirectory' ? (
+        <CustomerDirectoryScreen onNavigate={handleScreenNavigation} />
+      ) : currentScreen === 'chat' ? (
+        <ChatScreen onNavigate={handleScreenNavigation} />
+      ) : currentScreen === 'notes' ? (
+        <NotesScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'supportUsers' ? (
         <SupportUsersScreen onNavigate={handleScreenNavigation} />
       ) : (
@@ -454,6 +499,14 @@ function App() {
       </KeyboardAvoidingView>
     </SafeAreaProvider>
     </Provider>
+  );
+}
+
+function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 }
 

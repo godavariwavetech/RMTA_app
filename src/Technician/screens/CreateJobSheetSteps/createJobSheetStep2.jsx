@@ -93,12 +93,12 @@ export default function CreateJobSheetStep2({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 2 OF 8 · DEVICE</Text>
+            <Text style={styles.stepText}>STEP 2 OF 7 · DEVICE</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '25%' }]} />
+            <View style={[styles.progressBar, { width: '28.57%' }]} />
           </View>
 
           {/* Content Section */}
@@ -239,6 +239,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

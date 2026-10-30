@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Linking,
   StyleSheet,
   Text,
   View,
@@ -8,7 +9,6 @@ import {
   StatusBar,
   TextInput,
   Alert,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,19 +16,21 @@ import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
-import { useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
+import { isValidImei } from '../../../utils/imeiValidation';
+import ImeiScannerModal from '../../../Components/ImeiScannerModal';
+
+const KYM_URL = 'https://ceir.sancharsaathi.gov.in/Device/SancharSaathiKym.jsp';
+const CEIR_URL = 'https://ceir.sancharsaathi.gov.in/Device/CeirImeiVerification.jsp';
 
 export default function DeviceVerification({ onNavigate }) {
-  const user = useSelector(state => state.auth.user) || {};
   const [imeiNumber, setImeiNumber] = useState('');
-  const [isChecking, setIsChecking] = useState(false);
 
   // The IMEI is complete once 15 digits are entered.
   const imeiComplete = imeiNumber.length === 15;
+  // A 15-digit number must also pass the Luhn checksum to be a real IMEI.
+  const imeiValid = isValidImei(imeiNumber);
 
   const handleBack = () => {
     if (onNavigate) {
@@ -36,32 +38,14 @@ export default function DeviceVerification({ onNavigate }) {
     }
   };
 
-  const handleScanIMEI = () => {
-    Alert.alert('Scan IMEI', 'Camera functionality would be implemented here');
-  };
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const handleScanIMEI = () => setScannerOpen(true);
 
-  const handleCheckIMEI = async () => {
-    if (!imeiComplete || isChecking) return;
-    setIsChecking(true);
-    try {
-      const { response, data } = await postJson(ENDPOINTS.IMEI_CHECK, {
-        member_id: user.member_id,
-        imei: imeiNumber,
-      });
-      setIsChecking(false);
-      if (response.ok && data && data.success !== false && data.data && data.data.valid) {
-        // Valid IMEI → show the result screen.
-        onNavigate('imeiResult', { imeiNumber });
-      } else {
-        Alert.alert(
-          'Invalid IMEI number',
-          'The IMEI you entered is not valid. Please check the 15-digit number and try again.',
-        );
-      }
-    } catch (err) {
-      setIsChecking(false);
-      Alert.alert('Could not check IMEI', err.message || 'Please try again.');
-    }
+  // Once the IMEI passes the checksum, these government pages can confirm it.
+  const openLink = url => {
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Could not open the link', 'Please open it in a browser: ' + url),
+    );
   };
 
   return (
@@ -117,6 +101,10 @@ export default function DeviceVerification({ onNavigate }) {
                   Enter all 15 digits ({imeiNumber.length}/15)
                 </Text>
               )}
+              {imeiComplete && !imeiValid && (
+                <Text style={styles.imeiHint}>This IMEI number is not valid</Text>
+              )}
+              {imeiValid && <Text style={styles.imeiValidHint}>✓ Valid IMEI number</Text>}
 
               <TouchableOpacity
                 style={styles.scanButton}
@@ -126,56 +114,46 @@ export default function DeviceVerification({ onNavigate }) {
               </TouchableOpacity>
             </View>
 
-            {/* CEIR Status Section */}
-            <View style={styles.statusSection}>
-              <View style={styles.statusCard}>
-                <View style={styles.statusIcon}>
-                  {/* <Text style={styles.shieldIcon}>🛡️</Text> */}
-                  <Image source={require('../../../Assets/icons/shieldTick.png')} style={styles.shieldIcon} />
-                </View>
-                <View style={styles.statusContent}>
-                  <Text style={styles.statusTitle}>CEIR status</Text>
-                  <Text style={styles.statusDescription}>
-                    Check for blacklisted or reported devices
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.infoCard}>
-                <View style={styles.infoIcon}>
-                  {/* <Text style={styles.infoSymbol}>ℹ️</Text> */}
-                  <View style={styles.statusIcon}>
-                    {/* <Text style={styles.shieldIcon}>🛡️</Text> */}
-                    <Image source={require('../../../Assets/icons/shieldTick.png')} style={styles.shieldIcon} />
-                  </View>
-                  {/* <Image source={require('../../../Assets/icons/shieldTick.png')} style={styles.shieldIcon} /> */}
-                </View>
-                <Text style={styles.infoText}>
-                  Results shown in this prototype are sample data.
-                </Text>
-              </View>
-            </View>
-
             {/* Device Info Display */}
 
             <View style={styles.bottomSpacer} />
           </View>
         </ScrollView>
 
-        {/* Check Button */}
+        <ImeiScannerModal
+          visible={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScanned={imei => {
+            setImeiNumber(imei);
+            setScannerOpen(false);
+          }}
+        />
+
+        {/* Footer: the two official checks appear once the IMEI is valid */}
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.checkButton,
-              (isChecking || !imeiComplete) && styles.checkButtonDisabled
-            ]}
-            onPress={handleCheckIMEI}
-            disabled={isChecking || !imeiComplete}
-          >
-            <Text style={styles.checkButtonText}>
-              {isChecking ? 'Checking...' : 'Check IMEI'}
-            </Text>
-          </TouchableOpacity>
+          {imeiValid ? (
+            <>
+              <Text style={styles.footerHeading}>Check this IMEI on Sanchar Saathi</Text>
+              <TouchableOpacity
+                style={styles.checkButton}
+                onPress={() => openLink(KYM_URL)}
+              >
+                <Text style={styles.checkButtonText}>Know Your Mobile (KYM)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.checkButton, styles.checkButtonSecond]}
+                onPress={() => openLink(CEIR_URL)}
+              >
+                <Text style={styles.checkButtonText}>CEIR IMEI verification</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={[styles.checkButton, styles.checkButtonDisabled]}>
+              <Text style={styles.checkButtonText}>
+                {imeiComplete ? 'Enter a valid IMEI' : 'Enter a 15-digit IMEI'}
+              </Text>
+            </View>
+          )}
         </View>
       </SafeAreaView>
     </>
@@ -214,6 +192,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: Colors.primary,
@@ -290,69 +271,8 @@ const styles = StyleSheet.create({
   },
 
   /* Status Section */
-  statusSection: {
-    marginBottom: hp('2.5%'),
-    gap: hp('1.5%'),
-  },
-  statusCard: {
-    flexDirection: 'row',
-    backgroundColor: '#F0F4F8',
-    // borderWidth: 1,
-    // borderColor: '#BFDBFE',
-    borderRadius: wp('3%'),
-    padding: wp('3%'),
-    alignItems: 'center',
-    gap: wp('3%'),
-  },
-  statusIcon: {
-    width: wp('10%'),
-    height: wp('10%'),
-    borderRadius: wp('5%'),
-    // backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shieldIcon: {
-    fontSize: wp('6%'),
-    height: wp('5%'),
-    width: wp('5%')
-  },
-  statusContent: {
-    flex: 1,
-  },
-  statusTitle: {
-    fontSize: wp('3.6%'),
-    fontWeight: '700',
-    // color: '#1E40AF',
-    marginBottom: hp('0.3%'),
-  },
-  statusDescription: {
-    fontSize: wp('2.8%'),
-    color: '#6B7280',
-    fontWeight: '400',
-  },
 
   /* Info Card */
-  infoCard: {
-    flexDirection: 'row',
-    backgroundColor: '#F0F4F8',
-    borderRadius: wp('3%'),
-    padding: wp('3%'),
-    alignItems: 'center',
-    gap: wp('2%'),
-  },
-  infoIcon: {
-    marginTop: hp('0.3%'),
-  },
-  infoSymbol: {
-    fontSize: wp('5%'),
-  },
-  infoText: {
-    fontSize: wp('3%'),
-    color: '#6B7280',
-    fontWeight: '400',
-    flex: 1,
-  },
 
   /* Result Card */
   resultCard: {
@@ -441,6 +361,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  footerHeading: {
+    fontSize: wp('3.4%'),
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: hp('1.2%'),
+  },
+  checkButtonSecond: {
+    marginTop: hp('1.2%'),
+    backgroundColor: '#071A3D',
+  },
+  imeiValidHint: {
+    fontSize: wp('3.2%'),
+    color: '#15803D',
+    fontWeight: '600',
+    marginBottom: hp('1.5%'),
+    marginTop: hp('-0.5%'),
   },
   checkButtonDisabled: {
     backgroundColor: '#D1D5DB',

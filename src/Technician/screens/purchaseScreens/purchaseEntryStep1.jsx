@@ -21,8 +21,6 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updatePurchaseDraft, createPurchaseCustomer } from '../../../redux/slices/purchaseSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
@@ -80,6 +78,8 @@ export default function PurchaseEntryStep1({ onNavigate }) {
         member_id: user.member_id,
         aadharnumber: aadharDigits,
         address: formData.address.trim(),
+        customer_image: formData.sellerPhoto && formData.sellerPhoto.base64 ? formData.sellerPhoto.base64 : null,
+        photo_file_id: formData.sellerPhoto && formData.sellerPhoto.file_id ? formData.sellerPhoto.file_id : null,
       }),
     );
     setSubmitting(false);
@@ -100,13 +100,15 @@ export default function PurchaseEntryStep1({ onNavigate }) {
         result.payload.seller_id ||
         result.payload.customer_id ||
         result.payload.id);
+    const savedSellerPhoto = formData.sellerPhoto
+      ? { uri: formData.sellerPhoto.uri || null, file_id: formData.sellerPhoto.file_id || null }
+      : null;
     const seller = {
       ...formData,
+      sellerPhoto: savedSellerPhoto,
       sellerMobile: mobileDigits,
       customer_id: customerId,
     };
-
-    console.log('[Purchase][Step1] seller captured →', seller);
     dispatch(updatePurchaseDraft({ seller }));
     if (onNavigate) {
       onNavigate('verifySellerMobileNumber', {
@@ -127,27 +129,10 @@ export default function PurchaseEntryStep1({ onNavigate }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setFormData(prev => ({ ...prev, sellerPhoto: { uri: asset.uri, uploading: true } }));
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'seller.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setFormData(prev => ({
-              ...prev,
-              sellerPhoto: { uri: asset.uri, file_id: data.data.file_id, uploading: false },
-            }));
-          } else {
-            setFormData(prev => ({ ...prev, sellerPhoto: { uri: asset.uri, uploading: false } }));
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setFormData(prev => ({ ...prev, sellerPhoto: { uri: asset.uri, uploading: false } }));
-          Alert.alert('Upload failed', err.message);
-        }
+        setFormData(prev => ({
+          ...prev,
+          sellerPhoto: { uri: asset.uri, base64: asset.base64, uploading: false },
+        }));
       },
     );
   };
@@ -175,7 +160,12 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.backButtonText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Purchase Entry</Text>
-          <View style={styles.placeholderButton} />
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => onNavigate && onNavigate('viewPurchaseHistory')}
+          >
+            <Text style={styles.historyButtonText}>History</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Step Indicator */}
@@ -256,8 +246,8 @@ export default function PurchaseEntryStep1({ onNavigate }) {
                   <ActivityIndicator size="small" color="#0066FF" />
                   <Text style={styles.photoUploadSubtitle}>Uploading…</Text>
                 </View>
-              ) : formData.sellerPhoto && formData.sellerPhoto.file_id ? (
-                <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Uploaded</Text>
+              ) : formData.sellerPhoto && (formData.sellerPhoto.file_id || formData.sellerPhoto.base64) ? (
+                <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>Photo ready</Text>
               ) : (
                 <Text style={styles.photoUploadSubtitle}>JPG or PNG • Up to 5 MB</Text>
               )}
@@ -351,6 +341,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -359,6 +352,13 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  historyButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#EEF3FF',
+  },
+  historyButtonText: { fontSize: 13, fontWeight: '700', color: '#2F5DDC' },
   placeholderButton: {
     width: 44,
   },

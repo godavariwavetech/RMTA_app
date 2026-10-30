@@ -20,6 +20,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
+import DatePickerModal, { formatDisplayDate } from '../../../Components/DatePickerModal';
 
 export default function CreateJobSheetStep4({ onNavigate }) {
   const dispatch = useDispatch();
@@ -30,9 +31,11 @@ export default function CreateJobSheetStep4({ onNavigate }) {
     draftRepair.problem_description || '',
   );
   const [estimatedCost, setEstimatedCost] = useState(draftRepair.estimated_cost || '');
+  // Stored as "YYYY-MM-DD".
   const [estimatedDelivery, setEstimatedDelivery] = useState(
     draftRepair.estimated_delivery_text || '',
   );
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   const buildRepair = () => ({
     category: selectedCategory,
@@ -97,12 +100,12 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 4 OF 8 · REPAIR</Text>
+            <Text style={styles.stepText}>STEP 4 OF 7 · REPAIR</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '50%' }]} />
+            <View style={[styles.progressBar, { width: '57.14%' }]} />
           </View>
 
           {/* Content Section */}
@@ -165,12 +168,28 @@ export default function CreateJobSheetStep4({ onNavigate }) {
             {/* Estimated Delivery */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Estimated Delivery</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Select delivery date and time"
-                placeholderTextColor="#D1D5DB"
+              <TouchableOpacity
+                style={[styles.input, styles.dateInput]}
+                activeOpacity={0.7}
+                onPress={() => setDatePickerVisible(true)}
+              >
+                <Text
+                  style={[
+                    styles.dateInputText,
+                    !estimatedDelivery && styles.dateInputPlaceholder,
+                  ]}
+                >
+                  {formatDisplayDate(estimatedDelivery) || 'Select delivery date'}
+                </Text>
+              </TouchableOpacity>
+              <DatePickerModal
+                visible={datePickerVisible}
                 value={estimatedDelivery}
-                onChangeText={setEstimatedDelivery}
+                onConfirm={date => {
+                  setEstimatedDelivery(date);
+                  setDatePickerVisible(false);
+                }}
+                onClose={() => setDatePickerVisible(false)}
               />
             </View>
 
@@ -222,6 +241,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -305,6 +327,16 @@ const styles = StyleSheet.create({
   },
   categoryTextSelected: {
     color: '#FFFFFF',
+  },
+  dateInput: {
+    justifyContent: 'center',
+  },
+  dateInputText: {
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  dateInputPlaceholder: {
+    color: '#D1D5DB',
   },
   input: {
     backgroundColor: '#FFFFFF',

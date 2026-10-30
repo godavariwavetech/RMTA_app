@@ -9,7 +9,9 @@ export function chooseImageSource(options = {}, onResponse) {
       {
         mediaType: 'photo',
         includeBase64: true,
-        quality: 0.7,
+        quality: 0.65,
+        maxWidth: 1200,
+        maxHeight: 1200,
         ...options,
       },
       handleResponse,
@@ -20,7 +22,9 @@ export function chooseImageSource(options = {}, onResponse) {
       {
         mediaType: 'photo',
         includeBase64: true,
-        quality: 0.7,
+        quality: 0.65,
+        maxWidth: 1200,
+        maxHeight: 1200,
         ...options,
         selectionLimit: 1,
       },

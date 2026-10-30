@@ -17,6 +17,7 @@ import {
 } from 'react-native-responsive-screen';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { formatDisplayDate } from '../../../Components/DatePickerModal';
 import { Colors } from '../../../Constants/Colors';
 import { createJobSheet } from '../../../redux/slices/jobSheetSlice';
 
@@ -41,7 +42,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
   const complaint = repair.problem_description || '—';
   const estimate = repair.estimated_cost || '—';
-  const delivery = repair.estimated_delivery_text || '—';
+  const delivery = formatDisplayDate(repair.estimated_delivery_text) || repair.estimated_delivery_text || '—';
 
   // Prefer a real uploaded photo for the preview; fall back to the sample image.
   const allPhotos = [
@@ -68,7 +69,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
     const conditionValue = component =>
       (conditions.find(c => c && c.component === component) || {}).condition_value || '';
 
-    // Step 6 captures exactly one photo per category — front/back/damage map
+    // Step 3 captures exactly one photo per category — front/back/damage map
     // 1:1 onto frontimage/backimage/damageimage, sent as raw base64.
     const photos = Array.isArray(draft.photos) ? draft.photos : [];
     const photoBase64 = type => (photos.find(p => p && p.photo_type === type) || {}).base64 || null;
@@ -99,16 +100,13 @@ export default function CreateJobSheetStep7({ onNavigate }) {
       backimage: photoBase64('back'),
       damageimage: photoBase64('damage'),
     };
-    console.log('[JobSheet][Step7] submitting payload →', JSON.stringify(payload, null, 2));
     setSubmitting(true);
     const result = await dispatch(createJobSheet(payload));
     setSubmitting(false);
 
     if (createJobSheet.fulfilled.match(result)) {
-      console.log('[JobSheet][Step7] created ✓ →', result.payload);
-      onNavigate('createJobSheetStep8', { job: result.payload });
+      onNavigate('resetTo', { target: 'jobs' });
     } else {
-      console.log('[JobSheet][Step7] create FAILED →', result.payload);
       const message =
         (result.payload && result.payload.message) ||
         'Could not create the job sheet. Please try again.';
@@ -144,12 +142,12 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 7 OF 8 · REVIEW</Text>
+            <Text style={styles.stepText}>STEP 6 OF 7 · REVIEW</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '87.5%' }]} />
+            <View style={[styles.progressBar, { width: '85.71%' }]} />
           </View>
 
           {/* Device Reference Image */}
@@ -277,6 +275,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

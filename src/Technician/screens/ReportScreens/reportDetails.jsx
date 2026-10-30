@@ -19,7 +19,7 @@ import { useSelector } from 'react-redux';
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
-import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { showAppModal } from '../../../utils/appModal';
 
@@ -62,7 +62,7 @@ export default function ReportDetails({ onNavigate, reportType }) {
     try {
       const s = reportData.summary;
       const chartRows = reportData.weekRepairs.map(r => `<tr><td>${r.day}</td><td>${r.value}</td></tr>`).join('');
-      const file = await RNHTMLtoPDF.convert({
+      const file = await generatePDF({
         fileName: `RMTA_Repair_Performance_${Date.now()}`,
         base64: false,
         html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Repair Performance</h1><p>${user.shop_name || 'RMTA'} - ${reportData.period}</p><h2>Summary</h2><p>Completed: ${s.completed} jobs</p><p>In progress: ${s.inProgress} jobs</p><p>Ready for pickup: ${s.readyForPickup} jobs</p><p>Revenue: ${s.revenue}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${chartRows}</table></body></html>`,
@@ -259,6 +259,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('7%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   pageTitle: {
     fontSize: wp('5%'),

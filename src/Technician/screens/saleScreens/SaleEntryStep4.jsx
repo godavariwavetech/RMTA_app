@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import PdfSizeModal from '../../../Components/PdfSizeModal';
+import { convertToPdf, pdfBodyStyle, pdfHeadStyle } from '../../../utils/pdfSizes';
 import FileShare from 'react-native-share';
 
 import {
@@ -41,9 +42,10 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [printing, setPrinting] = useState(false);
 
-  const buildInvoiceHtml = () => `
+  const buildInvoiceHtml = sizeKey => `
     <html>
-      <body style="font-family: Helvetica, Arial, sans-serif; padding: 24px; color: #1F2937;">
+      <head>${pdfHeadStyle(sizeKey)}</head>
+      <body style="${pdfBodyStyle(sizeKey)}">
         <h1 style="margin-bottom: 4px;">${invoiceId}</h1>
         <p style="color: #6B7280; margin-top: 0;">${invoiceDate} · ${storeName}</p>
         <h2 style="border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">Invoice</h2>
@@ -60,14 +62,19 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
     </html>
   `;
 
-  const generateInvoicePdf = () =>
-    RNHTMLtoPDF.convert({
-      html: buildInvoiceHtml(),
-      fileName: invoiceId,
-      base64: false,
-    });
+  const generateInvoicePdf = sizeKey =>
+    convertToPdf({ html: buildInvoiceHtml(sizeKey), fileName: invoiceId, sizeKey });
 
-  const handleDownloadPDF = async () => {
+  // Download / Print first ask which paper size to make the PDF for.
+  const [pdfAction, setPdfAction] = useState(null); // 'download' | 'print' | null
+  const handlePdfSizeSelected = sizeKey => {
+    const action = pdfAction;
+    setPdfAction(null);
+    if (action === 'download') handleDownloadPDF(sizeKey);
+    else if (action === 'print') handlePrint(sizeKey);
+  };
+
+  const handleDownloadPDF = async sizeKey => {
     if (generatingPdf) return;
     setGeneratingPdf(true);
     try {
@@ -117,7 +124,7 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
 
   // No dedicated print library — generate the same PDF and hand it to the
   // share sheet, where most Android print services accept a PDF directly.
-  const handlePrint = async () => {
+  const handlePrint = async sizeKey => {
     if (printing) return;
     setPrinting(true);
     try {
@@ -256,7 +263,7 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
             <View style={styles.actionButtons}>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={handleDownloadPDF}
+                onPress={() => setPdfAction('download')}
                 disabled={generatingPdf}
               >
                 {generatingPdf ? (
@@ -278,7 +285,7 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={handlePrint}
+                onPress={() => setPdfAction('print')}
                 disabled={printing}
               >
                 {printing ? (
@@ -302,6 +309,11 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
             <Text style={styles.confirmButtonText}>Complete sale</Text>
           </TouchableOpacity>
         </View>
+        <PdfSizeModal
+          visible={pdfAction !== null}
+          onSelect={handlePdfSizeSelected}
+          onClose={() => setPdfAction(null)}
+        />
       </SafeAreaView>
     </>
   );
@@ -337,6 +349,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

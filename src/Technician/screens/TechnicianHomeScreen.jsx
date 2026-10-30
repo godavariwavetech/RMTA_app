@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Animated,
   StyleSheet,
   Text,
   View,
@@ -18,47 +17,26 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
+import { useI18n } from '../../i18n';
 import BottomNav from '../../Components/BottomNav';
 import { postJson } from '../../redux/slices/authSlice';
+import ScrollTicker from '../../Components/ScrollTicker';
+import BannerCarousel from '../../Components/BannerCarousel';
+import useAccountProfile from '../../utils/useAccountProfile';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
 import { ENDPOINTS } from '../../Constants/config';
-import { showAppActionSheet } from '../../utils/appModal';
+// Re-enable together with the NFC option in the QR tile below.
+// import { showAppActionSheet } from '../../utils/appModal';
 
 export default function TechnicianHomeScreen({ onNavigate }) {
+  const { t } = useI18n();
   const [selectedNavItem, setSelectedNavItem] = useState('home');
 
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user);
 
-  // Full profile — admins were self-registered (member_registertion), so
-  // their details live under admin_details; technicians were added by an
-  // admin, so theirs live under technician_details. Both fetched by user_id.
-  const isAdmin = user && user.role === 'admin';
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!user || !user.user_id) return;
-      try {
-        const endpoint = isAdmin ? ENDPOINTS.ADMIN_DETAILS : ENDPOINTS.TECHNICIAN_DETAILS;
-        const { response, data } = await postJson(endpoint, {
-          user_id: user.user_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          // This backend sometimes wraps the record in a single-element
-          // array ([{ ...profile }]) instead of returning it directly.
-          const record = Array.isArray(data.data) ? data.data[0] : data.data;
-          setProfile(record);
-        }
-      } catch (e) {
-        // Keep the cached login details if the fetch fails.
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [user, isAdmin]);
+  // Full profile (admin_details for admins, technician_details for technicians).
+  const profile = useAccountProfile();
 
   // Today's summary counts (jobs/sales/purchases for this member today).
   const counts = useSelector(state => state.jobSheet.counts);
@@ -110,25 +88,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const tickerTranslateX = useRef(new Animated.Value(0)).current;
-  const [tickerContentWidth, setTickerContentWidth] = useState(0);
-  const tickerMessage =
-    'Welcome to RMTA  •  Member updates and services  •  ';
-
-  useEffect(() => {
-    if (!tickerContentWidth) return undefined;
-    const distance = tickerContentWidth / 2;
-    const animation = Animated.loop(
-      Animated.timing(tickerTranslateX, {
-        toValue: -distance,
-        duration: Math.max(12000, distance * 28),
-        useNativeDriver: true,
-      }),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [tickerContentWidth, tickerTranslateX]);
-
   const handleNavigation = (screen, params) => {
     setSelectedNavItem(screen);
     if (onNavigate) {
@@ -136,29 +95,69 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     }
   };
 
+  // Home banners: picture banners and text banners that open a screen.
   const banners = [
-    { id: 1, image: require('../../Assets/images/TechnicianHomeBanner1.png') },
+    {
+      id: 1,
+      title: t('banner1Title'),
+      subtitle: t('banner1Sub'),
+      color: '#071A3D',
+      accent: '#21D4FD',
+      symbol: '⚙',
+      onPress: () => handleNavigation('createJobSheetStep1', { fresh: true }),
+    },
+    {
+      id: 2,
+      title: t('banner2Title'),
+      subtitle: t('banner2Sub'),
+      color: '#173B82',
+      accent: '#8BB8FF',
+      symbol: '✓',
+      onPress: () => handleNavigation('deviceVerification'),
+    },
+    {
+      id: 3,
+      title: t('banner3Title'),
+      subtitle: t('banner3Sub'),
+      color: '#3730A3',
+      accent: '#C4B5FD',
+      symbol: 'ID',
+      onPress: () => handleNavigation('myDigitalId'),
+    },
+    {
+      id: 4,
+      title: t('banner4Title'),
+      subtitle: t('banner4Sub'),
+      color: '#126B58',
+      accent: '#6EE7B7',
+      symbol: '▤',
+      onPress: () => handleNavigation('createJobSheetStep1', { fresh: true }),
+    },
   ];
 
+  // Pastel tile behind each quick-action icon, by action id.
+  const ACTION_TINTS = {7: '#FEF3C7', 1: '#DBEAFE', 2: '#D1FAE5', 3: '#FFEDD5', 4: '#E0E7FF', 5: '#DBEAFE', 6: '#EDE9FE', 8: '#FEE2E2', 9: '#CFFAFE', 10: '#DCFCE7', 11: '#FEF3C7'};
   const quickActions = [
-    { id: 1, icon: require('../../Assets/icons/quickActions1.png'), label: 'New job sheet' },
-    { id: 2, icon: require('../../Assets/icons/quickActions2.png'), label: 'Purchase' },
-    { id: 3, icon: require('../../Assets/icons/quickActions3.png'), label: 'Sale' },
-    { id: 4, icon: require('../../Assets/icons/quickActions4.png'), label: 'CEIR / IMEI' },
-    { id: 5, icon: require('../../Assets/icons/quickActions5.png'), label: 'Digital ID' },
-    { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC / QR scan' },
-    { id: 8, icon: require('../../Assets/icons/quickActions8.png'), label: 'Reports' },
-    { id: 9, icon: require('../../Assets/icons/profile.png'), label: 'Supporters' },
+    { id: 7, icon: require('../../Assets/icons/qa_notes.png'), label: t('qaNotes') },
+    { id: 1, icon: require('../../Assets/icons/qa_job.png'), label: t('qaNewJobSheet') },
+    { id: 2, icon: require('../../Assets/icons/qa_purchase.png'), label: t('qaPurchase') },
+    { id: 3, icon: require('../../Assets/icons/qa_sale.png'), label: t('qaSale') },
+    { id: 4, icon: require('../../Assets/icons/qa_ceir.png'), label: t('qaCeirImei') },
+    { id: 5, icon: require('../../Assets/icons/qa_id.png'), label: t('qaDigitalId') },
+    { id: 6, icon: require('../../Assets/icons/qa_qr.png'), label: t('qaNfcQr') },
+    { id: 8, icon: require('../../Assets/icons/qa_reports.png'), label: t('qaReports') },
+    { id: 11, emoji: '📒', label: 'Customer directory' },
+    { id: 9, icon: require('../../Assets/icons/qa_supporters.png'), label: t('qaSupporters') },
+    { id: 10, emoji: '💬', label: 'Chat' },
   ];
 
-  // Format a count as a 2-digit string (e.g. 3 → "03").
-  const fmt = n => String(n || 0).padStart(2, '0');
+  const fmt = n => String(n || 0);
   const todayStats = [
-    { id: 1, count: fmt(counts.jobs_today), label: 'Jobs today', icon: require('../../Assets/icons/clipboard.png'), color: '#DBEAFE', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 2, count: fmt(counts.completed), label: 'Completed', icon: require('../../Assets/icons/circle-check.png'), color: '#DCFCE7', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 3, count: fmt(counts.pending), label: 'Pending', icon: require('../../Assets/icons/pending.png'), color: '#f8f5daff', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 4, count: fmt(counts.sales), label: 'Sales', icon: require('../../Assets/icons/arrow-up-right.png'), color: '#FFF7ED', textColor: '#333333ff', borderColor: '#e5d4b8a1' },
-    { id: 5, count: fmt(counts.purchases), label: 'Purchases', icon: require('../../Assets/icons/arrow-down-left.png'), color: '#EDE9FE', textColor: '#333333ff', borderColor: '#d5ccef9a' },
+    { id: 1, count: fmt(counts.jobs_today), label: t('jobsToday'), icon: require('../../Assets/icons/clipboard.png'), color: '#DBEAFE', textColor: '#333333ff', borderColor: 'transparent' },
+    { id: 2, count: fmt(counts.completed), label: t('completed'), icon: require('../../Assets/icons/circle-check.png'), color: '#DCFCE7', textColor: '#333333ff', borderColor: 'transparent' },
+    { id: 3, count: fmt(counts.pending), label: t('pending'), icon: require('../../Assets/icons/pending.png'), color: '#f8f5daff', textColor: '#333333ff', borderColor: 'transparent' },
+    { id: 4, count: fmt(counts.sales), label: t('sales'), icon: require('../../Assets/icons/arrow-up-right.png'), color: '#FFF7ED', textColor: '#333333ff', borderColor: '#e5d4b8a1' },
+    { id: 5, count: fmt(counts.purchases), label: t('purchases'), icon: require('../../Assets/icons/arrow-down-left.png'), color: '#EDE9FE', textColor: '#333333ff', borderColor: '#d5ccef9a' },
   ];
 
   // Build the recent-activity list from whichever actions have happened,
@@ -224,7 +223,7 @@ export default function TechnicianHomeScreen({ onNavigate }) {
               <Text style={styles.avatarText}>{techInitials}</Text>
             </View>
             <View style={styles.headerInfo}>
-              <Text style={styles.title}>Welcome back,</Text>
+              <Text style={styles.title}>{t('welcomeBackComma')}</Text>
               <Text style={styles.name}>{techName}</Text>
 
             </View>
@@ -238,43 +237,16 @@ export default function TechnicianHomeScreen({ onNavigate }) {
             </View>
           </View>
 
-          <View style={styles.ticker}>
-            <View style={styles.tickerViewport}>
-              <Animated.View
-                onLayout={event => setTickerContentWidth(event.nativeEvent.layout.width)}
-                style={[
-                  styles.tickerTrack,
-                  { transform: [{ translateX: tickerTranslateX }] },
-                ]}
-              >
-                <Text style={styles.tickerText}>{tickerMessage}</Text>
-                <Text style={styles.tickerText}>{tickerMessage}</Text>
-              </Animated.View>
-            </View>
-          </View>
+          <ScrollTicker fallbackText={t('tickerText')} />
         </View>
 
-        {/* Featured Banner */}
-        <View style={styles.bannerContainer}>
-          <TouchableOpacity style={styles.banner}>
-            <Image source={banners[0].image} style={styles.bannerImage} />
-          </TouchableOpacity>
-          <View style={styles.dotsContainer}>
-            {banners.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  index === 0 && styles.activeDot,
-                ]}
-              />
-            ))}
-          </View>
-        </View>
+        {/* Featured banners */}
+        <BannerCarousel slides={banners} />
 
         {/* Quick Actions Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
+          <View style={styles.sectionUnderline} />
           <View style={styles.quickActionsGrid}>
             {quickActions.map((action) => (
               <TouchableOpacity
@@ -292,31 +264,46 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                   } else if (action.id === 5) {
                     handleNavigation('myDigitalId');
                   } else if (action.id === 6) {
-                    showAppActionSheet('Choose a scan type', 'Select a way to scan.', [
-                      {
-                        text: 'NFC card',
-                        subtitle: 'Read an RMTA card',
-                        icon: '◉',
-                        onPress: () => handleNavigation('scanNFC'),
-                      },
-                      {
-                        text: 'Scan QR code',
-                        subtitle: 'Use a QR code image or camera',
-                        icon: '▦',
-                        onPress: () => handleNavigation('scanQR'),
-                      },
-                    ]);
+                    // NFC scanning is switched off for now: this tile goes straight
+                    // to the QR scanner instead of asking NFC card vs QR code.
+                    // showAppActionSheet(t('chooseScanType'), t('selectScanWay'), [
+                    //   {
+                    //     text: t('nfcCard'),
+                    //     subtitle: t('readRmtaCard'),
+                    //     icon: '◉',
+                    //     onPress: () => handleNavigation('scanNFC'),
+                    //   },
+                    //   {
+                    //     text: t('scanQrCode'),
+                    //     subtitle: t('qrSub'),
+                    //     icon: '▦',
+                    //     onPress: () => handleNavigation('scanQR'),
+                    //   },
+                    // ]);
+                    handleNavigation('scanQR');
+                  } else if (action.id === 7) {
+                    handleNavigation('notes');
                   } else if (action.id === 8) {
                     handleNavigation('reports');
                   } else if (action.id === 9) {
                     handleNavigation('supportUsers');
+                  } else if (action.id === 10) {
+                    handleNavigation('chat');
+                  } else if (action.id === 11) {
+                    handleNavigation('customerDirectory');
                   }
                 }}
               >
-                <View style={styles.actionIcon}>
-                  <Image source={action.icon} style={styles.actionIconImage} />
+                <View style={[styles.actionIcon, { backgroundColor: ACTION_TINTS[action.id] || '#EEF2FF' }]}>
+                  {action.icon ? (
+                    <Image source={action.icon} style={styles.actionIconImage} />
+                  ) : (
+                    <Text style={styles.actionEmoji}>{action.emoji}</Text>
+                  )}
                 </View>
-                <Text style={styles.actionLabel}>{action.label}</Text>
+                <Text style={styles.actionLabel} numberOfLines={2}>
+                  {action.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -325,20 +312,24 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         {/* Today's Summary Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's summary</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View all {'>'}</Text>
+            <Text style={styles.sectionTitle}>{t('todaysSummary')}</Text>
+            <TouchableOpacity onPress={() => handleNavigation('jobs')}>
+              <Text style={styles.viewAllText}>{t('viewAll')} {'>'}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.statsGrid}>
             {todayStats.slice(0, 3).map((stat) => (
-              <TouchableOpacity key={stat.id} style={[styles.statCard, { backgroundColor: stat.color }]}>
-                <View style={{display: 'flex', flexDirection: 'row', alignItems: 'center', gap: wp('1%')}}>
+              <TouchableOpacity
+                key={stat.id}
+                activeOpacity={0.8}
+                style={styles.statCard}
+                onPress={() => handleNavigation('jobs')}
+              >
+                <View style={[styles.statIconCircle, { backgroundColor: stat.color }]}>
                   <Image source={stat.icon} style={styles.statIcon} />
-                  <Text style={[styles.statCount, { color: stat.textColor }]}>{stat.count}</Text>
                 </View>
-
-                <Text style={[styles.statLabelWide, ]}>{stat.label}</Text>
+                <Text style={styles.statCount}>{stat.count}</Text>
+                <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -346,24 +337,23 @@ export default function TechnicianHomeScreen({ onNavigate }) {
             {todayStats.slice(3).map((stat) => (
               <TouchableOpacity
                 key={stat.id}
-                style={[
-                  styles.statCardWide,
-                  {
-                    backgroundColor: stat.color,
-                    borderWidth: 2,
-                    borderColor: stat.borderColor
-                  }
-                ]}
+                activeOpacity={0.8}
+                onPress={() =>
+                  handleNavigation('purchaseAndSaleHistory', {
+                    initialTab: stat.id === 4 ? 'sales' : 'purchases',
+                    singleTab: true,
+                  })
+                }
+                style={styles.statCardWide}
               >
-
-                <View style={styles.statWideContent}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: wp('2%')}}>
-                    <Image source={stat.icon} style={styles.statIconWide} />
-                    <Text style={[styles.statLabelWide, ]}>{stat.label}</Text>
-                  </View>
-
-                  <Text style={[styles.statCountWide, { color: stat.textColor }]}>{stat.count}</Text>
+                <View style={[styles.statIconCircle, { backgroundColor: stat.color, marginBottom: 0 }]}>
+                  <Image source={stat.icon} style={styles.statIcon} />
                 </View>
+                <View style={styles.statWideContent}>
+                  <Text style={styles.statCountWide}>{stat.count}</Text>
+                  <Text style={styles.statLabelWide}>{stat.label}</Text>
+                </View>
+                <Text style={styles.statChevron}>›</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -372,9 +362,9 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         {/* Recent Activity Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent activity</Text>
+            <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
             <TouchableOpacity>
-              <Text style={styles.viewAllText}>View all {'>'}</Text>
+              <Text style={styles.viewAllText}>{t('viewAll')} {'>'}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.activityList}>
@@ -393,13 +383,13 @@ export default function TechnicianHomeScreen({ onNavigate }) {
               ))
             ) : (
               <Text style={styles.activityEmptyText}>
-                No recent activity yet. Create a job sheet, verify an IMEI, or record a sale to see it here.
+                {t('noRecentActivity')}
               </Text>
             )}
           </View>
         </View>
 
-         <Text style={styles.bottomNavTitle}>One association. Stronger together.</Text>
+         <Text style={styles.bottomNavTitle}>{t('oneAssociation')}</Text>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -492,38 +482,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  ticker: {
-    height: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    overflow: 'hidden',
-    marginTop: 0,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: '#193057',
-    borderWidth: 1,
-    borderColor: '#3E5B86',
-  },
-  tickerViewport: {
-    flex: 1,
-    height: '100%',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  tickerTrack: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    flexShrink: 0,
-    alignItems: 'center',
-  },
-  tickerText: {
-    flexShrink: 0,
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    includeFontPadding: false,
-    paddingRight: 28,
-  },
   statusToggleCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -576,134 +534,125 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 12,
   },
+  sectionUnderline: {
+    width: 26,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#2F5DDC',
+    marginTop: 5,
+  },
   actionButton: {
     width: '23%',
     alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#fff',
-    paddingVertical: hp('2%'),
-    borderRadius: wp('4%'),
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 9,
+    paddingBottom: 7,
+    paddingHorizontal: 3,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#dddddd9d'
+    borderColor: '#E8ECF3',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   actionIcon: {
-    width: wp('4%'),
-    height: wp('12%'),
-    borderRadius: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    // backgroundColor: '#F3F4F6',
+    marginBottom: 6,
   },
   actionIconImage: {
-    width: wp('10%'),
-    height: wp('10%'),
+    width: 34,
+    height: 34,
     resizeMode: 'contain',
   },
+  actionEmoji: { fontSize: 22 },
   actionLabel: {
-    fontSize: 11,
-    color: '#4B5563',
+    fontSize: 10,
+    lineHeight: 13,
+    minHeight: 26,
+    color: '#1F2937',
     textAlign: 'center',
-    fontWeight: '500',
-  },
-  bannerContainer: {
-    paddingHorizontal: 16,
-    marginVertical: 8,
-  },
-  banner: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  bannerImage: {
-    width: '100%',
-    height: 180,
-    resizeMode: 'cover',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D1D5DB',
-  },
-  activeDot: {
-    backgroundColor: '#bbbbbbff',
-    width: 8,
+    fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginTop: 12,
-    gap: 8,
+    gap: 10,
   },
   statCard: {
-    width: '30%',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
     borderRadius: 16,
-    marginBottom: 12,
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     alignItems: 'center',
   },
+  statIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
   statIcon: {
-    width: wp('5%'),
-    height: wp('5%'),
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    marginBottom: 8,
   },
   statCount: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 4,
+    color: '#1F2937',
   },
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
-    textAlign: 'center',
+    color: '#6B7280',
+    marginTop: 2,
   },
   statsGridBottom: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 12,
+    gap: 10,
+    marginTop: 10,
   },
   statCardWide: {
     flex: 1,
-    paddingVertical: hp('1.5%'),
-    paddingHorizontal: wp('2%'),
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  statIconWide: {
-    width: wp('6%'),
-    height: wp('6%'),
-    resizeMode: 'contain',
+    gap: 10,
   },
   statWideContent: {
     flex: 1,
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   statLabelWide: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
-    color: '#596579'
+    color: '#6B7280',
   },
-
   statCountWide: {
     fontSize: 20,
     fontWeight: '700',
-    marginTop: 4,
+    color: '#1F2937',
+  },
+  statChevron: {
+    fontSize: 22,
+    color: '#9CA3AF',
   },
   activityList: {
     marginTop: 12,

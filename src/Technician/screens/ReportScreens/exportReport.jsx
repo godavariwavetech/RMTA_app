@@ -213,6 +213,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('7%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   pageTitle: {
     fontSize: wp('5%'),

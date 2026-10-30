@@ -117,7 +117,7 @@ export default function CreateJobSheetStep5({ onNavigate }) {
     dispatch(updateJobDraft({ access }));
     console.log('[JobSheet][Step5] access captured →', access);
     if (onNavigate) {
-      onNavigate('createJobSheetStep6');
+      onNavigate('createJobSheetStep7');
     }
   };
 
@@ -168,12 +168,12 @@ export default function CreateJobSheetStep5({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 5 OF 8 · SECURITY</Text>
+            <Text style={styles.stepText}>STEP 5 OF 7 · SECURITY</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '62.5%' }]} />
+            <View style={[styles.progressBar, { width: '71.43%' }]} />
           </View>
 
           {/* Content Section */}
@@ -356,6 +356,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

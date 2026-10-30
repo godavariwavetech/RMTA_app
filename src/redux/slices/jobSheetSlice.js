@@ -55,19 +55,46 @@ export const createJobSheet = createAsyncThunk(
   },
 );
 
-// POST /public_app/job_counts — Today's summary counts for a member.
+// First value found under any of the candidate keys, as a number.
+const pickCount = (obj, keys) => {
+  for (const key of keys) {
+    if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
+      const n = Number(obj[key]);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return 0;
+};
+
+// Maps whatever shape the endpoint returns (an object, or a one-element array)
+// onto the five dashboard counts. Several key spellings are accepted because
+// the getscroll response format isn't documented yet.
+const normalizeCounts = raw => {
+  const row = Array.isArray(raw) ? raw[0] || {} : raw || {};
+  return {
+    jobs_today: pickCount(row, ['jobs_today', 'today_jobs', 'jobs', 'job_count', 'total_jobs']),
+    completed: pickCount(row, ['completed', 'completed_jobs', 'completed_count', 'complete']),
+    pending: pickCount(row, ['pending', 'pending_jobs', 'pending_count']),
+    sales: pickCount(row, ['sales', 'sales_count', 'sale_count', 'total_sales']),
+    purchases: pickCount(row, ['purchases', 'purchase_count', 'purchases_count', 'total_purchases']),
+  };
+};
+
+// POST /public_app/getcounts { member_id } — dashboard counts for a member.
 export const fetchJobCounts = createAsyncThunk(
   'jobSheet/counts',
   async (payload, { rejectWithValue }) => {
     try {
-      const { response, data } = await postJson(ENDPOINTS.JOB_COUNTS, payload);
+      const { response, data } = await postJson(ENDPOINTS.JOB_COUNTS, {
+        member_id: payload && payload.member_id,
+      });
       if (!response.ok || (data && data.success === false)) {
         return rejectWithValue({
           status: response.status,
-          message: (data && data.message) || 'Could not load counts.',
+          message: (data && (data.message || data.msg)) || 'Could not load counts.',
         });
       }
-      return data.data;
+      return normalizeCounts(data && (data.data !== undefined ? data.data : data));
     } catch (err) {
       return rejectWithValue({ status: 0, message: err.message });
     }

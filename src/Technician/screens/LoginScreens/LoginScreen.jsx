@@ -21,11 +21,13 @@ import {
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
 import { Colors } from '../../../Constants/Colors';
+import { useI18n } from '../../../i18n';
 import { useDispatch } from 'react-redux';
 import { loginUser } from '../../../redux/slices/authSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 export default function LoginScreen({ onNavigate, initialMode }) {
+  const { t } = useI18n();
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
@@ -196,7 +198,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                 <Text style={styles.backButtonText}>‹</Text>
               </TouchableOpacity>
               <Text style={styles.headerTitle}>
-                {loginMode === 'admin' ? 'Admin access' : 'Welcome to RMTA'}
+                {loginMode === 'admin' ? t('adminAccess') : t('welcomeToRmta')}
               </Text>
               <View style={styles.placeholderButton} />
             </View>
@@ -218,7 +220,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
               >
                 {/* Overlay for better text visibility */}
                 <View style={styles.welcomeCardOverlay} />
-                
+
                 <View style={styles.welcomeCardTextContainer}>
                   <Image
                     source={require('../../../Assets/images/appLogo.png')}
@@ -227,13 +229,13 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   />
                   <Text style={styles.welcomeTitle}>
                     {loginMode === 'admin'
-                      ? 'Manage with confidence.'
-                      : 'Welcome back.'}
+                      ? t('manageWithConfidence')
+                      : t('welcomeBack')}
                   </Text>
                   <Text style={styles.welcomeSubtitle}>
                     {loginMode === 'admin'
-                      ? 'Secure access for RMTA administrators.'
-                      : 'Your shop, jobs and membership. All in one place.'}
+                      ? t('adminSecure')
+                      : t('shopJobsMembership')}
                   </Text>
                 </View>
               </ImageBackground>
@@ -257,7 +259,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                     loginMode === 'technician' && styles.modeButtonTextSelected,
                   ]}
                 >
-                  Technician login
+                  {t('technicianLogin')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -275,14 +277,14 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                     loginMode === 'admin' && styles.modeButtonTextSelected,
                   ]}
                 >
-                  Admin login
+                  {t('adminLogin')}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
+              <Text style={styles.fieldLabel}>{t('mobileNumber')}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -309,12 +311,12 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Password</Text>
+              <Text style={styles.fieldLabel}>{t('password')}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   ref={passwordInput}
                   style={styles.input}
-                  placeholder="Enter password"
+                  placeholder={t('enterPassword')}
                   placeholderTextColor="#999999"
                   value={password}
                   onChangeText={text => {
@@ -355,7 +357,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
               onPress={handleForgotPassword}
               activeOpacity={0.7}
             >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
             </TouchableOpacity>
 
             {/* Register link — Admin tab only. Technicians don't self-register;
@@ -369,7 +371,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
               >
                 <Text style={styles.registerLinkText}>
                   Don't have an account?{' '}
-                  <Text style={styles.registerLinkHighlight}>Register</Text>
+                  <Text style={styles.registerLinkHighlight}>{t('register')}</Text>
                 </Text>
               </TouchableOpacity>
             )}
@@ -387,7 +389,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.signInButtonText}>Sign in</Text>
+                  <Text style={styles.signInButtonText}>{t('signIn')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -468,6 +470,9 @@ const styles = StyleSheet.create({
     fontSize: wp('9%'),
     color: '#1F2937',
     fontWeight: '400',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('4.8%'),

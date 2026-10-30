@@ -190,6 +190,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     // color: Colors.secondary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

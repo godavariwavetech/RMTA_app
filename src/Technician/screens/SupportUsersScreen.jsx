@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   StatusBar,
   StyleSheet,
   Text,
@@ -16,54 +16,86 @@ import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
-import { Colors } from '../../Constants/Colors';
-import { fetchTechnicians } from '../../redux/slices/techniciansSlice';
+import { SkeletonUserList } from '../../Components/Skeleton';
+import { fetchSupporters } from '../../redux/slices/supportersSlice';
+import { BASE_URL } from '../../Constants/config';
+
+// `location` arrives as a JSON string: {"points":[{"lat":..,"lng":..}]}.
+const parseLocation = raw => {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const point = parsed && parsed.points && parsed.points[0];
+    if (point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng))) {
+      return { lat: Number(point.lat), lng: Number(point.lng) };
+    }
+  } catch (e) {
+    // no usable location
+  }
+  return null;
+};
+
+const imageUrl = path =>
+  path ? (/^https?:\/\//.test(path) ? path : `${BASE_URL}${String(path).replace(/^\//, '')}`) : null;
 
 export default function SupportUsersScreen({ onNavigate }) {
   const dispatch = useDispatch();
-  const { list, loading, error } = useSelector(state => state.technicians);
+  const { list, loading, error } = useSelector(state => state.supporters);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    dispatch(fetchTechnicians());
+    dispatch(fetchSupporters());
   }, [dispatch]);
 
   const users = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return list;
     return list.filter(user =>
-      [user.full_name, user.mobile, user.member_code, user.shop_name, user.city, user.state]
-        .some(value => String(value || '').toLowerCase().includes(normalizedQuery)),
+      [user.name, user.phone_number, user.shop_name].some(value =>
+        String(value || '').toLowerCase().includes(normalizedQuery),
+      ),
     );
   }, [list, query]);
 
+  const openMap = point =>
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`);
+  const callNumber = phone => Linking.openURL(`tel:${phone}`);
+
   const renderUser = ({ item }) => {
-    const isActive = String(item.technician_status || '').toLowerCase() === 'active';
-    const location = [item.city, item.state].filter(Boolean).join(', ');
+    const point = parseLocation(item.location);
+    const photo = imageUrl(item.shop_image);
 
     return (
       <View style={styles.userCard}>
         <View style={styles.userTopRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(item.full_name || 'U').trim().charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.shopImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(item.name || 'U').trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.userHeading}>
-            <Text style={styles.userName}>{item.full_name || 'Unnamed user'}</Text>
-            <Text style={styles.memberCode}>{item.member_code || 'RMTA member'}</Text>
-          </View>
-          <View style={[styles.statusBadge, isActive ? styles.activeBadge : styles.inactiveBadge]}>
-            <Text style={[styles.statusText, isActive ? styles.activeText : styles.inactiveText]}>
-              {item.technician_status || 'Unknown'}
-            </Text>
+            <Text style={styles.userName}>{item.name || 'Unnamed supporter'}</Text>
+            <Text style={styles.memberCode}>{item.shop_name || 'Shop not added'}</Text>
           </View>
         </View>
 
-        <View style={styles.details}>
-          <Detail label="Mobile" value={item.mobile} />
-          <Detail label="Shop" value={item.shop_name} />
-          <Detail label="Location" value={location} />
+        <View style={styles.actions}>
+          {!!item.phone_number && (
+            <TouchableOpacity style={styles.actionButton} onPress={() => callNumber(item.phone_number)}>
+              <Text style={styles.actionText}>Call</Text>
+            </TouchableOpacity>
+          )}
+          {!!point && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.actionSecondary]}
+              onPress={() => openMap(point)}
+            >
+              <Text style={[styles.actionText, styles.actionSecondaryText]}>View on map</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -97,7 +129,7 @@ export default function SupportUsersScreen({ onNavigate }) {
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search name, mobile, shop or ID"
+            placeholder="Search name, mobile or shop"
             placeholderTextColor="#8A94A6"
             value={query}
             onChangeText={setQuery}
@@ -117,31 +149,32 @@ export default function SupportUsersScreen({ onNavigate }) {
           renderItem={renderUser}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          refreshing={loading}
-          onRefresh={() => dispatch(fetchTechnicians())}
+          // Only show the pull-to-refresh spinner when there's already a list;
+          // the first load uses the skeleton instead.
+          refreshing={loading && users.length > 0}
+          onRefresh={() => dispatch(fetchSupporters())}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              {loading ? (
-                <ActivityIndicator color={Colors.primary} />
-              ) : (
+            loading ? (
+              <SkeletonUserList count={5} />
+            ) : (
+              <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>
                   {error || (query ? 'No users match your search.' : 'No users found.')}
                 </Text>
-              )}
-            </View>
+                {!!error && (
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => dispatch(fetchSupporters())}
+                  >
+                    <Text style={styles.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )
           }
         />
       </SafeAreaView>
     </>
-  );
-}
-
-function Detail({ label, value }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value || '—'}</Text>
-    </View>
   );
 }
 
@@ -208,16 +241,26 @@ const styles = StyleSheet.create({
   userHeading: { flex: 1 },
   userName: { color: '#172033', fontSize: 15, fontWeight: '700' },
   memberCode: { color: '#788397', fontSize: 12, marginTop: 3 },
-  statusBadge: { borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5 },
-  activeBadge: { backgroundColor: '#DCFCE7' },
-  inactiveBadge: { backgroundColor: '#F3F4F6' },
-  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
-  activeText: { color: '#16804A' },
-  inactiveText: { color: '#687386' },
-  details: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#EEF1F5' },
-  detailRow: { flexDirection: 'row', paddingVertical: 4 },
-  detailLabel: { width: 70, color: '#8993A4', fontSize: 12 },
-  detailValue: { flex: 1, color: '#39465C', fontSize: 12, fontWeight: '500' },
+  shopImage: { width: 52, height: 52, borderRadius: 12, marginRight: 11, backgroundColor: '#E8F0FE' },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#2F5DDC',
+  },
+  actionText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  actionSecondary: { backgroundColor: '#EEF3FF' },
+  actionSecondaryText: { color: '#2F5DDC' },
   emptyState: { flex: 1, minHeight: 160, justifyContent: 'center', alignItems: 'center' },
+  retryButton: {
+    marginTop: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#2F5DDC',
+  },
+  retryText: { color: '#FFFFFF', fontWeight: '600' },
   emptyText: { color: '#788397', fontSize: 14, textAlign: 'center', paddingHorizontal: 20 },
 });

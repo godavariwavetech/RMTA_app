@@ -38,7 +38,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     },
   );
 
-  // Up to 3 condition photos: { uri, base64 }. The first photo is sent as
+  // Up to 3 condition photos: { uri, base64 }. They are sent as
   // create_purchase's backimage. Restore from draft.
   const [photos, setPhotos] = useState(
     Array.isArray(draftConditionPhotos)
@@ -88,7 +88,6 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
   const handleContinue = () => {
     const conditionPhotos = buildConditionPhotos();
-    console.log('[Purchase][Step5] condition captured →', condition, conditionPhotos);
     dispatch(updatePurchaseDraft({ condition: condition, conditionPhotos: conditionPhotos }));
     if (onNavigate) {
       onNavigate('purchaseEntryStep6', {
@@ -112,7 +111,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
   const completedSteps = 5;
 
-  const screenOptions = ['Good', 'Damaged', 'Cracked'];
+  const screenOptions = ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'];
   const bodyOptions = ['Good', 'Scratched', 'Damaged'];
   const workingOptions = ['Working', 'Not working'];
   const batteryOptions = ['Good', 'Weak', 'Damaged'];
@@ -400,6 +399,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -527,7 +529,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   thumbOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
     borderRadius: wp('2%'),
     justifyContent: 'center',

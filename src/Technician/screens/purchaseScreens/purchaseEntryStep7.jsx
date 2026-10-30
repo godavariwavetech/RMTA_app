@@ -49,9 +49,11 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       chargingport: conditionData?.chargingPort || '',
       batterey: conditionData?.battery || '',
       // frontimage = step 2's device photo, backimage = step 5's first
-      // condition photo — both sent as raw base64.
+      // condition photo — both sent as raw base64. Keep the full batch too so
+      // the API can store every condition photo when its schema supports it.
       frontimage: (deviceData?.devicePhoto && deviceData.devicePhoto.base64) || null,
       backimage: (conditionPhotos[0] && conditionPhotos[0].base64) || null,
+      condition_images: conditionPhotos.map(photo => photo.base64).filter(Boolean),
       purchaseprice: priceData?.purchasePrice || '0',
       paymentmode: priceData?.paymentMode || 'Cash',
       transactionid: priceData?.transactionId || '',
@@ -63,7 +65,6 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
   const handleCompletePurchase = async () => {
     if (submitting) return;
     const payload = buildPayload();
-    console.log('[Purchase][Step7] submitting full payload →', JSON.stringify(payload, null, 2));
     setSubmitting(true);
     try {
       const { response, data } = await postJson(ENDPOINTS.CREATE_PURCHASE, payload);
@@ -74,7 +75,6 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       }
       // Unwrap in case this endpoint also wraps the record in an array.
       const purchase = Array.isArray(data.data) ? data.data[0] : data.data;
-      console.log('[Purchase][Step7] created ✓ →', purchase);
       dispatch(resetPurchaseDraft());
       if (onNavigate) {
         onNavigate('purchaseEntryStep8', {
@@ -270,6 +270,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

@@ -8,7 +8,6 @@ import {
   Image,
   StatusBar,
   TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,6 +17,7 @@ import {
 } from 'react-native-responsive-screen';
 import { useSelector, useDispatch } from 'react-redux';
 
+import { SkeletonCardList } from '../../../Components/Skeleton';
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
@@ -288,7 +288,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
             {/* Device List */}
             <View style={styles.deviceList}>
               {(isSearching ? searching : loading) ? (
-                <ActivityIndicator color={Colors.primary} style={{ marginVertical: hp('4%') }} />
+                <SkeletonCardList count={3} />
               ) : displayedDevices.length > 0 ? (
                 displayedDevices.map((device) => (
                   <View key={device.id}>
@@ -355,6 +355,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

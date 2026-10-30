@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { BASE_URL, ENDPOINTS, REQUEST_TIMEOUT } from '../../Constants/config';
 import { saveUser, clearUser } from '../../utils/authStorage';
+import { logApiRequest } from '../../utils/apiLogger';
 
 // Keep response handling consistent across endpoints. Some API errors arrive
 // with HTTP 200 and a string status, while proxy/server failures can be plain
@@ -46,6 +47,7 @@ export async function postJson(endpoint, payload) {
   const url = `${BASE_URL}${endpoint}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  const log = logApiRequest('POST', endpoint, url, payload);
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -56,6 +58,7 @@ export async function postJson(endpoint, payload) {
     clearTimeout(timeoutId);
     const raw = await response.text();
     const data = parseApiResponseBody(raw);
+    log.response(response.status, data);
     return { response, data };
   } catch (err) {
     clearTimeout(timeoutId);
@@ -63,6 +66,7 @@ export async function postJson(endpoint, payload) {
       err.name === 'AbortError'
         ? 'The server did not respond in time (timeout). Check your connection.'
         : `Could not reach the server (${err.message}).`;
+    log.error(message);
     const tagged = new Error(message);
     tagged.isNetwork = true;
     throw tagged;
@@ -71,7 +75,7 @@ export async function postJson(endpoint, payload) {
 
 // Shared GET helper for endpoints registered as GET (e.g. search_purchase) —
 // same timeout/JSON-parse behavior as postJson, params go on the query string.
-export async function getJson(endpoint, params) {
+export async function getJson(endpoint, params, timeoutMs = REQUEST_TIMEOUT) {
   const query = params
     ? '?' +
       new URLSearchParams(
@@ -82,7 +86,8 @@ export async function getJson(endpoint, params) {
     : '';
   const url = `${BASE_URL}${endpoint}${query}`;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const log = logApiRequest('GET', endpoint, url, params);
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -96,6 +101,7 @@ export async function getJson(endpoint, params) {
     } catch (e) {
       data = raw;
     }
+    log.response(response.status, data);
     return { response, data };
   } catch (err) {
     clearTimeout(timeoutId);
@@ -103,6 +109,7 @@ export async function getJson(endpoint, params) {
       err.name === 'AbortError'
         ? 'The server did not respond in time (timeout). Check your connection.'
         : `Could not reach the server (${err.message}).`;
+    log.error(message);
     const tagged = new Error(message);
     tagged.isNetwork = true;
     throw tagged;
@@ -171,6 +178,7 @@ export const registerMember = createAsyncThunk(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
+    const log = logApiRequest('POST', ENDPOINTS.MEMBER_REGISTRATION, url, payload);
     try {
       console.log('🌐 POST →', url);
       const response = await fetch(url, {
@@ -183,6 +191,7 @@ export const registerMember = createAsyncThunk(
 
       const raw = await response.text();
       const data = parseApiResponseBody(raw);
+      log.response(response.status, data);
       console.log(`[API] Registration response HTTP ${response.status}`, {
         success: data && data.success,
         status: data && data.status,
@@ -206,6 +215,7 @@ export const registerMember = createAsyncThunk(
           ? 'The server did not respond in time (timeout). Check your connection and that the backend is running.'
           : `Could not reach the server (${err.message}).`;
       console.log('🔴 Network error —', message);
+      log.error(message);
       return rejectWithValue({ status: 0, message });
     }
   },
@@ -226,6 +236,7 @@ export const loginUser = createAsyncThunk(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
+    const log = logApiRequest('POST', ENDPOINTS.MEMBER_LOGIN, url, payload);
     try {
       console.log('🌐 POST →', url);
       const response = await fetch(url, {
@@ -238,6 +249,7 @@ export const loginUser = createAsyncThunk(
 
       const raw = await response.text();
       const data = parseApiResponseBody(raw);
+      log.response(response.status, data);
       console.log(`[API] Login response HTTP ${response.status}`, {
         success: data && data.success,
         status: data && data.status,
@@ -297,6 +309,7 @@ export const loginUser = createAsyncThunk(
           ? 'The server did not respond in time (timeout). Check your connection and that the backend is running.'
           : `Could not reach the server (${err.message}).`;
       console.log('🔴 Network error —', message);
+      log.error(message);
       return rejectWithValue({ status: 0, message });
     }
   },
