@@ -43,6 +43,14 @@ target 'RMTA' do
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
 
+        # Dynamic pods (image-picker, RCTImage, RCTNetwork) call UTTypeCopyPreferredTagWithClass,
+        # which lives in MobileCoreServices; link it so those frameworks resolve the symbol.
+        ldflags = config.build_settings['OTHER_LDFLAGS'] || ['$(inherited)']
+        ldflags = [ldflags] unless ldflags.is_a?(Array)
+        unless ldflags.join(' ').include?('MobileCoreServices')
+          config.build_settings['OTHER_LDFLAGS'] = ldflags + ['-framework', 'MobileCoreServices']
+        end
+
         # Some pods still declare iOS 13/14, which the current Xcode rejects
         # (supported range starts at 15.0). Raise them to the app's target.
         current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
