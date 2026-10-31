@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -40,6 +41,7 @@ const LOCK_OPTIONS = [
 ];
 
 export default function CreateJobSheetStep5({ onNavigate }) {
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftAccess = useSelector(state => state.jobSheet.draft.access) || {};
@@ -113,7 +115,15 @@ export default function CreateJobSheetStep5({ onNavigate }) {
   };
 
   const handleContinue = () => {
-    // No validation — capture whatever's entered and move on.
+    setTried(true);
+    if (lockType === 'password' && !devicePassword.trim()) {
+      Alert.alert('Missing details', 'Please enter the device password / PIN.');
+      return;
+    }
+    if (lockType === 'pattern' && pattern.length === 0) {
+      Alert.alert('Missing details', 'Please set the unlock pattern.');
+      return;
+    }
     const access = buildAccess();
     dispatch(updateJobDraft({ access }));
     console.log('[JobSheet][Step5] access captured →', access);
@@ -210,9 +220,9 @@ export default function CreateJobSheetStep5({ onNavigate }) {
             {/* Password input — only for the Password option */}
             {lockType === 'password' && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Device password / PIN</Text>
+                <Text style={styles.label}>Device password / PIN <Text style={styles.required}>*</Text></Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, tried && !String(devicePassword).trim() && styles.inputError]}
                   placeholder="Enter the device password"
                   placeholderTextColor="#D1D5DB"
                   value={devicePassword}
@@ -225,7 +235,7 @@ export default function CreateJobSheetStep5({ onNavigate }) {
             {/* Pattern entry — only for the Pattern option */}
             {lockType === 'pattern' && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Unlock pattern</Text>
+                <Text style={styles.label}>Unlock pattern <Text style={styles.required}>*</Text></Text>
                 <TouchableOpacity
                   style={styles.patternOpenButton}
                   onPress={() => setPatternModalVisible(true)}
@@ -331,6 +341,12 @@ export default function CreateJobSheetStep5({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

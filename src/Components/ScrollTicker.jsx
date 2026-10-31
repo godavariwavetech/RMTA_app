@@ -4,11 +4,14 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { ENDPOINTS } from '../Constants/config';
 import { getJson } from '../redux/slices/authSlice';
 
+// Time the ticker takes to move one pixel: 16.7 ms is about 60 px per second.
+const SPEED_MS_PER_PX = 16.7;
+
 // Scrolling announcement banner. Loads the messages from
 // GET /public_app/getscroll -> { data: [{ id, description, d_in, i_ts }] } and
 // scrolls them one after the other, each separated by a dot. While loading, or
 // if the call fails or returns nothing, `fallbackText` is shown instead.
-export default function ScrollTicker({ fallbackText }) {
+export default function ScrollTicker({ fallbackText, refreshKey = 0 }) {
   const [messages, setMessages] = useState([]);
   const [contentWidth, setContentWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
@@ -31,7 +34,7 @@ export default function ScrollTicker({ fallbackText }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   // The track holds two identical copies side by side; sliding left by the
   // width of one copy and restarting makes the loop seamless.
@@ -42,7 +45,7 @@ export default function ScrollTicker({ fallbackText }) {
     const animation = Animated.loop(
       Animated.timing(translateX, {
         toValue: -distance,
-        duration: Math.max(12000, distance * 28),
+        duration: Math.max(6000, distance * SPEED_MS_PER_PX),
         easing: Easing.linear,
         useNativeDriver: true,
       }),

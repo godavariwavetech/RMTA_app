@@ -23,6 +23,7 @@ import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updateSaleDraft } from '../../../redux/slices/saleSlice';
 import StepNav from '../../../Components/StepNav';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 const sampleImage = require('../../../Assets/images/sampleMobileImg.png');
 
@@ -269,7 +270,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
           {/* Content */}
           <View style={styles.content}>
             {/* Section Title */}
-            <Text style={styles.sectionTitle}>Choose from your inventory</Text>
+            <Text style={styles.sectionTitle}>Choose from your inventory <Text style={{ color: '#EF4444' }}>*</Text></Text>
 
             {/* Search Field */}
             <View style={styles.searchContainer}>
@@ -284,6 +285,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            <ImeiScanButton compact onScanned={setSearchQuery} />
             </View>
 
             {/* Device List */}

@@ -22,8 +22,10 @@ import { postJson } from '../../../redux/slices/authSlice';
 import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { showAppModal } from '../../../utils/appModal';
+import useRefresh from '../../../utils/useRefresh';
 
 export default function ReportsScreen({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedNavItem, setSelectedNavItem] = useState('reports');
@@ -49,7 +51,7 @@ export default function ReportsScreen({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [user.member_id, selectedPeriod]);
+  }, [user.member_id, selectedPeriod, tick]);
 
   const handleNavigation = (screen) => {
     setSelectedNavItem(screen);
@@ -165,7 +167,7 @@ export default function ReportsScreen({ onNavigate }) {
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Reports</Text>
           </View>
-        <ScrollView
+        <ScrollView refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}

@@ -22,8 +22,10 @@ import { postJson } from '../../../redux/slices/authSlice';
 import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { showAppModal } from '../../../utils/appModal';
+import useRefresh from '../../../utils/useRefresh';
 
 export default function ReportDetails({ onNavigate, reportType }) {
+  const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const isAdmin = user.role === 'admin';
   const [report, setReport] = useState(null);
@@ -49,7 +51,7 @@ export default function ReportDetails({ onNavigate, reportType }) {
     return () => {
       active = false;
     };
-  }, [isAdmin, user.member_id]);
+  }, [isAdmin, user.member_id, tick]);
 
   const handleBack = () => {
     if (onNavigate) {
@@ -136,7 +138,7 @@ export default function ReportDetails({ onNavigate, reportType }) {
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Report Detail</Text>
           </View>
-        <ScrollView
+        <ScrollView refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}

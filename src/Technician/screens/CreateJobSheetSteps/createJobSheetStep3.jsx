@@ -30,6 +30,7 @@ const PHOTO_CATEGORIES = [
 ];
 
 export default function CreateJobSheetStep3({ onNavigate }) {
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const draftPhotos = useSelector(state => state.jobSheet.draft.photos);
   const draftConditions = useSelector(state => state.jobSheet.draft.conditions);
@@ -133,6 +134,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
 
   const handleContinue = () => {
     // Every condition field must be answered before moving on.
+    setTried(true);
     const unanswered = Object.keys(selections).filter(k => !selections[k]);
     if (unanswered.length > 0) {
       Alert.alert(
@@ -229,7 +231,11 @@ export default function CreateJobSheetStep3({ onNavigate }) {
             <View style={styles.categoriesContainer}>
               {conditionCategories.map((category) => (
                 <View key={category.id} style={styles.categorySection}>
-                  <Text style={styles.categoryLabel}>{category.label}</Text>
+                  <Text style={[styles.categoryLabel, tried && !selections[category.id] && styles.categoryLabelError]}>
+                    {category.label}
+                    <Text style={styles.required}> *</Text>
+                    {tried && !selections[category.id] ? '  — choose one' : ''}
+                  </Text>
                   <View style={styles.optionsContainer}>
                     {category.options.map((option) => (
                       <TouchableOpacity
@@ -306,6 +312,13 @@ export default function CreateJobSheetStep3({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  categoryLabelError: { color: '#DC2626' },
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

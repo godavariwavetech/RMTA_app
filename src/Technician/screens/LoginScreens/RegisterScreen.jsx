@@ -200,8 +200,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
         (payload && payload.message) ||
         'Registration failed. Please try again.';
 
-      if (payload && payload.status === 409) {
-        // Account already exists → on OK, take them to Login with the matching tab.
+      if (payload && (payload.status === 409 || payload.status === 300)) {
+        // Account already exists (409 or 300) → on OK, take them to Login with the matching tab.
         Alert.alert('Account already exists', message, [
           {
             text: 'OK',
@@ -210,7 +210,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 loginMode: user_ind === 1 ? 'admin' : 'technician',
               }),
           },
-        ]);
+        ], { type: 'warning' });
       } else {
         alert(message);
       }

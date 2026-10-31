@@ -24,6 +24,7 @@ import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
 import ImeiScannerModal from '../../../Components/ImeiScannerModal';
 import { isValidImei } from '../../../utils/imeiValidation';
 import StepNav from '../../../Components/StepNav';
+import { istDateTime } from '../../../utils/istDate';
 
 // Official government pages for checking an IMEI (same as the Device Verification screen).
 const KYM_URL = 'https://ceir.sancharsaathi.gov.in/Device/SancharSaathiKym.jsp';
@@ -36,6 +37,8 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   const draftImeiValid = !!draftImei.verified && isValidImei(draftImei.imei || '');
   const [imei, setImei] = useState(draftImei.imei || '');
   const [imeiVerified, setImeiVerified] = useState(draftImeiValid);
+  // When the IMEI was verified (India time), sent with the purchase as imeiverified_date.
+  const [verifiedAt, setVerifiedAt] = useState(draftImeiValid ? draftImei.verifiedAt || null : null);
   const [scannerOpen, setScannerOpen] = useState(false);
   // Which IMEI field the open scanner fills: 1 or 2.
   const [scanTarget, setScanTarget] = useState(1);
@@ -78,6 +81,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   const handleImeiChange = (value) => {
     setImei(value);
     setImeiVerified(false);
+    setVerifiedAt(null);
     setSancharChecked(false);
     setImeiStatus('');
   };
@@ -85,6 +89,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   const handleVerifyIMEI = () => {
     const valid = isValidImei(imei);
     setImeiVerified(valid);
+    setVerifiedAt(valid ? istDateTime() : null);
     setImeiStatus(
       valid
         ? `Valid IMEI - ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`
@@ -93,7 +98,8 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   };
 
   const handleContinue = () => {
-    const imeiData = { imei: imei, imei2: imei2, verified: imeiVerified };
+    if (!sancharChecked) return;
+    const imeiData = { imei: imei, imei2: imei2, verified: imeiVerified, verifiedAt };
     dispatch(updatePurchaseDraft({ imei: imeiData, ceirVerified: sancharChecked }));
     if (onNavigate) {
       onNavigate('purchaseEntryStep5', {
@@ -108,7 +114,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   const handleBackPress = () => {
     dispatch(
       updatePurchaseDraft({
-        imei: { imei: imei, imei2: imei2, verified: imeiVerified },
+        imei: { imei: imei, imei2: imei2, verified: imeiVerified, verifiedAt },
         ceirVerified: sancharChecked,
       }),
     );
@@ -228,7 +234,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.checkRow, sancharChecked && styles.checkRowDone]}
+                  style={[styles.checkRow, sancharChecked && styles.checkRowDone, !sancharChecked && styles.checkRowRequired]}
                   onPress={() => setSancharChecked(prev => !prev)}
                   activeOpacity={0.8}
                 >
@@ -236,9 +242,12 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
                     {sancharChecked && <Text style={styles.checkMark}>✓</Text>}
                   </View>
                   <Text style={[styles.checkText, sancharChecked && styles.checkTextDone]}>
-                    IMEI verified on Sanchar Saathi
+                    IMEI verified on Sanchar Saathi <Text style={styles.required}>*</Text>
                   </Text>
                 </TouchableOpacity>
+                {!sancharChecked && (
+                  <Text style={styles.checkHint}>Check the IMEI on Sanchar Saathi, then tick this box to continue.</Text>
+                )}
               </View>
             )}
 
@@ -278,6 +287,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
             setImei(scannedImei);
             const valid = isValidImei(scannedImei);
             setImeiVerified(valid);
+            setVerifiedAt(valid ? istDateTime() : null);
             setImeiStatus(
               valid
                 ? `Valid IMEI - ${deviceData?.deviceBrand || 'Device'} ${deviceData?.deviceModel || ''}`
@@ -293,10 +303,10 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
           <TouchableOpacity
             style={[
               styles.continueButton,
-              (!imeiVerified || !imei2Ok) && styles.continueButtonDisabled,
+              (!imeiVerified || !imei2Ok || !sancharChecked) && styles.continueButtonDisabled,
             ]}
             onPress={handleContinue}
-            disabled={!imeiVerified || !imei2Ok}
+            disabled={!imeiVerified || !imei2Ok || !sancharChecked}
           >
             <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
@@ -354,6 +364,15 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
     backgroundColor: '#F9FAFB',
+  },
+  checkRowRequired: {
+    borderColor: '#FCA5A5',
+  },
+  checkHint: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 8,
+    marginLeft: 2,
   },
   checkRowDone: {
     borderColor: '#16A34A',

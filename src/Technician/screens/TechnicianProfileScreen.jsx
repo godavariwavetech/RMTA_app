@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -20,7 +20,8 @@ import { Colors } from '../../Constants/Colors';
 import { useI18n, LANGUAGES } from '../../i18n';
 import useAccountProfile from '../../utils/useAccountProfile';
 import BottomNav from '../../Components/BottomNav';
-import { logoutUser } from '../../redux/slices/authSlice';
+import { getJson, logoutUser } from '../../redux/slices/authSlice';
+import { BASE_URL, ENDPOINTS } from '../../Constants/config';
 import { confirmAction, showAppModal } from '../../utils/appModal';
 
 export default function TechnicianProfileScreen({ onNavigate }) {
@@ -38,12 +39,49 @@ export default function TechnicianProfileScreen({ onNavigate }) {
   const techMobile = d.mobile || '—';
   const techShop = d.shop_name || '—';
   const techLocation = [d.city, d.state].filter(Boolean).join(', ') || '—';
-  const techRmtaId = d.member_code || '—';
+  // The member code is empty for some accounts, so fall back to the member id.
+  const techRmtaId = d.member_code
+    ? String(d.member_code)
+    : d.member_id
+    ? `Member ID: ${d.member_id}`
+    : '—';
   const techValidUntil = d.valid_until;
   const isAdmin = user.role === 'admin';
   const isActive = isAdmin
     ? String(d.account_status || '').toLowerCase() === 'active'
     : user.technician_status === 'active';
+
+  // Profile photo: from the profile data when it has one, otherwise looked up in
+  // getallmembers by member id. Staff logins don't have their own photo.
+  const [photoUri, setPhotoUri] = useState(null);
+  useEffect(() => {
+    if (user.tech_id || !user.member_id) return undefined;
+    let active = true;
+    const toUri = v => {
+      const raw = String(v || '').trim();
+      if (!raw) return null;
+      return /^https?:\/\//.test(raw) ? raw : `${BASE_URL}${raw.replace(/^\//, '')}`;
+    };
+    const own = toUri(d.person_image || d.photo || d.profile_image);
+    if (own) {
+      setPhotoUri(own);
+      return undefined;
+    }
+    (async () => {
+      try {
+        const { response, data } = await getJson(ENDPOINTS.GET_ALL_MEMBERS);
+        const rows = Array.isArray(data) ? data : data && data.data;
+        if (!active || !response.ok || !Array.isArray(rows)) return;
+        const row = rows.find(r => r && String(r.id) === String(user.member_id));
+        if (row) setPhotoUri(toUri(row.person_image));
+      } catch (e) {
+        // no photo: the initial is shown instead
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user.tech_id, user.member_id, d.person_image, d.photo, d.profile_image]);
 
   const handleNavigation = (screen) => {
     setSelectedNavItem(screen);
@@ -145,20 +183,31 @@ export default function TechnicianProfileScreen({ onNavigate }) {
 
                 <View style={styles.avatarCircle}>
                     {/* <Text style={styles.avatarText}>RK</Text> */}
-                    <Image source={require('../../Assets/images/appLogo.png')} style={{height: wp('12%'), width: wp('12%')}} />
+                    <Image source={require('../../Assets/images/appLogo.png')} style={styles.avatarLogo} />
                 </View>
 
               </View>
               
 
-              <View style={styles.profileCardSubCon}>
-                <Text style={styles.profileName}>{techName}</Text>
-                <Text style={styles.memberId}>{techRmtaId}</Text>
-                <Text style={styles.shopName}>{techShop}</Text>
-                <Text style={styles.locationValidity}>
-                  {techLocation}
-                  {techValidUntil ? ` · ${t('validTill')} ${techValidUntil}` : ''}
-                </Text>
+              <View style={[styles.profileCardSubCon, styles.profileRow]}>
+                <View style={styles.photoCircle}>
+                  {photoUri ? (
+                    <Image source={{ uri: photoUri }} style={styles.photoImage} />
+                  ) : (
+                    <Text style={styles.photoInitial}>
+                      {String(techName).trim().charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.profileInfo}>
+                  <Text style={styles.profileName}>{techName}</Text>
+                  <Text style={styles.memberId}>{techRmtaId}</Text>
+                  <Text style={styles.shopName}>{techShop}</Text>
+                  <Text style={styles.locationValidity}>
+                    {techLocation}
+                    {techValidUntil ? ` · ${t('validTill')} ${techValidUntil}` : ''}
+                  </Text>
+                </View>
               </View>
 
             </View>
@@ -292,6 +341,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
   },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileInfo: { flex: 1 },
+  photoCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginRight: 14,
+  },
+  photoImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  photoInitial: { color: '#FFFFFF', fontSize: 26, fontWeight: '800' },
   profileName: {
     fontSize: 16,
     fontWeight: '700',
@@ -299,8 +367,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   memberId: {
-    fontSize: 12,
-    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F2B233',
     marginBottom: 4,
   },
   shopName: {
@@ -335,10 +404,18 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   avatarCircle: {
-    width: 56,
-    height: 56,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarLogo: {
+    width: 56,
+    height: 56,
+    resizeMode: 'contain',
   },
 
   section: {

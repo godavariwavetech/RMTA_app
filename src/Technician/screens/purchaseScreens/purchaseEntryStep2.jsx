@@ -26,6 +26,7 @@ import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
   const draftDevice = useSelector(state => state.purchase.draft.device) || {};
@@ -45,6 +46,11 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   };
 
   const handleContinue = () => {
+    setTried(true);
+    if (!formData.deviceBrand.trim() || !formData.deviceModel.trim()) {
+      Alert.alert('Missing details', 'Please enter the device brand and model.');
+      return;
+    }
     console.log('[Purchase][Step2] device captured →', formData);
     dispatch(updatePurchaseDraft({ device: formData }));
     if (onNavigate) {
@@ -118,9 +124,9 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
           <View style={styles.content}>
             {/* Device Brand Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Device brand</Text>
+              <Text style={styles.label}>Device brand <Text style={styles.required}>*</Text></Text>
               <TextInput {...nav.props(0)}
-                style={styles.input}
+                style={[styles.input, tried && !String(formData.deviceBrand).trim() && styles.inputError]}
                 placeholder="e.g., OnePlus, Samsung"
                 placeholderTextColor="#9CA3AF"
                 value={formData.deviceBrand}
@@ -130,9 +136,9 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
 
             {/* Device Model Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Device model</Text>
+              <Text style={styles.label}>Device model <Text style={styles.required}>*</Text></Text>
               <TextInput {...nav.props(1)}
-                style={styles.input}
+                style={[styles.input, tried && !String(formData.deviceModel).trim() && styles.inputError]}
                 placeholder="e.g., 9R, S21"
                 placeholderTextColor="#9CA3AF"
                 value={formData.deviceModel}
@@ -216,6 +222,12 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

@@ -17,8 +17,10 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { fetchTechnicians } from '../../redux/slices/techniciansSlice';
+import useRefresh from '../../utils/useRefresh';
 
 export default function TechnicianList({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const dispatch = useDispatch();
   const { list, loading } = useSelector(state => state.technicians);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,7 +30,7 @@ export default function TechnicianList({ onNavigate }) {
   // AddTechnician), so a newly added technician shows up right away.
   useEffect(() => {
     dispatch(fetchTechnicians());
-  }, [dispatch]);
+  }, [dispatch, tick]);
 
   const handleBackPress = () => {
     if (onNavigate) {
@@ -180,7 +182,7 @@ export default function TechnicianList({ onNavigate }) {
         </View>
 
         {/* Technicians List */}
-        <FlatList
+        <FlatList refreshControl={refreshControl}
           data={filteredTechnicians}
           keyExtractor={(item) => String(item.user_id)}
           renderItem={renderTechnicianItem}

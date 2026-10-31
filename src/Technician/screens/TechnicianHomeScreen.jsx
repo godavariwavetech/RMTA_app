@@ -23,8 +23,9 @@ import ScrollTicker from '../../Components/ScrollTicker';
 import BannerCarousel from '../../Components/BannerCarousel';
 import useAccountProfile from '../../utils/useAccountProfile';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
-import { getJson } from '../../redux/slices/authSlice';
+import { getJson, postJson, setUserMenuIds } from '../../redux/slices/authSlice';
 import { ENDPOINTS, BASE_URL } from '../../Constants/config';
+import useRefresh from '../../utils/useRefresh';
 // Re-enable together with the NFC option in the QR tile below.
 // import { showAppActionSheet } from '../../utils/appModal';
 
@@ -33,9 +34,39 @@ import { ENDPOINTS, BASE_URL } from '../../Constants/config';
 // built-in banners (or nothing) until the request finishes again.
 let bannerCache = null;
 
+// A technician (staff) account only sees the modules assigned to it, plus these
+// always-available actions: Notes, CEIR / IMEI, Digital ID, QR scan and Supporters.
+const COMMON_ACTIONS = [7, 4, 5, 6, 9];
+// Quick action id -> menu id from public_app/geappmenu
+// (1 New job Sheet, 2 Purchase, 3 Sale, 4 Reports, 5 Customer Directory).
+const ACTION_MENU = { 1: 1, 2: 2, 3: 3, 8: 4, 11: 5 };
+
+// menu_ids may arrive as an array, a JSON string or a comma-separated string.
+const toMenuIds = value => {
+  if (value === undefined || value === null) return null;
+  let list = value;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch (e) {
+      list = list.split(',');
+    }
+  }
+  if (!Array.isArray(list)) return null;
+  return list.map(Number).filter(n => !Number.isNaN(n));
+};
+
 export default function TechnicianHomeScreen({ onNavigate, active: screenActive = true }) {
+  const { tick, refreshControl } = useRefresh();
   const { t } = useI18n();
   const [selectedNavItem, setSelectedNavItem] = useState('home');
+  // Home stays mounted (hidden) while other tabs are open. Rebuilding the bottom bar
+  // each time Home is shown again gives it exactly the state of a first launch, so the
+  // selected-tab highlight is drawn fresh instead of from the hidden view.
+  const [navKey, setNavKey] = useState(0);
+  useEffect(() => {
+    if (screenActive) setNavKey(k => k + 1);
+  }, [screenActive]);
 
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user);
@@ -54,7 +85,32 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
     if (user && user.member_id) {
       dispatch(fetchJobCounts({ member_id: user.member_id }));
     }
-  }, [dispatch, user, screenActive]);
+  }, [dispatch, user, screenActive, tick]);
+
+  // A technician's assigned modules can change while they are signed in, so ask the
+  // server again each time Home is shown and update the saved list.
+  useEffect(() => {
+    if (!screenActive || !user || !user.tech_id || !user.member_id) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { response, data } = await postJson(ENDPOINTS.GET_TECHNICIAN_PERMISSIONS, {
+          member_id: user.member_id,
+          tech_id: user.tech_id,
+        });
+        const rows = Array.isArray(data) ? data : data && data.data;
+        if (cancelled || !response.ok || !Array.isArray(rows)) return;
+        const row = rows.find(r => r && String(r.id) === String(user.tech_id));
+        const ids = row ? toMenuIds(row.menu_ids) : null;
+        if (ids) dispatch(setUserMenuIds(ids));
+      } catch (e) {
+        // keep the modules from login
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, screenActive, tick, user && user.tech_id, user && user.member_id]);
 
   // Home banners from GET /public_app/getbanners. Each row's picture URL may be
   // absolute or relative to the server; rows flagged deleted (d_in) are skipped.
@@ -103,7 +159,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
     return () => {
       active = false;
     };
-  }, [screenActive]);
+  }, [screenActive, tick]);
 
   // View model: start from the cached login user (always has the basics),
   // then layer the freshly fetched profile on top — but only its non-empty
@@ -186,14 +242,25 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
     { id: 12, emoji: '🧑‍🔧', label: 'Staff' },
   ];
 
+  // Staff accounts carry menu_ids from login: show only the assigned modules plus
+  // the common actions. Other accounts (no menu_ids) see everything.
+  const menuIds = toMenuIds(user && user.menu_ids);
+  const isStaff = !!(user && user.tech_id);
+  const visibleActions = menuIds
+    ? quickActions.filter(
+        a => COMMON_ACTIONS.includes(a.id) || (ACTION_MENU[a.id] && menuIds.includes(ACTION_MENU[a.id])),
+      )
+    : quickActions;
+
   const fmt = n => String(n || 0);
   const todayStats = [
-    { id: 1, count: fmt(counts.jobs_today), label: t('jobsToday'), icon: require('../../Assets/icons/clipboard.png'), color: '#DBEAFE', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 2, count: fmt(counts.completed), label: t('completed'), icon: require('../../Assets/icons/circle-check.png'), color: '#DCFCE7', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 3, count: fmt(counts.pending), label: t('pending'), icon: require('../../Assets/icons/pending.png'), color: '#f8f5daff', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 4, count: fmt(counts.sales), label: t('sales'), icon: require('../../Assets/icons/arrow-up-right.png'), color: '#FFF7ED', textColor: '#333333ff', borderColor: '#e5d4b8a1' },
-    { id: 5, count: fmt(counts.purchases), label: t('purchases'), icon: require('../../Assets/icons/arrow-down-left.png'), color: '#EDE9FE', textColor: '#333333ff', borderColor: '#d5ccef9a' },
+    { id: 1, count: fmt(counts.jobs_today), label: t('jobsToday'), icon: require('../../Assets/icons/clipboard.png'), accent: '#2563EB', tint: '#EFF6FF', border: '#BFDBFE' },
+    { id: 2, count: fmt(counts.completed), label: t('completed'), icon: require('../../Assets/icons/circle-check.png'), accent: '#16A34A', tint: '#F0FDF4', border: '#BBF7D0' },
+    { id: 3, count: fmt(counts.pending), label: t('pending'), icon: require('../../Assets/icons/pending.png'), accent: '#D97706', tint: '#FFFBEB', border: '#FDE68A' },
+    { id: 4, count: fmt(counts.sales), label: t('sales'), icon: require('../../Assets/icons/arrow-up-right.png'), accent: '#EA580C', tint: '#FFF7ED', border: '#FED7AA' },
+    { id: 5, count: fmt(counts.purchases), label: t('purchases'), icon: require('../../Assets/icons/arrow-down-left.png'), accent: '#7C3AED', tint: '#F5F3FF', border: '#DDD6FE' },
   ];
+  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <>
@@ -203,7 +270,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
         {/* Header Section */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -225,7 +292,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
             </View>
           </View>
 
-          <ScrollTicker fallbackText={t('tickerText')} />
+          <ScrollTicker fallbackText={t('tickerText')} refreshKey={tick} />
         </View>
 
         {/* Featured banners */}
@@ -240,7 +307,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
           <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
           <View style={styles.sectionUnderline} />
           <View style={styles.quickActionsGrid}>
-            {quickActions.map((action, index) => (
+            {visibleActions.map((action, index) => (
               <TouchableOpacity
                 key={action.id}
                 style={[
@@ -300,31 +367,38 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
                     <Text style={styles.actionEmoji}>{action.emoji}</Text>
                   )}
                 </View>
-                <Text style={styles.actionLabel} numberOfLines={2}>
-                  {action.label}
-                </Text>
+                {/* Two lines tall: a one-line name is centred in it, so it sits a little lower. */}
+                <View style={styles.actionLabelBox}>
+                  <Text style={styles.actionLabel} numberOfLines={2}>
+                    {action.label}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Today's Summary Section */}
+        {/* Today's Summary Section (not shown to technician / staff logins) */}
+        {!isStaff && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('todaysSummary')}</Text>
+            <View style={styles.dateChip}>
+              <Text style={styles.dateChipText}>{todayLabel}</Text>
+            </View>
           </View>
           <View style={styles.statsGrid}>
             {todayStats.slice(0, 3).map((stat) => (
               <TouchableOpacity
                 key={stat.id}
-                activeOpacity={0.8}
-                style={styles.statCard}
+                activeOpacity={0.85}
+                style={[styles.statCard, { backgroundColor: stat.tint, borderColor: stat.border }]}
                 onPress={() => handleNavigation('jobs')}
               >
-                <View style={[styles.statIconCircle, { backgroundColor: stat.color }]}>
+                <View style={[styles.statIconCircle, { backgroundColor: stat.accent }]}>
                   <Image source={stat.icon} style={styles.statIcon} />
                 </View>
-                <Text style={styles.statCount}>{stat.count}</Text>
+                <Text style={[styles.statCount, { color: stat.accent }]}>{stat.count}</Text>
                 <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
               </TouchableOpacity>
             ))}
@@ -333,27 +407,29 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
             {todayStats.slice(3).map((stat) => (
               <TouchableOpacity
                 key={stat.id}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
                 onPress={() =>
                   handleNavigation('purchaseAndSaleHistory', {
                     initialTab: stat.id === 4 ? 'sales' : 'purchases',
                     singleTab: true,
                   })
                 }
-                style={styles.statCardWide}
+                style={[styles.statCardWide, { backgroundColor: stat.tint, borderColor: stat.border }]}
               >
-                <View style={[styles.statIconCircle, { backgroundColor: stat.color, marginBottom: 0 }]}>
+                <View style={[styles.statAccentBar, { backgroundColor: stat.accent }]} />
+                <View style={[styles.statIconCircle, styles.statIconWide, { backgroundColor: stat.accent }]}>
                   <Image source={stat.icon} style={styles.statIcon} />
                 </View>
                 <View style={styles.statWideContent}>
-                  <Text style={styles.statCountWide}>{stat.count}</Text>
+                  <Text style={[styles.statCountWide, { color: stat.accent }]}>{stat.count}</Text>
                   <Text style={styles.statLabelWide}>{stat.label}</Text>
                 </View>
-                <Text style={styles.statChevron}>›</Text>
+                <Text style={[styles.statChevron, { color: stat.accent }]}>›</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
+        )}
 
          <Text style={styles.bottomNavTitle}>{t('oneAssociation')}</Text>
 
@@ -361,7 +437,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
       </ScrollView>
 
       {/* Bottom Navigation - Sticky */}
-      <BottomNav selectedItem={selectedNavItem} onNavigate={handleNavigation} />
+      <BottomNav key={navKey} selectedItem={selectedNavItem} onNavigate={handleNavigation} />
       </SafeAreaView>
     </>
   );
@@ -511,7 +587,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    marginTop: 12,
+    marginTop: 8,
   },
   actionButtonGap: {
     marginRight: '2.5%',
@@ -526,10 +602,10 @@ const styles = StyleSheet.create({
   actionButton: {
     width: '23%',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     backgroundColor: '#FFFFFF',
-    paddingTop: 9,
-    paddingBottom: 7,
+    paddingTop: 6,
+    paddingBottom: 4,
     paddingHorizontal: 3,
     borderRadius: 12,
     borderWidth: 1,
@@ -541,65 +617,75 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   actionIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 3,
   },
   actionIconImage: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     resizeMode: 'contain',
   },
-  actionEmoji: { fontSize: 30 },
+  actionEmoji: { fontSize: 27 },
+  actionLabelBox: {
+    minHeight: 26,
+    justifyContent: 'center',
+  },
   actionLabel: {
     fontSize: 10,
-    lineHeight: 13,
-    minHeight: 26,
+    lineHeight: 12,
     color: '#1F2937',
     textAlign: 'center',
     fontWeight: '600',
   },
+  dateChip: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  dateChipText: { fontSize: 11, fontWeight: '700', color: '#4F46E5' },
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 8,
     gap: 10,
   },
   statCard: {
     flex: 1,
     paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   statIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
+  statIconWide: { marginBottom: 0 },
   statIcon: {
-    width: 20,
-    height: 20,
+    width: 17,
+    height: 17,
     resizeMode: 'contain',
+    tintColor: '#FFFFFF',
   },
   statCount: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 30,
+    fontWeight: '800',
+    lineHeight: 34,
   },
   statLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
+    fontWeight: '600',
+    color: '#475569',
     marginTop: 2,
   },
   statsGridBottom: {
@@ -611,30 +697,37 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    paddingLeft: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    overflow: 'hidden',
+  },
+  statAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
   },
   statWideContent: {
     flex: 1,
   },
   statLabelWide: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
+    fontWeight: '600',
+    color: '#475569',
   },
   statCountWide: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 28,
   },
   statChevron: {
-    fontSize: 22,
-    color: '#9CA3AF',
+    fontSize: 24,
+    fontWeight: '700',
   },
   activityList: {
     marginTop: 12,
@@ -701,7 +794,7 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   bottomSpacer: {
-    height: 40,
+    height: 130,
   },
   bottomNavContainer: {
     backgroundColor: 'transparent',

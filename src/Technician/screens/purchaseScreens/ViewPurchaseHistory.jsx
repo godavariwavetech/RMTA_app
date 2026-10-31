@@ -18,6 +18,7 @@ import {
 } from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 export default function ViewPurchaseHistory({ onNavigate }) {
   const [activeTab, setActiveTab] = useState('purchases'); // 'purchases' or 'sales'
@@ -234,6 +235,7 @@ export default function ViewPurchaseHistory({ onNavigate }) {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            <ImeiScanButton compact onScanned={setSearchQuery} />
             </View>
 
             {/* Transactions List */}

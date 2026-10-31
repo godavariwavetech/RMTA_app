@@ -28,6 +28,7 @@ import StepNav from '../../../Components/StepNav';
 
 export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Fall back to the Redux draft when buyerData/deviceData weren't passed in
@@ -66,7 +67,16 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   };
 
   const handleCreateInvoice = async () => {
-    if (!formData.salePrice || !onNavigate || submitting) return;
+    if (!onNavigate || submitting) return;
+    setTried(true);
+    if (!(Number(formData.salePrice) > 0)) {
+      Alert.alert('Missing details', 'Please enter the sale price.');
+      return;
+    }
+    if (formData.paymentMode !== 'cash' && !String(formData.transactionId || '').trim()) {
+      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
+      return;
+    }
     dispatch(updateSaleDraft({ sale: formData }));
 
     // deviceData.id is the purchase/inventory record's id (from
@@ -169,7 +179,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
               <Text style={styles.label}>
                 Sale Price <Text style={styles.required}>*</Text>
               </Text>
-              <View style={styles.priceInputContainer}>
+              <View style={[styles.priceInputContainer, tried && !(Number(formData.salePrice) > 0) && styles.inputError]}>
                 <Text style={styles.currencySymbol}>₹</Text>
                 <TextInput {...nav.props(0)}
                   style={styles.priceInput}
@@ -248,7 +258,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
                   Transaction ID <Text style={styles.required}>*</Text>
                 </Text>
                 <TextInput {...nav.props(1)}
-                  style={styles.input}
+                  style={[styles.input, tried && !String(formData.transactionId || '').trim() && styles.inputError]}
                   placeholder={formData.paymentMode === 'upi' ? 'UPI Transaction ID' : 'Bank Reference Number'}
                   placeholderTextColor="#9CA3AF"
                   value={formData.transactionId}
@@ -292,10 +302,10 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
           <TouchableOpacity
             style={[
               styles.createInvoiceButton,
-              (!formData.salePrice || submitting) && styles.createInvoiceButtonDisabled,
+              submitting && styles.createInvoiceButtonDisabled,
             ]}
             onPress={handleCreateInvoice}
-            disabled={!formData.salePrice || submitting}
+            disabled={submitting}
           >
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -312,6 +322,9 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

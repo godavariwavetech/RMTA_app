@@ -82,7 +82,7 @@ export default function DeviceVerification({ onNavigate }) {
 
             {/* IMEI Input Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>IMEI number</Text>
+              <Text style={styles.sectionLabel}>IMEI number <Text style={{ color: '#EF4444' }}>*</Text></Text>
 
               <View style={styles.imeiInputContainer}>
                 <TextInput

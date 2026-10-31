@@ -35,7 +35,10 @@ function inferType(title, actions, explicit) {
   if (/could not|couldn't|failed|error|invalid|incorrect|denied|wrong|unable|not found|rejected/.test(t)) return 'error';
   if (/incomplete|required|missing|no active|warning|limit|exceed|permission|not allowed/.test(t)) return 'warning';
   if (actions.some(a => a.style === 'cancel')) return 'confirm';
-  if (/success|created|saved|sent|complete|verified|done|ready|updated|added|resent/.test(t)) return 'success';
+  // "already exists" / "already registered" are warnings; match whole words so "already"
+  // is not mistaken for "ready".
+  if (/\balready\b|\bexists?\b|\bduplicate\b/.test(t)) return 'warning';
+  if (/success|created|saved|\bsent\b|complete|verified|\bdone\b|\bready\b|updated|added|resent/.test(t)) return 'success';
   return 'info';
 }
 

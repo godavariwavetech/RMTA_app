@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +24,7 @@ import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData }) {
   const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const draftPrice = useSelector(state => state.purchase.draft.price) || {};
   const [purchasePrice, setPurchasePrice] = useState(draftPrice.purchasePrice || '');
@@ -36,6 +38,15 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
   });
 
   const handleContinue = () => {
+    setTried(true);
+    if (!(Number(purchasePrice) > 0)) {
+      Alert.alert('Missing details', 'Please enter the purchase price.');
+      return;
+    }
+    if (paymentMode !== 'Cash' && !transactionId.trim()) {
+      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
+      return;
+    }
     const priceData = buildPrice();
     console.log('[Purchase][Step6] price captured →', priceData);
     dispatch(updatePurchaseDraft({ price: priceData }));
@@ -96,8 +107,8 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
             {/* Purchase Price Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Purchase Price</Text>
-              <View style={styles.priceInputContainer}>
+              <Text style={styles.label}>Purchase Price <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.priceInputContainer, tried && !(Number(purchasePrice) > 0) && styles.inputError]}>
                 <Text style={styles.currencySymbol}>₹</Text>
                 <TextInput {...nav.props(0)}
                   style={styles.priceInput}
@@ -138,9 +149,11 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
             {/* Transaction ID Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Transaction ID</Text>
+              <Text style={styles.label}>
+                Transaction ID{paymentMode !== 'Cash' && <Text style={styles.required}> *</Text>}
+              </Text>
               <TextInput {...nav.props(1)}
-                style={styles.input}
+                style={[styles.input, tried && paymentMode !== 'Cash' && !transactionId.trim() && styles.inputError]}
                 placeholder="Enter Transaction ID"
                 placeholderTextColor="#9CA3AF"
                 value={transactionId}
@@ -174,6 +187,12 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',

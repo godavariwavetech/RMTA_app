@@ -23,6 +23,7 @@ import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { resetPurchaseDraft } from '../../../redux/slices/purchaseSlice';
 import StepNav from '../../../Components/StepNav';
+import { istDateTime } from '../../../utils/istDate';
 
 export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData }) {
   const dispatch = useDispatch();
@@ -42,6 +43,8 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       device_model: deviceData?.deviceModel || '',
       imei1: imeiData?.imei || '',
       imei2: imeiData?.imei2 || '',
+      // "YYYY-MM-DD HH:mm:ss" in India time: when the IMEI was verified on step 3.
+      imeiverified_date: imeiData?.verifiedAt || istDateTime(),
       color: deviceData?.color || '',
       storage: deviceData?.storage || '',
       screen: conditionData?.screen || '',

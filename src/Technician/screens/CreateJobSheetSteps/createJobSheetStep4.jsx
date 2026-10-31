@@ -30,7 +30,16 @@ export default function CreateJobSheetStep4({ onNavigate }) {
   const dispatch = useDispatch();
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftRepair = useSelector(state => state.jobSheet.draft.repair) || {};
-  const [selectedCategory, setSelectedCategory] = useState(draftRepair.category || '');
+  // Several categories can be picked (e.g. Display + Battery). Restored from the draft;
+  // older drafts only have a single `category` string.
+  const [selectedCategories, setSelectedCategories] = useState(() => {
+    if (Array.isArray(draftRepair.categories)) return draftRepair.categories;
+    return draftRepair.category ? String(draftRepair.category).split(',').map(c => c.trim()).filter(Boolean) : [];
+  });
+  const toggleCategory = category =>
+    setSelectedCategories(prev =>
+      prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category],
+    );
   const [problemDescription, setProblemDescription] = useState(
     draftRepair.problem_description || '',
   );
@@ -42,7 +51,9 @@ export default function CreateJobSheetStep4({ onNavigate }) {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   const buildRepair = () => ({
-    category: selectedCategory,
+    // create_job_sheets takes repair_category as one string: "Display, Battery".
+    category: selectedCategories.join(', '),
+    categories: selectedCategories,
     problem_description: problemDescription,
     estimated_cost: estimatedCost,
     // estimated_delivery stays null (free-text isn't a parseable datetime for
@@ -63,7 +74,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
     setTried(true);
     // All fields are required before moving on.
     if (
-      !selectedCategory ||
+      selectedCategories.length === 0 ||
       !problemDescription.trim() ||
       !estimatedCost.trim() ||
       !estimatedDelivery.trim()
@@ -121,26 +132,24 @@ export default function CreateJobSheetStep4({ onNavigate }) {
             {/* Repair Category */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Repair Category <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.multiHint}>Select all that apply</Text>
               <View style={styles.categoryContainer}>
-                {repairCategories.map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.categoryButton,
-                      selectedCategory === category && styles.categoryButtonSelected,
-                    ]}
-                    onPress={() => setSelectedCategory(category)}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        selectedCategory === category && styles.categoryTextSelected,
-                      ]}
+                {repairCategories.map((category) => {
+                  const on = selectedCategories.includes(category);
+                  return (
+                    <TouchableOpacity
+                      key={category}
+                      style={[styles.categoryButton, on && styles.categoryButtonSelected]}
+                      onPress={() => toggleCategory(category)}
+                      activeOpacity={0.8}
                     >
-                      {category}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text style={[styles.categoryText, on && styles.categoryTextSelected]}>
+                        {on ? '✓  ' : ''}
+                        {category}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
@@ -218,6 +227,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  multiHint: { fontSize: 12, color: '#9CA3AF', marginTop: -2, marginBottom: 8 },
   required: {
     color: '#EF4444',
   },

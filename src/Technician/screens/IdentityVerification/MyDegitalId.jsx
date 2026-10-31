@@ -17,14 +17,14 @@ import {
 
 import { Colors } from '../../../Constants/Colors';
 import { BASE_URL } from '../../../Constants/config';
-import useAccountProfile from '../../../utils/useAccountProfile';
+import { useMemberProfile } from '../../../utils/useAccountProfile';
 import MemberIdentityCard from '../../../Components/MemberIdentityCard';
 
 const imageUrl = path =>
   path ? (/^https?:\/\//.test(path) ? path : `${BASE_URL}${String(path).replace(/^\//, '')}`) : null;
 
 export default function MyDigitalId({ onNavigate }) {
-  const profile = useAccountProfile();
+  const profile = useMemberProfile();
 
   const handleBack = () => {
     if (onNavigate) {

@@ -2,6 +2,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { Alert, AppState, BackHandler, KeyboardAvoidingView, Platform, View, useWindowDimensions } from 'react-native';
 import { Colors } from './src/Constants/Colors';
 import { APP_MAX_WIDTH } from './src/utils/responsive';
+import AppLockGate from './src/Components/AppLockGate';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
@@ -85,6 +86,19 @@ import ChatScreen from './src/Technician/screens/ChatScreen';
 import CustomerDirectoryScreen from './src/Technician/screens/CustomerDirectoryScreen';
 
 installAppModalAlerts();
+
+// Going Back from the step after a mobile-number OTP (job sheet / purchase / sale step 2)
+// should land on the details step, not re-open the OTP screen that was just completed.
+const OTP_ONLY_SCREENS = new Set([
+  'verifyMobileNumber', 'verifySellerMobileNumber', 'verifyBuyerMobileNumber',
+]);
+const popHistory = (history: string[]) => {
+  let next = history.slice(0, -1);
+  while (next.length > 1 && OTP_ONLY_SCREENS.has(next[next.length - 1])) {
+    next = next.slice(0, -1);
+  }
+  return next;
+};
 
 const keyboardAwareScreens = new Set([
   'createJobSheetStep1', 'createJobSheetStep2', 'createJobSheetStep3',
@@ -291,7 +305,7 @@ function AppContent() {
         return false;
       }
 
-      const previousHistory = navigationHistory.slice(0, -1);
+      const previousHistory = popHistory(navigationHistory);
       setNavigationHistory(previousHistory);
       setCurrentScreen(previousHistory[previousHistory.length - 1]);
       setNavigationParams(savedParams.current[previousHistory.length - 1] || {});
@@ -314,7 +328,7 @@ function AppContent() {
     // Handle goBack action
     if (screen === 'goBack') {
       if (navigationHistory.length > 1) {
-        const newHistory = navigationHistory.slice(0, -1);
+        const newHistory = popHistory(navigationHistory);
         const previousScreen = newHistory[newHistory.length - 1];
         setNavigationHistory(newHistory);
         setCurrentScreen(previousScreen);
@@ -571,7 +585,6 @@ function AppContent() {
           onNavigate={handleScreenNavigation}
           job={navigationParams.job}
           summary={navigationParams.summary}
-          pdfOnly={!!navigationParams.pdfOnly}
         />
       ) : currentScreen === 'purchaseEntryStep1' ? (
         <PurchaseEntryStep1 onNavigate={handleScreenNavigation} />
@@ -653,6 +666,7 @@ function AppContent() {
       </View>
       <StatusBarBackdrop />
       <PlayerIdSync />
+      <AppLockGate onLoggedOut={() => handleScreenNavigation('logout')} />
       <LoginStatusWatcher onLogout={() => handleScreenNavigation('logout')} isHome={currentScreen === 'home'} />
     </SafeAreaProvider>
     </Provider>

@@ -17,6 +17,7 @@ import {
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS, buildUrl } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import useRefresh from '../../utils/useRefresh';
 
 const sampleImage = require('../../Assets/images/sampleMobileImg.png');
 const money = v => `₹${Number(v || 0).toLocaleString('en-IN')}`;
@@ -24,6 +25,7 @@ const deviceName = (brand, model) => [brand, model].filter(Boolean).join(' ') ||
 const photoSource = path => (path ? { uri: buildUrl(path) } : sampleImage);
 
 export default function PurchaseAndSaleMonitoring({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const [selectedType, setSelectedType] = useState('Purchases');
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [purchases, setPurchases] = useState([]);
@@ -73,7 +75,7 @@ export default function PurchaseAndSaleMonitoring({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [tick]);
 
   const handleBackPress = () => {
     if (onNavigate) {
@@ -143,7 +145,7 @@ export default function PurchaseAndSaleMonitoring({ onNavigate }) {
           <View style={styles.placeholderButton} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
           {/* Title Section */}
           <View style={styles.titleSection}>
             <Text style={styles.mainTitle}>Device transactions</Text>

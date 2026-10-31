@@ -21,8 +21,10 @@ import { postJson } from '../../redux/slices/authSlice';
 import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { showAppModal } from '../../utils/appModal';
+import useRefresh from '../../utils/useRefresh';
 
 export default function AdminReports({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [report, setReport] = useState(null);
 
@@ -44,7 +46,7 @@ export default function AdminReports({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [selectedPeriod]);
+  }, [selectedPeriod, tick]);
 
   const handleExportReport = async () => {
     try {
@@ -158,7 +160,7 @@ export default function AdminReports({ onNavigate }) {
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Admin Reports</Text>
           </View>
-        <ScrollView
+        <ScrollView refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}

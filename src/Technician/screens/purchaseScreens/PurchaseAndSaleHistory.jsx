@@ -24,6 +24,8 @@ import { ENDPOINTS, buildUrl } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { setPhotos } from '../../../utils/photoCache';
 import DatePickerModal, { formatDisplayDate } from '../../../Components/DatePickerModal';
+import useRefresh from '../../../utils/useRefresh';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 const sampleImage = require('../../../Assets/images/sampleMobileImg.png');
 
@@ -45,6 +47,7 @@ const toDateKey = raw => {
 const MAX_FIELD_LENGTH = 300;
 
 export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purchases', singleTab = false }) {
+  const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
@@ -209,7 +212,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.member_id, reloadKey]);
+  }, [user.member_id, reloadKey, tick]);
 
   // Filter data based on search query
   const filterData = (data) => {
@@ -334,7 +337,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
           <View style={styles.placeholderButton} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
           {/* Content */}
           <View style={styles.content}>
             {/* Tabs */}
@@ -388,6 +391,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            <ImeiScanButton compact onScanned={setSearchQuery} />
             </View>
 
             {/* Availability filter (purchases only) */}

@@ -41,9 +41,39 @@ export function parseApiResponseBody(raw) {
   return data;
 }
 
+// A technician (staff) login adds its own `tech_id` to every form submission and
+// status-update call, so the server knows which staff member did it. store.js keeps this
+// in step with the logged-in user (null for admins and members).
+let apiTechId = null;
+export function setApiTechId(id) {
+  apiTechId = id === undefined || id === null || id === '' ? null : id;
+}
+const TECH_TAGGED_ENDPOINTS = new Set([
+  ENDPOINTS.CREATE_JOB_SHEET_CUSTOMER,
+  ENDPOINTS.CREATE_JOB_SHEET,
+  ENDPOINTS.CREATE_PURCHASE_CUSTOMER,
+  ENDPOINTS.CREATE_PURCHASE,
+  ENDPOINTS.CREATE_SALE_CUSTOMER,
+  ENDPOINTS.CREATE_SALE,
+  ENDPOINTS.START_REPAIR,
+  ENDPOINTS.START_JOB_REPAIR,
+  ENDPOINTS.MARK_JOB_READY,
+  ENDPOINTS.HANDOVER_REPAIR,
+]);
+
 // Shared POST helper: builds the URL, applies a timeout, parses JSON, and
 // returns { response, data }. Throws a tagged Error on network/timeout failure.
 export async function postJson(endpoint, payload) {
+  if (
+    apiTechId &&
+    TECH_TAGGED_ENDPOINTS.has(endpoint) &&
+    payload &&
+    typeof payload === 'object' &&
+    !Array.isArray(payload) &&
+    payload.tech_id === undefined
+  ) {
+    payload = { ...payload, tech_id: apiTechId };
+  }
   const url = `${BASE_URL}${endpoint}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -168,6 +198,7 @@ export function getJsonWithBody(endpoint, payload) {
 // Backend responses:
 //   200 { status:200, success:true, data:{ user_id, member_id, member_code, membership_status } }
 //   409 { success:false, message:"An account with this mobile number already exists. Please log in." }
+//   300 (HTTP status or the `status` in the body): the mobile number already has an account
 //   500 { success:false, message:"Server error. Please try again." }
 export const registerMember = createAsyncThunk(
   'auth/registerMember',
@@ -197,6 +228,15 @@ export const registerMember = createAsyncThunk(
         status: data && data.status,
       });
 
+      // 300 means the mobile number is already registered. It can arrive as the HTTP
+      // status or as `status` inside a 200 response body.
+      if (response.status === 300 || Number(data && data.status) === 300) {
+        return rejectWithValue({
+          status: 300,
+          message: 'You already have an account with this mobile number. Please log in.',
+        });
+      }
+
       // Duplicate (409) or server error (500) → surface the server's message.
       if (!response.ok || (data && data.success === false)) {
         return rejectWithValue({
@@ -221,8 +261,10 @@ export const registerMember = createAsyncThunk(
   },
 );
 
-// POST /public_app/member_login
-// payload: { user_ind, mobile, password }   (user_ind: 1 = admin, 0 = technician)
+// POST /public_app/member_login          (admin, user_ind 1)
+//   payload: { user_ind, mobile, password }
+// POST /public_app/technician_login      (technician / staff, user_ind 0)
+//   payload: { mobile_number, password }
 //
 // Backend responses:
 //   200 { status:200, success:true, data:{ user_id, member_id, role, membership_status, ... } }
@@ -231,18 +273,24 @@ export const registerMember = createAsyncThunk(
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async (payload, { rejectWithValue }) => {
-    const url = `${BASE_URL}${ENDPOINTS.MEMBER_LOGIN}`;
+    // Technicians (staff added under a member) sign in on their own endpoint.
+    const isTechnician = Number(payload.user_ind) !== 1;
+    const endpoint = isTechnician ? ENDPOINTS.TECHNICIAN_LOGIN : ENDPOINTS.MEMBER_LOGIN;
+    const requestBody = isTechnician
+      ? { mobile_number: payload.mobile, password: payload.password }
+      : payload;
+    const url = `${BASE_URL}${endpoint}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-    const log = logApiRequest('POST', ENDPOINTS.MEMBER_LOGIN, url, payload);
+    const log = logApiRequest('POST', endpoint, url, requestBody);
     try {
       console.log('🌐 POST →', url);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -275,8 +323,10 @@ export const loginUser = createAsyncThunk(
         });
       }
 
+      // A technician login that succeeds is an active account even when the
+      // response carries no membership_status.
       const rawMembershipStatus = String(
-        responseUser.membership_status ?? '',
+        responseUser.membership_status ?? (isTechnician ? 'active' : ''),
       ).toLowerCase();
       const membershipStatus =
         rawMembershipStatus === '1' || rawMembershipStatus === 'active'
@@ -291,6 +341,9 @@ export const loginUser = createAsyncThunk(
         ...safeUser,
         user_id: responseUser.user_id ?? responseUser.id,
         member_id: responseUser.member_id ?? responseUser.id,
+        // Staff rows name the person tech_name; the app reads full_name.
+        full_name: responseUser.full_name ?? responseUser.tech_name,
+        tech_id: isTechnician ? responseUser.id : undefined,
         // The selected login type is authoritative. Some API records omit
         // role or return a legacy role label that the app cannot route on.
         role: Number(payload.user_ind) === 1 ? 'admin' : 'technician',
@@ -404,6 +457,12 @@ const authSlice = createSlice({
         state.user.technician_status = action.payload;
       }
     },
+    // Keep a technician's assigned modules (menu ids) current after the owner changes them.
+    setUserMenuIds(state, action) {
+      if (state.user) {
+        state.user.menu_ids = action.payload;
+      }
+    },
     // Restore a persisted session on app launch (from AsyncStorage).
     hydrateUser(state, action) {
       state.user = action.payload;
@@ -452,6 +511,7 @@ export const {
   clearAuthError,
   resetAuth,
   setUserTechnicianStatus,
+  setUserMenuIds,
   hydrateUser,
 } = authSlice.actions;
 export default authSlice.reducer;

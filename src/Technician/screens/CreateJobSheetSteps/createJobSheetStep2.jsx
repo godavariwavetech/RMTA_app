@@ -23,6 +23,7 @@ import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
 import { isValidImei } from '../../../utils/imeiValidation';
 import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 import StepNav from '../../../Components/StepNav';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 export default function CreateJobSheetStep2({ onNavigate }) {
   const nav = useFieldNav();
@@ -165,6 +166,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                   keyboardType="number-pad"
                   maxLength={15}
                 />
+                <ImeiScanButton label="Scan IMEI 1" onScanned={setImei1} />
                 {imei1.length > 0 && !isValidImei(imei1) && (
                   <Text style={styles.imeiError}>
                     {imei1.length < 15 ? `${imei1.length}/15 digits` : 'Not a valid IMEI number'}
@@ -184,6 +186,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
                   keyboardType="number-pad"
                   maxLength={15}
                 />
+                <ImeiScanButton label="Scan IMEI 2" onScanned={setImei2} />
                 {imei2.length > 0 && !isValidImei(imei2) && (
                   <Text style={styles.imeiError}>
                     {imei2.length < 15 ? `${imei2.length}/15 digits` : 'Not a valid IMEI number'}

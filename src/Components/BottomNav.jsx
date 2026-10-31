@@ -11,11 +11,23 @@ import {
 
 import { useI18n } from '../i18n';
 
-// Colours the centre button cycles through (ends where it starts, so it loops).
-const BUTTON_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EF4444'];
-// The bar follows the same colour at the same moment, in a deeper shade so the
-// white icons and labels stay readable.
-const BAR_COLORS = ['#B91C1C', '#C2410C', '#A16207', '#15803D', '#0E7490', '#1D4ED8', '#6D28D9', '#B91C1C'];
+// The bar drifts through deep cool shades (navy, blue, indigo, violet, teal) and the
+// centre button through light warm ones (amber, peach, yellow, rose, pink) at the same
+// moment. Cool against warm always contrasts and stays easy on the eye. Each pair keeps
+// a contrast of at least 4:1 between bar and button, white labels on the bar at least
+// 7:1, and the dark "+" on the button at least 8.9:1. Both lists end where they start so
+// the animation loops without a jump.
+const BAR_COLORS = ['#0B2A66', '#1E3A8A', '#3730A3', '#5B21B6', '#115E59', '#155E75', '#1E40AF', '#0B2A66'];
+const BUTTON_COLORS = ['#FBBF24', '#FDBA74', '#FDE047', '#FACC15', '#FDA4AF', '#F9A8D4', '#FBBF24', '#FBBF24'];
+
+// A soft radial gradient on the centre button without a gradient library: stacked white
+// circles of growing transparency-sum toward a highlight point at the upper left, laid
+// over the animated base colour. The base keeps cycling, so the gradient follows it.
+const GLOSS_SIZES = [58, 48, 38, 28, 18];
+const GLOSS_CENTER = { x: 20, y: 18 };
+// A few faint circles pushed toward the lower right darken that side in steps, which
+// reads as a smooth gradient rather than one hard edge.
+const SHADE_OFFSETS = [14, 20, 26];
 
 const loop = (value, duration, easing = Easing.linear, useNativeDriver = true) =>
   Animated.loop(
@@ -67,7 +79,7 @@ export default function BottomNav({ selectedItem, onNavigate }) {
   const barColor = buttonHue.interpolate({ inputRange, outputRange: BAR_COLORS });
 
   return (
-    <View style={styles.bottomNavContainer}>
+    <View style={styles.bottomNavContainer} pointerEvents="box-none">
       <Animated.View style={[styles.navBarShell, { backgroundColor: barColor }]}>
         <View style={styles.bottomNav}>
           {navItems.map(item => {
@@ -84,6 +96,7 @@ export default function BottomNav({ selectedItem, onNavigate }) {
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
               >
+                {/* Selected tab: a rounded rectangle of one fixed size behind icon and label. */}
                 <View style={[styles.itemInner, isSelected && styles.itemInnerSelected]}>
                   <Image
                     source={item.icon}
@@ -105,6 +118,29 @@ export default function BottomNav({ selectedItem, onNavigate }) {
             accessibilityLabel={t('navAdd')}
           >
             <Animated.View style={[styles.centerButton, { backgroundColor: buttonColor }]}>
+              {GLOSS_SIZES.map(size => (
+                <View
+                  key={size}
+                  pointerEvents="none"
+                  style={[
+                    styles.gloss,
+                    {
+                      width: size,
+                      height: size,
+                      borderRadius: size / 2,
+                      left: GLOSS_CENTER.x - size / 2,
+                      top: GLOSS_CENTER.y - size / 2,
+                    },
+                  ]}
+                />
+              ))}
+              {SHADE_OFFSETS.map(offset => (
+                <View
+                  key={offset}
+                  pointerEvents="none"
+                  style={[styles.shade, { left: offset, top: offset + 2 }]}
+                />
+              ))}
               <Text style={styles.centerPlus}>+</Text>
             </Animated.View>
           </TouchableOpacity>
@@ -115,7 +151,14 @@ export default function BottomNav({ selectedItem, onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  // The bar floats over the screen instead of taking its own strip below the content,
+  // so content scrolls underneath it and nothing is cut off above it. box-none lets
+  // taps in the gaps around the bar pass through to the screen.
   bottomNavContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'transparent',
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -150,18 +193,18 @@ const styles = StyleSheet.create({
   },
   centerSpacer: { flex: 1 },
   itemInner: {
+    width: 48,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
+    borderRadius: 10,
   },
-  itemInnerSelected: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  itemInnerSelected: { backgroundColor: 'rgba(255,255,255,0.24)' },
   navIcon: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   navLabel: {
     fontSize: 10,
@@ -192,6 +235,16 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  centerPlus: { color: '#FFFFFF', fontSize: 38, fontWeight: '300', lineHeight: 42, marginTop: -3 },
+  gloss: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.085)' },
+  // Slight darkening toward the lower right to give the gradient depth.
+  shade: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(15,23,42,0.045)',
+  },
+  centerPlus: { color: '#0B1B3F', fontSize: 38, fontWeight: '300', lineHeight: 42, marginTop: -3 },
 });

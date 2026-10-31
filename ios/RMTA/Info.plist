@@ -33,6 +33,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>RMTA uses Face ID to unlock the app and keep your shop records private.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>RMTA uses the camera to capture profile and device images for your records.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

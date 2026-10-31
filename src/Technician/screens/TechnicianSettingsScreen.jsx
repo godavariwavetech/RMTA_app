@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -20,12 +20,24 @@ import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { useI18n, LANGUAGES } from '../../i18n';
 import { logoutUser } from '../../redux/slices/authSlice';
+import { getAppLockEnabled, isLockAvailable, setAppLockEnabled } from '../../utils/appLock';
 
 export default function TechnicianSettingsScreen({ onNavigate }) {
   const { t, language } = useI18n();
   const dispatch = useDispatch();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [smsUpdates, setSmsUpdates] = useState(true);
+  // App lock (Face ID / fingerprint / passcode when the app opens).
+  const [appLock, setAppLock] = useState(true);
+  const [lockAvailable, setLockAvailable] = useState(true);
+  useEffect(() => {
+    getAppLockEnabled().then(setAppLock);
+    isLockAvailable().then(setLockAvailable);
+  }, []);
+  const toggleAppLock = value => {
+    setAppLock(value);
+    setAppLockEnabled(value);
+  };
 
   const handleBackPress = () => {
     if (onNavigate) {
@@ -63,6 +75,18 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
       type: 'toggle',
       state: smsUpdates,
       setState: setSmsUpdates,
+    },
+    {
+      id: 6,
+      icon: require('../../Assets/icons/lockIcon.png'),
+      title: 'App lock',
+      subtitle: lockAvailable
+        ? 'Ask for Face ID, fingerprint or passcode when the app opens'
+        : 'Set a screen lock on this phone to use it',
+      type: 'toggle',
+      state: appLock && lockAvailable,
+      setState: toggleAppLock,
+      disabled: !lockAvailable,
     },
     {
       id: 4,
@@ -129,6 +153,7 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
                   <Switch
                     style={styles.toggle}
                     value={item.state}
+                    disabled={item.disabled}
                     onValueChange={item.setState}
                     trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
                     thumbColor={item.state ? Colors.primary : '#FFFFFF'}
