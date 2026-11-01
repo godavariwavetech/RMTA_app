@@ -13,12 +13,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { fetchTechnicians } from '../../redux/slices/techniciansSlice';
+import useRefresh from '../../utils/useRefresh';
 
 export default function AdminHomeScreen({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const dispatch = useDispatch();
   // Active/inactive technician counts for the dashboard stat cards.
   const { counts } = useSelector(state => state.technicians);
@@ -26,7 +28,7 @@ export default function AdminHomeScreen({ onNavigate }) {
   // Refresh the counts whenever the dashboard is shown.
   useEffect(() => {
     dispatch(fetchTechnicians());
-  }, [dispatch]);
+  }, [dispatch, tick]);
 
   const handleReviewApprovals = () => {
     if (onNavigate) {
@@ -97,8 +99,7 @@ export default function AdminHomeScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Admin Dashboard</Text>
             <TouchableOpacity
@@ -112,6 +113,8 @@ export default function AdminHomeScreen({ onNavigate }) {
               />
             </TouchableOpacity>
           </View>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
+
 
           {/* Association Overview Card */}
           <View style={styles.overviewCard}>
@@ -206,7 +209,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

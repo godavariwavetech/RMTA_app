@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
 
@@ -51,12 +51,7 @@ export default function NFCVerified({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -64,6 +59,12 @@ export default function NFCVerified({ onNavigate }) {
             <Text style={styles.headerTitle}>NFC Verified</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Success Alert */}
           <View style={styles.successAlert}>
@@ -113,7 +114,7 @@ export default function NFCVerified({ onNavigate }) {
                   </View>
                 </View>
 
-                
+
               </View>
             </View>
           </View>
@@ -121,7 +122,7 @@ export default function NFCVerified({ onNavigate }) {
           {/* Verification Details */}
           <View style={styles.verificationDetailsSection}>
             <Text style={styles.sectionTitle}>Verification details</Text>
-            
+
             <View style={styles.detailsCard}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Member ID</Text>
@@ -194,6 +195,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: Colors.primary,

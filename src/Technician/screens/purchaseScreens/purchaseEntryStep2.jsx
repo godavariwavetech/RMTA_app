@@ -9,25 +9,25 @@ import {
   StatusBar,
   TextInput,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
+  const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
-  const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
   const draftDevice = useSelector(state => state.purchase.draft.device) || {};
   const [formData, setFormData] = useState({
@@ -46,6 +46,11 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   };
 
   const handleContinue = () => {
+    setTried(true);
+    if (!formData.deviceBrand.trim() || !formData.deviceModel.trim()) {
+      Alert.alert('Missing details', 'Please enter the device brand and model.');
+      return;
+    }
     console.log('[Purchase][Step2] device captured →', formData);
     dispatch(updatePurchaseDraft({ device: formData }));
     if (onNavigate) {
@@ -57,9 +62,9 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   };
 
   const handleCapturePhoto = () => {
-    launchImageLibrary(
+    chooseImageSource(
       { mediaType: 'photo', includeBase64: true, quality: 0.7 },
-      async response => {
+      response => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
@@ -68,27 +73,11 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setFormData(prev => ({ ...prev, devicePhoto: { uri: asset.uri, uploading: true } }));
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'device.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setFormData(prev => ({
-              ...prev,
-              devicePhoto: { uri: asset.uri, file_id: data.data.file_id, uploading: false },
-            }));
-          } else {
-            setFormData(prev => ({ ...prev, devicePhoto: { uri: asset.uri, uploading: false } }));
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setFormData(prev => ({ ...prev, devicePhoto: { uri: asset.uri, uploading: false } }));
-          Alert.alert('Upload failed', err.message);
-        }
+        // Sent as create_purchase's frontimage — raw base64, no upload step.
+        setFormData(prev => ({
+          ...prev,
+          devicePhoto: { uri: asset.uri, base64: asset.base64 },
+        }));
       },
     );
   };
@@ -96,7 +85,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
   const handleBackPress = () => {
     dispatch(updatePurchaseDraft({ device: formData }));
     if (onNavigate) {
-      onNavigate('verifySellerMobileNumber');
+      onNavigate('goBack');
     }
   };
 
@@ -110,8 +99,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -119,24 +107,26 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             <Text style={styles.headerTitle}>Purchase Device</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · DEVICE</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · DEVICE</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '25%' }]} />
+            <View style={[styles.progressBar, { width: '28.6%' }]} />
           </View>
 
           {/* Form Content */}
           <View style={styles.content}>
             {/* Device Brand Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Device brand</Text>
-              <TextInput
-                style={styles.input}
+              <Text style={styles.label}>Device brand <Text style={styles.required}>*</Text></Text>
+              <TextInput {...nav.props(0)}
+                style={[styles.input, tried && !String(formData.deviceBrand).trim() && styles.inputError]}
                 placeholder="e.g., OnePlus, Samsung"
                 placeholderTextColor="#9CA3AF"
                 value={formData.deviceBrand}
@@ -146,9 +136,9 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
 
             {/* Device Model Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Device model</Text>
-              <TextInput
-                style={styles.input}
+              <Text style={styles.label}>Device model <Text style={styles.required}>*</Text></Text>
+              <TextInput {...nav.props(1)}
+                style={[styles.input, tried && !String(formData.deviceModel).trim() && styles.inputError]}
                 placeholder="e.g., 9R, S21"
                 placeholderTextColor="#9CA3AF"
                 value={formData.deviceModel}
@@ -159,7 +149,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             {/* Storage Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Storage</Text>
-              <TextInput
+              <TextInput {...nav.props(2)}
                 style={styles.input}
                 placeholder="e.g., 128 GB"
                 placeholderTextColor="#9CA3AF"
@@ -171,7 +161,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
             {/* Color Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Color</Text>
-              <TextInput
+              <TextInput {...nav.props(3)}
                 style={styles.input}
                 placeholder="e.g., Lake Blue, Black"
                 placeholderTextColor="#9CA3AF"
@@ -202,13 +192,8 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
                     ? 'Change device photo'
                     : 'Capture device photo'}
                 </Text>
-                {formData.devicePhoto && formData.devicePhoto.uploading ? (
-                  <View style={styles.photoStatusRow}>
-                    <ActivityIndicator size="small" color="#0066FF" />
-                    <Text style={styles.photoUploadSubtitle}>Uploading…</Text>
-                  </View>
-                ) : formData.devicePhoto && formData.devicePhoto.file_id ? (
-                  <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Uploaded</Text>
+                {formData.devicePhoto && formData.devicePhoto.base64 ? (
+                  <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Selected</Text>
                 ) : (
                   <Text style={styles.photoUploadSubtitle}>JPG or PNG • Up to 5 MB</Text>
                 )}
@@ -221,27 +206,36 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -263,6 +257,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

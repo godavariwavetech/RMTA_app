@@ -15,9 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 export default function ViewPurchaseHistory({ onNavigate }) {
   const [activeTab, setActiveTab] = useState('purchases'); // 'purchases' or 'sales'
@@ -108,7 +109,7 @@ export default function ViewPurchaseHistory({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('goBack');
     }
   };
 
@@ -234,6 +235,7 @@ export default function ViewPurchaseHistory({ onNavigate }) {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            <ImeiScanButton compact onScanned={setSearchQuery} />
             </View>
 
             {/* Transactions List */}
@@ -277,8 +279,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -300,6 +302,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

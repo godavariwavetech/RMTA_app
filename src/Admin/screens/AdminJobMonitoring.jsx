@@ -14,10 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import useRefresh from '../../utils/useRefresh';
 
 // Map a raw job_sheets status to a display label, badge colors, and the
 // Active/Completed filter group.
@@ -36,6 +37,7 @@ const statusMeta = s => {
 };
 
 export default function AdminJobMonitoring({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedJob, setSelectedJob] = useState(null);
@@ -74,7 +76,7 @@ export default function AdminJobMonitoring({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [tick]);
 
   const handleBackPress = () => {
     if (onNavigate) {
@@ -175,7 +177,7 @@ export default function AdminJobMonitoring({ onNavigate }) {
           <View style={styles.placeholderButton} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
           {/* Search Section */}
           <View style={styles.searchSection}>
             <Text style={styles.searchLabel}>Search jobs</Text>
@@ -295,6 +297,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     // color: Colors.secondary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

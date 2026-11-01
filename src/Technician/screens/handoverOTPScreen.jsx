@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  TextInput,
   Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,12 +13,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import OtpInput from '../../Components/OtpInput';
+import { confirmAction } from '../../utils/appModal';
 
 export default function HandoverOTPScreen({ onNavigate }) {
   const activeJob = useSelector(state => state.jobSheet.activeJob);
@@ -27,7 +28,6 @@ export default function HandoverOTPScreen({ onNavigate }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(300); // 5 minutes in seconds
   const [isResendDisabled, setIsResendDisabled] = useState(true);
-  const otpRefs = useRef([]);
 
   useEffect(() => {
     if (timer > 0) {
@@ -46,33 +46,44 @@ export default function HandoverOTPScreen({ onNavigate }) {
     }
   };
 
-  const handleOTPChange = (text, index) => {
-    const newOtp = [...otp];
-    newOtp[index] = text;
-    setOtp(newOtp);
-
-    // Auto move to next input
-    if (text && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyPress = (e, index) => {
-    // Handle backspace
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      const newOtp = [...otp];
-      newOtp[index - 1] = '';
-      setOtp(newOtp);
-    }
-  };
-
   const isOTPComplete = otp.every((digit) => digit !== '');
 
-  const handleVerifyAndContinue = () => {
-    if (isOTPComplete) {
-      if (onNavigate) {
-        onNavigate('handoverCompleted');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+
+  // The server checks the OTP: POST verify_handoverotp { mobile, otp, customer_id }. An empty
+  // answer means the OTP is wrong.
+  const handleVerifyAndContinue = async () => {
+    if (!isOTPComplete || verifying) return;
+    const mobile = String((activeJob && activeJob.customer_mobile) || '').replace(/\D/g, '').slice(-10);
+    setVerifying(true);
+    setVerifyError('');
+    try {
+      const { response, data } = await postJson(ENDPOINTS.VERIFY_HANDOVER_OTP, {
+        mobile,
+        otp: otp.join(''),
+        customer_id: activeJob && activeJob.customer_id,
+      });
+      const accepted =
+        response.ok &&
+        data &&
+        data.success !== false &&
+        (Array.isArray(data.data) ? data.data.length > 0 : !!data.data);
+      if (!accepted) {
+        setVerifyError(
+          (data && data.success === false && (data.message || data.msg)) ||
+            'Incorrect OTP. Please check the code and try again.',
+        );
+        return;
       }
+    } catch (err) {
+      setVerifyError(err.message || 'Could not verify the OTP. Please try again.');
+      return;
+    } finally {
+      setVerifying(false);
+    }
+    if (onNavigate) {
+      onNavigate('replaceStack', { target: 'handoverCompleted', base: ['home', 'jobs'] });
     }
   };
 
@@ -110,8 +121,7 @@ export default function HandoverOTPScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -119,6 +129,8 @@ export default function HandoverOTPScreen({ onNavigate }) {
             <Text style={styles.headerTitle}>Handover OTP</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Content Section */}
           <View style={styles.content}>
@@ -129,27 +141,7 @@ export default function HandoverOTPScreen({ onNavigate }) {
             </Text>
 
             {/* OTP Input Fields */}
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(el) => (otpRefs.current[index] = el)}
-                  style={[
-                    styles.otpInput,
-                    digit && styles.otpInputFilled,
-                    index === 0 && otp[0] && styles.otpInputActive,
-                  ]}
-                  maxLength={1}
-                  keyboardType="numeric"
-                  value={digit}
-                  onChangeText={(text) => handleOTPChange(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  secureTextEntry={!!digit}
-                  placeholder="•"
-                  placeholderTextColor="#E5E7EB"
-                />
-              ))}
-            </View>
+            <OtpInput value={otp} onChange={setOtp} />
 
             {/* Timer and Resend */}
             <View style={styles.timerContainer}>
@@ -176,15 +168,25 @@ export default function HandoverOTPScreen({ onNavigate }) {
 
         {/* Verify Button */}
         <View style={styles.buttonContainer}>
+          {!!verifyError && (
+            <Text style={{ color: '#DC2626', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>{verifyError}</Text>
+          )}
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              !isOTPComplete && styles.verifyButtonDisabled,
+              (!isOTPComplete || verifying) && styles.verifyButtonDisabled,
             ]}
-            onPress={handleVerifyAndContinue}
-            disabled={!isOTPComplete}
+            onPress={() =>
+              confirmAction({
+                title: 'Confirm handover?',
+                message: 'Verify this OTP and hand the device over to the customer.',
+                confirmText: 'Verify & hand over',
+                onConfirm: handleVerifyAndContinue,
+              })
+            }
+            disabled={!isOTPComplete || verifying}
           >
-            <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            <Text style={styles.verifyButtonText}>{verifying ? 'Verifying…' : 'Verify & continue'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -200,8 +202,8 @@ const styles = StyleSheet.create({
   },
    header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -225,6 +227,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -251,33 +256,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-    justifyContent: 'space-between',
-  },
-  otpInput: {
-    flex: 1,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1F2937',
-    textAlign: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F0F4FF',
-  },
-  otpInputActive: {
-    borderColor: Colors.primary,
   },
   timerContainer: {
     marginBottom: 20,

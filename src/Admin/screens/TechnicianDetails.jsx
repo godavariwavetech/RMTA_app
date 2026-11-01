@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { Colors } from '../../Constants/Colors';
 
 const capitalize = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
@@ -68,8 +68,7 @@ export default function TechnicianDetails({ onNavigate, technician }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               onPress={handleBackPress}
@@ -80,6 +79,8 @@ export default function TechnicianDetails({ onNavigate, technician }) {
             <Text style={styles.headerTitle}>Technician Details</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Technician Card */}
           <View style={styles.cardContainer}>
@@ -208,6 +209,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: wp('10%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

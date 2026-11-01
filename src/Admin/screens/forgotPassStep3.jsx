@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { resetPassword } from '../../redux/slices/authSlice';
@@ -90,13 +90,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContentContainer}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -107,6 +101,13 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
               <Text style={styles.headerTitle}>New password</Text>
               <View style={styles.placeholderButton} />
             </View>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContentContainer}
+          >
+
 
             {/* Main Title */}
             <View style={styles.titleSection}>
@@ -118,7 +119,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
 
             {/* New Password Field */}
             <View style={styles.fieldSection}>
-              <Text style={styles.fieldLabel}>New password</Text>
+              <Text style={styles.fieldLabel}>New password <Text style={styles.required}>*</Text></Text>
               <View style={styles.passwordFieldContainer}>
                 <TextInput
                   style={styles.passwordInput}
@@ -147,7 +148,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
 
             {/* Confirm Password Field */}
             <View style={styles.fieldSection}>
-              <Text style={styles.fieldLabel}>Confirm new password</Text>
+              <Text style={styles.fieldLabel}>Confirm new password <Text style={styles.required}>*</Text></Text>
               <View style={styles.passwordFieldContainer}>
                 <TextInput
                   style={styles.passwordInput}
@@ -217,6 +218,9 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -250,6 +254,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     // color: Colors.secondary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

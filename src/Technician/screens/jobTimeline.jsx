@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 
 import { Colors } from '../../Constants/Colors';
 
@@ -67,8 +67,7 @@ export default function JobTimelineScreen({ onNavigate, initialTab = 'timeline' 
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -76,6 +75,8 @@ export default function JobTimelineScreen({ onNavigate, initialTab = 'timeline' 
             <Text style={styles.headerTitle}>Job Timeline</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Tab Navigation */}
           {/* <View style={styles.tabContainer}>
@@ -178,8 +179,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -201,6 +202,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

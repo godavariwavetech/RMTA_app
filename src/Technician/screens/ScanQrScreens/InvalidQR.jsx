@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
 
@@ -114,6 +114,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: Colors.primary,

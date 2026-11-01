@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "168898203655",
+    "project_id": "rmta-d474f",
+    "storage_bucket": "rmta-d474f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168898203655:android:c954bfb67df47765c79aa2",
+        "android_client_info": {
+          "package_name": "com.rmta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDRKPn4BcS70ZLBbBO1czTNcDBGRcbuwEg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

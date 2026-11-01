@@ -12,10 +12,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { Colors } from '../../../Constants/Colors';
+import { useI18n, LANGUAGES } from '../../../i18n';
 
 export default function IntroScreen({ onNavigate }) {
+  const { t, language } = useI18n();
   const handleGetStarted = () => {
     if (onNavigate) {
       onNavigate('login'); // Navigate to login screen
@@ -35,6 +37,11 @@ export default function IntroScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
+        <TouchableOpacity style={styles.languageButton} onPress={() => onNavigate && onNavigate('language')}>
+          <Text style={styles.languageButtonText}>
+            {t('language')} · {LANGUAGES.find(item => item.code === language)?.label || 'English'}
+          </Text>
+        </TouchableOpacity>
         
           {/* Content Container */}
           <View style={styles.contentContainer}>
@@ -49,8 +56,8 @@ export default function IntroScreen({ onNavigate }) {
 
             {/* Tagline Section */}
             <View style={styles.taglineSection}>
-              <Text style={styles.taglineMain}>Your craft.</Text>
-              <Text style={styles.taglineSecondary}>Our community.</Text>
+              <Text style={styles.taglineMain}>{t('taglineMain')}</Text>
+              <Text style={styles.taglineSecondary}>{t('taglineSecondary')}</Text>
             </View>
 
             {/* Organization Section */}
@@ -78,7 +85,7 @@ export default function IntroScreen({ onNavigate }) {
               style={styles.getStartedButton}
               onPress={handleGetStarted}
             >
-              <Text style={styles.getStartedButtonText}>Get started</Text>
+              <Text style={styles.getStartedButtonText}>{t('getStarted')}</Text>
             </TouchableOpacity>
 
             {/* Flow / Account Lock Link */}
@@ -100,6 +107,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.primary,
   },
+  languageButton: {
+    position: 'absolute',
+    top: hp('2%'),
+    right: wp('5%'),
+    zIndex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  languageButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   backgroundImage: {
     flex: 1,
     justifyContent: 'center',

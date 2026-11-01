@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,26 +11,53 @@ import {
   KeyboardAvoidingView,
   Platform,
   ImageBackground,
-  Alert,
+  ActivityIndicator,
+  Keyboard,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { Colors } from '../../../Constants/Colors';
+import { useI18n } from '../../../i18n';
 import { useDispatch } from 'react-redux';
 import { loginUser } from '../../../redux/slices/authSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+
+// The "Forgot password?" link is switched off for now.
+const SHOW_FORGOT_PASSWORD = false;
 
 export default function LoginScreen({ onNavigate, initialMode }) {
+  const { t } = useI18n();
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
+  const [loginError, setLoginError] = useState('');
+  const [messageModal, setMessageModal] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const passwordInput = useRef(null);
   // 'technician' or 'admin' — defaults to technician, but can be preselected
   // (e.g. RegisterScreen sends 'admin' when the account already exists).
   const [loginMode, setLoginMode] = useState(initialMode || 'technician');
 
   const dispatch = useDispatch();
+
+  const showMessageModal = (title, message, action) => {
+    setMessageModal({ title, message, action });
+  };
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const handleBackPress = () => {
     if (loginMode === 'admin') {
@@ -54,10 +81,12 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
   const handleAdminLogin = () => {
     setLoginMode('admin');
+    setLoginError('');
   };
 
   const handleTechnicianLogin = () => {
     setLoginMode('technician');
+    setLoginError('');
   };
 
   const handleRegister = () => {
@@ -68,34 +97,60 @@ export default function LoginScreen({ onNavigate, initialMode }) {
   };
 
   const handleSignIn = async () => {
-    if (!onNavigate) return;
+    if (!onNavigate || isSubmitting) return;
+    Keyboard.dismiss();
+    setLoginError('');
 
-    // Validate inputs
-    if (!mobileNumber.trim() || !password.trim()) {
-      alert('Please enter mobile number and password');
+    const errors = {};
+    if (!mobileNumber.trim()) {
+      errors.mobileNumber = 'Mobile number is required.';
+    } else if (!isValidIndianMobileNumber(mobileNumber)) {
+      errors.mobileNumber = 'Enter a valid 10-digit Indian mobile number.';
+    }
+    if (!password.trim()) {
+      errors.password = 'Password is required.';
+    }
+
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      showMessageModal('Check your details', Object.values(errors).join('\n'));
       return;
     }
 
     // user_ind: 1 = admin login, 0 = technician login
     const user_ind = loginMode === 'admin' ? 1 : 0;
+    console.log('[Login] Submitting account type:', user_ind === 1 ? 'admin' : 'technician');
 
-    const result = await dispatch(
-      loginUser({ user_ind, mobile: mobileNumber.trim(), password }),
-    );
+    setIsSubmitting(true);
+    let result;
+    try {
+      result = await dispatch(
+        loginUser({ user_ind, mobile: normalizeMobileNumber(mobileNumber), password }),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
 
     if (loginUser.fulfilled.match(result)) {
-      // const status = result.payload && result.payload.membership_status;
-      const status = 'active';
+      const status = String(result.payload?.membership_status || '').toLowerCase();
       if (status === 'pending') {
         // Account exists but an admin hasn't approved it yet.
         onNavigate('statusPending');
       } else if (status === 'active') {
-        // Approved → into the app.
-        onNavigate(loginMode === 'admin' ? 'adminHome' : 'home');
+        // Admin and technician accounts use the same app home screen.
+        onNavigate('home');
       } else {
         // expired / suspended / rejected / unknown
-        alert(
-          `Your account is "${status || 'inactive'}". Please contact the administrator.`,
+        setLoginError(
+          status
+            ? `Your account is "${status}". Please contact the administrator.`
+            : 'We could not verify your account status. Please try again or contact the RMTA administrator.',
+        );
+        showMessageModal(
+          'Unable to sign in',
+          status
+            ? `Your account is "${status}". Please contact the administrator.`
+            : 'We could not verify your account status. Please try again or contact the RMTA administrator.',
         );
       }
     } else {
@@ -106,22 +161,20 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
       if (notFound && loginMode === 'admin') {
         // Non-existing admin number → prompt them to register.
-        Alert.alert(
+        showMessageModal(
           'No account found',
           "You don't have an account. Register now.",
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Register',
-              onPress: () => onNavigate('register', { user_ind: 1 }),
-            },
-          ],
+          {
+            label: 'Register',
+            onPress: () => onNavigate('register', { user_ind: 1 }),
+          },
         );
       } else {
         // Wrong password, server error, or network/timeout.
         const message =
           (payload && payload.message) || 'Login failed. Please try again.';
-        alert(message);
+        setLoginError(message);
+        showMessageModal('Sign in failed', message);
       }
     }
   };
@@ -136,14 +189,10 @@ export default function LoginScreen({ onNavigate, initialMode }) {
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -152,10 +201,18 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                 <Text style={styles.backButtonText}>‹</Text>
               </TouchableOpacity>
               <Text style={styles.headerTitle}>
-                {loginMode === 'admin' ? 'Admin access' : 'Welcome to RMTA'}
+                {loginMode === 'admin' ? t('adminAccess') : t('welcomeToRmta')}
               </Text>
               <View style={styles.placeholderButton} />
             </View>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={styles.scrollContent}
+            style={styles.scrollView}
+          >
+
 
             {/* Welcome Card */}
             <View style={styles.welcomeCard}>
@@ -166,7 +223,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
               >
                 {/* Overlay for better text visibility */}
                 <View style={styles.welcomeCardOverlay} />
-                
+
                 <View style={styles.welcomeCardTextContainer}>
                   <Image
                     source={require('../../../Assets/images/appLogo.png')}
@@ -175,13 +232,13 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   />
                   <Text style={styles.welcomeTitle}>
                     {loginMode === 'admin'
-                      ? 'Manage with confidence.'
-                      : 'Welcome back.'}
+                      ? t('manageWithConfidence')
+                      : t('welcomeBack')}
                   </Text>
                   <Text style={styles.welcomeSubtitle}>
                     {loginMode === 'admin'
-                      ? 'Secure access for RMTA administrators.'
-                      : 'Your shop, jobs and membership. All in one place.'}
+                      ? t('adminSecure')
+                      : t('shopJobsMembership')}
                   </Text>
                 </View>
               </ImageBackground>
@@ -196,6 +253,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   loginMode === 'technician' && styles.modeButtonSelected,
                 ]}
                 onPress={handleTechnicianLogin}
+                disabled={isSubmitting}
                 activeOpacity={0.8}
               >
                 <Text
@@ -204,7 +262,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                     loginMode === 'technician' && styles.modeButtonTextSelected,
                   ]}
                 >
-                  Technician login
+                  {t('technicianLogin')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -213,6 +271,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   loginMode === 'admin' && styles.modeButtonSelected,
                 ]}
                 onPress={handleAdminLogin}
+                disabled={isSubmitting}
                 activeOpacity={0.8}
               >
                 <Text
@@ -221,37 +280,58 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                     loginMode === 'admin' && styles.modeButtonTextSelected,
                   ]}
                 >
-                  Admin login
+                  {t('adminLogin')}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
+              <Text style={styles.fieldLabel}>{t('mobileNumber')} <Text style={styles.required}>*</Text></Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
-                  placeholder="+91 98765 43210"
+                  placeholder="98765 43210"
                   placeholderTextColor="#999999"
                   value={mobileNumber}
-                  onChangeText={setMobileNumber}
+                  onChangeText={text => {
+                    setMobileNumber(normalizeMobileNumber(text));
+                    setLoginError('');
+                    if (validationErrors.mobileNumber) {
+                      setValidationErrors(current => ({ ...current, mobileNumber: undefined }));
+                    }
+                  }}
                   keyboardType="phone-pad"
+                  maxLength={10}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordInput.current?.focus()}
                 />
               </View>
+              {!!validationErrors.mobileNumber && (
+                <Text style={styles.validationError}>{validationErrors.mobileNumber}</Text>
+              )}
             </View>
 
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Password</Text>
+              <Text style={styles.fieldLabel}>{t('password')} <Text style={styles.required}>*</Text></Text>
               <View style={styles.inputWrapper}>
                 <TextInput
+                  ref={passwordInput}
                   style={styles.input}
-                  placeholder="Enter password"
+                  placeholder={t('enterPassword')}
                   placeholderTextColor="#999999"
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={text => {
+                    setPassword(text);
+                    setLoginError('');
+                    if (validationErrors.password) {
+                      setValidationErrors(current => ({ ...current, password: undefined }));
+                    }
+                  }}
                   secureTextEntry={!isPasswordVisible}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSignIn}
                 />
                 <TouchableOpacity
                   onPress={() => setIsPasswordVisible(!isPasswordVisible)}
@@ -268,16 +348,22 @@ export default function LoginScreen({ onNavigate, initialMode }) {
                   />
                 </TouchableOpacity>
               </View>
+              {!!validationErrors.password && (
+                <Text style={styles.validationError}>{validationErrors.password}</Text>
+              )}
             </View>
+            {!!loginError && <Text style={styles.loginError}>{loginError}</Text>}
 
-            {/* Forgot Password — plain text link (not a button) */}
-            <TouchableOpacity
-              style={styles.forgotPasswordContainer}
-              onPress={handleForgotPassword}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
+            {/* Forgot Password — plain text link (hidden for now; set SHOW_FORGOT_PASSWORD to true to bring it back) */}
+            {SHOW_FORGOT_PASSWORD && (
+              <TouchableOpacity
+                style={styles.forgotPasswordContainer}
+                onPress={handleForgotPassword}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Register link — Admin tab only. Technicians don't self-register;
                an admin creates their account, then they log in from the
@@ -290,28 +376,77 @@ export default function LoginScreen({ onNavigate, initialMode }) {
               >
                 <Text style={styles.registerLinkText}>
                   Don't have an account?{' '}
-                  <Text style={styles.registerLinkHighlight}>Register</Text>
+                  <Text style={styles.registerLinkHighlight}>{t('register')}</Text>
                 </Text>
               </TouchableOpacity>
             )}
           </ScrollView>
 
           {/* Footer with Sign In Button */}
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.signInButton}
-              onPress={handleSignIn}
-            >
-              <Text style={styles.signInButtonText}>Sign in</Text>
-            </TouchableOpacity>
-          </View>
+          {!(Platform.OS === 'android' && keyboardVisible) && (
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={styles.signInButton}
+                onPress={handleSignIn}
+                disabled={isSubmitting}
+                activeOpacity={0.85}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.signInButtonText}>{t('signIn')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <Modal
+        visible={!!messageModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setMessageModal(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{messageModal?.title}</Text>
+            <Text style={styles.modalMessage}>{messageModal?.message}</Text>
+            <View style={styles.modalActions}>
+              {messageModal?.action && (
+                <TouchableOpacity
+                  style={styles.modalSecondaryButton}
+                  onPress={() => setMessageModal(null)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.modalPrimaryButton}
+                onPress={() => {
+                  const action = messageModal?.action;
+                  setMessageModal(null);
+                  action?.onPress();
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalPrimaryText}>
+                  {messageModal?.action?.label || 'OK'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -323,9 +458,13 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: hp('2%'),
+  },
   header: {
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('1.5%'),
+    paddingHorizontal: wp('5%'),
+    paddingVertical: hp('1%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -336,12 +475,15 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1%'),
   },
   backButtonText: {
-    fontSize: wp('10%'),
-    // color: '#5B8DEE',
-    fontWeight: '300',
+    fontSize: wp('9%'),
+    color: '#1F2937',
+    fontWeight: '400',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
-    fontSize: wp('5%'),
+    fontSize: wp('4.8%'),
     fontWeight: '700',
     color: '#1F2937',
     flex: 1,
@@ -351,8 +493,9 @@ const styles = StyleSheet.create({
     width: wp('8%'),
   },
   welcomeCard: {
-    marginHorizontal: wp('4%'),
-    marginVertical: hp('2%'),
+    marginHorizontal: wp('5%'),
+    marginTop: hp('1.5%'),
+    marginBottom: hp('2.5%'),
     borderRadius: wp('4%'),
     overflow: 'hidden',
     elevation: 2,
@@ -363,8 +506,8 @@ const styles = StyleSheet.create({
   },
   welcomeCardContent: {
     backgroundColor: Colors.primary,
-    paddingVertical: hp('3%'),
-    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('2.8%'),
+    paddingHorizontal: wp('5%'),
     position: 'relative',
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
@@ -388,47 +531,126 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1%'),
   },
   welcomeLogo: {
-    width: wp('20%'),
-    height: hp('10%'),
+    width: wp('17%'),
+    height: hp('8%'),
     marginBottom: hp('1%'),
   },
   welcomeTitle: {
-    fontSize: wp('6%'),
+    fontSize: wp('5.6%'),
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: hp('0.5%'),
   },
   welcomeSubtitle: {
-    fontSize: wp('3.5%'),
+    fontSize: wp('3.6%'),
     fontWeight: '400',
     color: '#FFFFFF',
     // textAlign: 'center',
-    lineHeight: hp('2.3%'),
+    lineHeight: hp('2.5%'),
   },
   fieldContainer: {
-    marginHorizontal: wp('4%'),
-    marginVertical: hp('1.5%'),
+    marginHorizontal: wp('5%'),
+    marginVertical: hp('1.2%'),
   },
   fieldLabel: {
-    fontSize: wp('3.5%'),
+    fontSize: wp('3.7%'),
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: hp('0.8%'),
+    marginBottom: hp('0.7%'),
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: wp('2.5%'),
+    borderRadius: wp('3%'),
     backgroundColor: '#FFFFFF',
     paddingHorizontal: wp('3%'),
   },
   input: {
     flex: 1,
-    paddingVertical: hp('1.5%'),
-    fontSize: wp('3.8%'),
+    paddingVertical: hp('1.35%'),
+    fontSize: wp('4%'),
     color: '#1F2937',
+  },
+  validationError: {
+    color: '#DC2626',
+    fontSize: wp('3.2%'),
+    marginTop: hp('0.5%'),
+  },
+  loginError: {
+    color: '#B42318',
+    backgroundColor: '#FEF3F2',
+    borderColor: '#FECDCA',
+    borderWidth: 1,
+    borderRadius: wp('2.5%'),
+    paddingHorizontal: wp('3.5%'),
+    paddingVertical: hp('1%'),
+    marginHorizontal: wp('5%'),
+    marginTop: hp('0.3%'),
+    fontSize: wp('3.4%'),
+    lineHeight: hp('2.2%'),
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: wp('7%'),
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: wp('4%'),
+    paddingHorizontal: wp('5%'),
+    paddingTop: hp('2.5%'),
+    paddingBottom: hp('2%'),
+    elevation: 10,
+  },
+  modalTitle: {
+    color: '#1F2937',
+    fontSize: wp('4.8%'),
+    fontWeight: '700',
+    marginBottom: hp('1%'),
+  },
+  modalMessage: {
+    color: '#4B5563',
+    fontSize: wp('3.8%'),
+    lineHeight: hp('2.6%'),
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: wp('2.5%'),
+    marginTop: hp('2.5%'),
+  },
+  modalPrimaryButton: {
+    minWidth: wp('22%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.2%'),
+    borderRadius: wp('2.5%'),
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+  },
+  modalPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: wp('3.7%'),
+    fontWeight: '700',
+  },
+  modalSecondaryButton: {
+    minWidth: wp('22%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.2%'),
+    borderRadius: wp('2.5%'),
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  modalSecondaryText: {
+    color: '#4B5563',
+    fontSize: wp('3.7%'),
+    fontWeight: '600',
   },
   eyeIcon: {
     padding: wp('2%'),
@@ -442,8 +664,8 @@ const styles = StyleSheet.create({
   },
   modeToggleContainer: {
     flexDirection: 'row',
-    marginHorizontal: wp('4%'),
-    marginTop: hp('1%'),
+    marginHorizontal: wp('5%'),
+    marginTop: hp('0.5%'),
     marginBottom: hp('0.5%'),
     gap: wp('3%'),
   },
@@ -480,14 +702,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   registerLinkContainer: {
-    marginHorizontal: wp('4%'),
-    // marginTop: hp('1.8%'),
+    marginHorizontal: wp('5%'),
+    marginTop: hp('1.5%'),
     alignItems: 'center',
     justifyContent: 'flex-end',
     position: 'relative',
     top: 0,
-    height: hp('10%'),
-    // backgroundColor :'#ffff'
+    minHeight: hp('6%'),
   },
   registerLinkText: {
     fontSize: wp('3.5%'),
@@ -537,15 +758,16 @@ const styles = StyleSheet.create({
     height: hp('2%'),
   },
   footer: {
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('5%'),
+    paddingTop: hp('1.4%'),
+    paddingBottom: hp('2%'),
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
   signInButton: {
-    paddingVertical: hp('1.6%'),
-    borderRadius: wp('2.5%'),
+    paddingVertical: hp('1.7%'),
+    borderRadius: wp('3%'),
     backgroundColor: Colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -556,7 +778,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   signInButtonText: {
-    fontSize: wp('4.2%'),
+    fontSize: wp('4.1%'),
     fontWeight: '700',
     color: '#FFFFFF',
   },

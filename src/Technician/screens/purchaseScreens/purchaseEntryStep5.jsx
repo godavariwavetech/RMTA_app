@@ -8,27 +8,24 @@ import {
   Image,
   StatusBar,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import StepNav from '../../../Components/StepNav';
 
 const MAX_PHOTOS = 3;
 
 export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData, imeiData, ceirVerified }) {
   const dispatch = useDispatch();
-  const user = useSelector(state => state.auth.user) || {};
   const draftCondition = useSelector(state => state.purchase.draft.condition);
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
   const [condition, setCondition] = useState(
@@ -42,14 +39,36 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     },
   );
 
-  // Up to 3 condition photos: { uri, file_id, uploading }. Restore from draft.
+  // Up to 3 condition photos: { uri, base64 }. They are sent as
+  // create_purchase's backimage. Restore from draft.
   const [photos, setPhotos] = useState(
     Array.isArray(draftConditionPhotos)
       ? draftConditionPhotos
-          .filter(p => p && p.file_id)
-          .map(p => ({ uri: p.uri || null, file_id: p.file_id, uploading: false }))
+          .filter(p => p && p.base64)
+          .map(p => ({ uri: p.uri || null, base64: p.base64 }))
       : [],
   );
+
+  // Photo of the bill / receipt: { uri, base64 }, sent as create_purchase's
+  // `billimage` next to the front and back images.
+  const draftBillImage = useSelector(state => state.purchase.draft.billImage);
+  const [billImage, setBillImage] = useState(draftBillImage || null);
+
+  const handlePickBill = () => {
+    chooseImageSource(
+      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
+          return;
+        }
+        const asset = response.assets && response.assets[0];
+        if (!asset || !asset.base64) return;
+        setBillImage({ uri: asset.uri, base64: asset.base64 });
+      },
+    );
+  };
 
   const handleConditionSelect = (category, value) => {
     setCondition(prev => ({
@@ -58,52 +77,25 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     }));
   };
 
-  const uploadOne = async asset => {
-    setPhotos(prev => [...prev, { uri: asset.uri, uploading: true }]);
-    try {
-      const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-        base64: asset.base64,
-        mime_type: asset.type || 'image/jpeg',
-        original_name: asset.fileName || 'condition.jpg',
-        uploaded_by: user.user_id,
-      });
-      if (res.ok && data && data.success !== false) {
-        setPhotos(prev =>
-          prev.map(p =>
-            p.uri === asset.uri ? { ...p, file_id: data.data.file_id, uploading: false } : p,
-          ),
-        );
-      } else {
-        setPhotos(prev => prev.map(p => (p.uri === asset.uri ? { ...p, uploading: false } : p)));
-        Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-      }
-    } catch (err) {
-      setPhotos(prev => prev.map(p => (p.uri === asset.uri ? { ...p, uploading: false } : p)));
-      Alert.alert('Upload failed', err.message);
-    }
-  };
-
   const handlePickPhotos = () => {
     const remaining = MAX_PHOTOS - photos.length;
     if (remaining <= 0) {
       Alert.alert('Limit reached', `You can upload up to ${MAX_PHOTOS} photos.`);
       return;
     }
-    launchImageLibrary(
+    chooseImageSource(
       { mediaType: 'photo', includeBase64: true, quality: 0.7, selectionLimit: remaining },
-      async response => {
+      response => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
           return;
         }
-        const assets = (response.assets || []).slice(0, remaining);
-        for (const asset of assets) {
-          if (asset && asset.base64) {
-            // eslint-disable-next-line no-await-in-loop
-            await uploadOne(asset);
-          }
-        }
+        const assets = (response.assets || []).slice(0, remaining).filter(a => a && a.base64);
+        setPhotos(prev => [
+          ...prev,
+          ...assets.map(asset => ({ uri: asset.uri, base64: asset.base64 })),
+        ]);
       },
     );
   };
@@ -112,14 +104,13 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Keep only uploaded photos (file_id); keep uri for the revisit preview.
+  // Keep the local uri too so the previews show when revisiting this step.
   const buildConditionPhotos = () =>
-    photos.filter(p => p && p.file_id).map(p => ({ file_id: p.file_id, uri: p.uri || null }));
+    photos.filter(p => p && p.base64).map(p => ({ base64: p.base64, uri: p.uri || null }));
 
   const handleContinue = () => {
     const conditionPhotos = buildConditionPhotos();
-    console.log('[Purchase][Step5] condition captured →', condition, conditionPhotos);
-    dispatch(updatePurchaseDraft({ condition: condition, conditionPhotos: conditionPhotos }));
+    dispatch(updatePurchaseDraft({ condition: condition, conditionPhotos: conditionPhotos, billImage }));
     if (onNavigate) {
       onNavigate('purchaseEntryStep6', {
         sellerData: sellerData,
@@ -133,16 +124,16 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
   const handleBackPress = () => {
     dispatch(
-      updatePurchaseDraft({ condition: condition, conditionPhotos: buildConditionPhotos() }),
+      updatePurchaseDraft({ condition: condition, conditionPhotos: buildConditionPhotos(), billImage }),
     );
     if (onNavigate) {
-      onNavigate('purchaseEnterStep4');
+      onNavigate('goBack');
     }
   };
 
-  const completedSteps = 5;
+  const completedSteps = 4;
 
-  const screenOptions = ['Good', 'Damaged', 'Cracked'];
+  const screenOptions = ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'];
   const bodyOptions = ['Good', 'Scratched', 'Damaged'];
   const workingOptions = ['Working', 'Not working'];
   const batteryOptions = ['Good', 'Weak', 'Damaged'];
@@ -155,8 +146,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -164,15 +154,17 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
             <Text style={styles.headerTitle}>Device Condition</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · CONDITION</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · CONDITION</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '62.5%' }]} />
+            <View style={[styles.progressBar, { width: '57.1%' }]} />
           </View>
 
           {/* Form Content */}
@@ -348,17 +340,12 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
               {photos.length > 0 && (
                 <View style={styles.thumbRow}>
                   {photos.map((photo, index) => (
-                    <View key={photo.uri || photo.file_id || index} style={styles.thumbWrapper}>
+                    <View key={photo.uri || index} style={styles.thumbWrapper}>
                       {photo.uri ? (
                         <Image source={{ uri: photo.uri }} style={styles.thumb} />
                       ) : (
                         <View style={[styles.thumb, styles.thumbPlaceholder]}>
                           <Text style={styles.thumbPlaceholderText}>✓</Text>
-                        </View>
-                      )}
-                      {photo.uploading && (
-                        <View style={styles.thumbOverlay}>
-                          <ActivityIndicator size="small" color="#FFFFFF" />
                         </View>
                       )}
                       <TouchableOpacity
@@ -386,18 +373,48 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
               )}
             </View>
 
+            {/* Bill image */}
+            <View style={styles.conditionGroup}>
+              <Text style={styles.conditionLabel}>Bill image</Text>
+
+              {billImage ? (
+                <View style={styles.thumbRow}>
+                  <View style={styles.thumbWrapper}>
+                    <Image source={{ uri: billImage.uri }} style={styles.thumb} />
+                    <TouchableOpacity
+                      style={styles.thumbRemove}
+                      onPress={() => setBillImage(null)}
+                    >
+                      <Text style={styles.thumbRemoveText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.photoUploadContainer} onPress={handlePickBill}>
+                  <Image
+                    source={require('../../../Assets/icons/camera.png')}
+                    style={styles.cameraIcon}
+                  />
+                  <Text style={styles.photoUploadTitle}>Add bill photo</Text>
+                  <Text style={styles.photoUploadSubtitle}>JPG or PNG</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <View style={styles.bottomSpacer} />
           </View>
         </ScrollView>
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>
@@ -411,8 +428,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -434,6 +451,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -561,7 +581,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   thumbOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
     borderRadius: wp('2%'),
     justifyContent: 'center',

@@ -15,55 +15,63 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { resetPurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import StepNav from '../../../Components/StepNav';
+import { istDateTime } from '../../../utils/istDate';
 
 export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData }) {
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
+  const draftBillImage = useSelector(state => state.purchase.draft.billImage);
   const [submitting, setSubmitting] = useState(false);
 
-  // Collapse all the screens' data into the payload the backend expects.
-  const buildPayload = () => ({
-    member_id: user.member_id,
-    created_by: user.user_id,
-    seller: {
-      full_name: sellerData?.sellerName || '',
-      mobile: sellerData?.sellerMobile || '',
-      aadhaar_last4: String(sellerData?.aadhaarNumber || '').replace(/\D/g, '').slice(-4) || null,
-      address: sellerData?.address || null,
-      photo_file_id: (sellerData?.sellerPhoto && sellerData.sellerPhoto.file_id) || null,
-    },
-    device: {
-      brand: deviceData?.deviceBrand || '',
-      model: deviceData?.deviceModel || '',
-      storage: deviceData?.storage || null,
-      color: deviceData?.color || null,
-      photo_file_id: (deviceData?.devicePhoto && deviceData.devicePhoto.file_id) || null,
-    },
-    imei: { imei: imeiData?.imei || '', verified: !!(imeiData && imeiData.verified) },
-    ceir_verified: !!ceirVerified,
-    condition: conditionData || {},
-    condition_photos: Array.isArray(draftConditionPhotos)
-      ? draftConditionPhotos.filter(p => p && p.file_id).map(p => ({ file_id: p.file_id }))
-      : [],
-    price: {
-      purchase_price: priceData?.purchasePrice || '0',
-      payment_mode: priceData?.paymentMode || 'Cash',
-      transaction_ref: priceData?.transactionId || null,
-    },
-  });
+  // Collapse all the screens' data into the flat payload create_purchase expects.
+  const buildPayload = () => {
+    const now = new Date().toISOString();
+    const conditionPhotos = Array.isArray(draftConditionPhotos) ? draftConditionPhotos : [];
+    return {
+      member_id: user.member_id,
+      seller_id: sellerData?.customer_id || null,
+      device_brand: deviceData?.deviceBrand || '',
+      device_model: deviceData?.deviceModel || '',
+      imei1: imeiData?.imei || '',
+      imei2: imeiData?.imei2 || '',
+      // "YYYY-MM-DD HH:mm:ss" in India time: when the IMEI was verified on step 3.
+      imeiverified_date: imeiData?.verifiedAt || istDateTime(),
+      color: deviceData?.color || '',
+      storage: deviceData?.storage || '',
+      screen: conditionData?.screen || '',
+      body: conditionData?.body || '',
+      camera: conditionData?.camera || '',
+      speaker: conditionData?.speaker || '',
+      chargingport: conditionData?.chargingPort || '',
+      batterey: conditionData?.battery || '',
+      // frontimage = step 2's device photo, backimage = step 5's first
+      // condition photo — both sent as raw base64. Keep the full batch too so
+      // the API can store every condition photo when its schema supports it.
+      frontimage: (deviceData?.devicePhoto && deviceData.devicePhoto.base64) || null,
+      backimage: (conditionPhotos[0] && conditionPhotos[0].base64) || null,
+      condition_images: conditionPhotos.map(photo => photo.base64).filter(Boolean),
+      // Photo of the bill / receipt added on step 6, raw base64.
+      billimage: (draftBillImage && draftBillImage.base64) || null,
+      purchaseprice: priceData?.purchasePrice || '0',
+      paymentmode: priceData?.paymentMode || 'Cash',
+      transactionid: priceData?.transactionId || '',
+      purchase_date: now,
+      created_date: now,
+    };
+  };
 
   const handleCompletePurchase = async () => {
     if (submitting) return;
     const payload = buildPayload();
-    console.log('[Purchase][Step7] submitting full payload →', JSON.stringify(payload, null, 2));
     setSubmitting(true);
     try {
       const { response, data } = await postJson(ENDPOINTS.CREATE_PURCHASE, payload);
@@ -72,12 +80,16 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
         Alert.alert('Could not complete purchase', (data && data.message) || 'Please try again.');
         return;
       }
-      console.log('[Purchase][Step7] created ✓ →', data.data);
+      // Unwrap in case this endpoint also wraps the record in an array.
+      const purchase = Array.isArray(data.data) ? data.data[0] : data.data;
       dispatch(resetPurchaseDraft());
       if (onNavigate) {
-        onNavigate('purchaseEntryStep8', {
-          sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData,
-          purchase: data.data,
+        onNavigate('replaceStack', {
+          target: 'purchaseEntryStep8',
+          screenParams: {
+            sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData,
+            purchase,
+          },
         });
       }
     } catch (err) {
@@ -88,11 +100,11 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('purchaseEntryStep6');
+      onNavigate('goBack');
     }
   };
 
-  const completedSteps = 7;
+  const completedSteps = 6;
 
   // Prepare display data
   const deviceBrand = deviceData?.deviceBrand || 'Device';
@@ -119,8 +131,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -128,15 +139,17 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
             <Text style={styles.headerTitle}>Review Purchase</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · REVIEW</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · REVIEW</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '87.5%' }]} />
+            <View style={[styles.progressBar, { width: '85.7%' }]} />
           </View>
 
           {/* Device Image Section */}
@@ -184,6 +197,13 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
                 <Text style={styles.summaryValue}>{imei}</Text>
               </View>
 
+              {!!imeiData?.imei2 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>IMEI 2</Text>
+                  <Text style={styles.summaryValue}>{imeiData.imei2}</Text>
+                </View>
+              )}
+
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Purchase price</Text>
                 <Text style={styles.summaryValue}>₹{purchasePrice}</Text>
@@ -220,6 +240,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
         {/* Complete Purchase Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.completeButton}
             onPress={handleCompletePurchase}
@@ -231,6 +252,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
               <Text style={styles.completeButtonText}>Complete purchase</Text>
             )}
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>
@@ -244,8 +266,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -267,6 +289,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

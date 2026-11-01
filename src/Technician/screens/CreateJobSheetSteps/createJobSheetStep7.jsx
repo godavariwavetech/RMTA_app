@@ -14,11 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { formatDisplayDate } from '../../../Components/DatePickerModal';
 import { Colors } from '../../../Constants/Colors';
 import { createJobSheet } from '../../../redux/slices/jobSheetSlice';
+import StepNav from '../../../Components/StepNav';
 
 export default function CreateJobSheetStep7({ onNavigate }) {
   const dispatch = useDispatch();
@@ -41,7 +43,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
   const complaint = repair.problem_description || '—';
   const estimate = repair.estimated_cost || '—';
-  const delivery = repair.estimated_delivery_text || '—';
+  const delivery = formatDisplayDate(repair.estimated_delivery_text) || repair.estimated_delivery_text || '—';
 
   // Prefer a real uploaded photo for the preview; fall back to the sample image.
   const allPhotos = [
@@ -55,47 +57,61 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('createJobSheetStep6');
+      onNavigate('goBack');
     }
   };
 
   const handleCreateJobSheet = async () => {
     if (submitting) return;
-    // Submit the full draft collected across steps 1–5, plus who's creating it.
-    // Device photos come from two steps: condition photos (step 3) and the
-    // front/back/damage set (step 6). Merge both into the single `photos` array
-    // the backend expects.
+
+    // The backend's condition_checks component names (step 3) → the flat
+    // screen/body/camera/speaker/chargingpoint/batterey fields it expects here.
+    const conditions = Array.isArray(draft.conditions) ? draft.conditions : [];
+    const conditionValue = component =>
+      (conditions.find(c => c && c.component === component) || {}).condition_value || '';
+
+    // Step 3 captures exactly one photo per category — front/back/damage map
+    // 1:1 onto frontimage/backimage/damageimage, sent as raw base64.
+    const photos = Array.isArray(draft.photos) ? draft.photos : [];
+    const photoBase64 = type => (photos.find(p => p && p.photo_type === type) || {}).base64 || null;
+
+    const access = draft.access || {};
+
     const payload = {
-      ...draft,
-      photos: [
-        ...(Array.isArray(draft.photos) ? draft.photos : []),
-        ...(Array.isArray(draft.conditionPhotos) ? draft.conditionPhotos : []),
-      ],
       member_id: user.member_id,
-      created_by: user.user_id,
+      customer_id: customer.customer_id || null,
+      device_brand: device.brand || '',
+      device_model: device.model || '',
+      imei1: device.imei1 || '',
+      imei2: device.imei2 || '',
+      color: device.color || '',
+      storage: device.storage || '',
+      screen: conditionValue('screen'),
+      body: conditionValue('body'),
+      camera: conditionValue('camera'),
+      speaker: conditionValue('speaker'),
+      chargingpoint: conditionValue('charging_port'),
+      batterey: conditionValue('battery'),
+      repair_category: repair.category || '',
+      problem_description: repair.problem_description || '',
+      estimated_cost: repair.estimated_cost || '',
+      estimated_delivery: repair.estimated_delivery_text || '',
+      devicelock: access.lock_type && access.lock_type !== 'none' ? access.unlock_value || '' : '',
+      frontimage: photoBase64('front'),
+      backimage: photoBase64('back'),
+      damageimage: photoBase64('damage'),
     };
-    delete payload.conditionPhotos;
-    console.log('[JobSheet][Step7] submitting full payload →', JSON.stringify(payload, null, 2));
     setSubmitting(true);
     const result = await dispatch(createJobSheet(payload));
     setSubmitting(false);
 
     if (createJobSheet.fulfilled.match(result)) {
-      console.log('[JobSheet][Step7] created ✓ →', result.payload);
-      onNavigate('createJobSheetStep8', { job: result.payload });
+      onNavigate('resetTo', { target: 'jobs' });
     } else {
-      console.log('[JobSheet][Step7] create FAILED →', result.payload);
       const message =
         (result.payload && result.payload.message) ||
         'Could not create the job sheet. Please try again.';
       alert(message);
-    }
-  };
-
-  const handleEditDetails = () => {
-    // Navigate back to edit customer details
-    if (onNavigate) {
-      onNavigate('createJobSheetStep1');
     }
   };
 
@@ -107,8 +123,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -116,15 +131,17 @@ export default function CreateJobSheetStep7({ onNavigate }) {
             <Text style={styles.headerTitle}>Review Job Sheet</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 7 OF 8 · REVIEW</Text>
+            <Text style={styles.stepText}>STEP 6 OF 7 · REVIEW</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '87.5%' }]} />
+            <View style={[styles.progressBar, { width: '85.71%' }]} />
           </View>
 
           {/* Device Reference Image */}
@@ -191,17 +208,13 @@ export default function CreateJobSheetStep7({ onNavigate }) {
               </View>
             </View>
 
-            {/* Edit Details Button */}
-            <TouchableOpacity style={styles.editButton} onPress={handleEditDetails}>
-              <Text style={styles.editButtonText}>Edit customer details</Text>
-            </TouchableOpacity>
-
             <View style={styles.bottomSpacer} />
           </View>
         </ScrollView>
 
         {/* Create Job Sheet Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.createButton}
             onPress={handleCreateJobSheet}
@@ -213,6 +226,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
               <Text style={styles.createButtonText}>Create job sheet</Text>
             )}
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>
@@ -227,8 +241,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -252,6 +266,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -396,27 +413,6 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#E5E7EB',
-  },
-  editButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#9CA3AF',
   },
   bottomSpacer: {
     height: 24,

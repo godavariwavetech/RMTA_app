@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
 
@@ -67,18 +67,19 @@ export default function ExportReport({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.headerSection}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Export Confirmation</Text>
           </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Main Content */}
           <View style={styles.mainContent}>
@@ -212,6 +213,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('7%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   pageTitle: {
     fontSize: wp('5%'),

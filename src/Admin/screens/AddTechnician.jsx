@@ -17,10 +17,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { addTechnician } from '../../redux/slices/techniciansSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../utils/mobileValidation';
 
 // Admin-only screen to add a technician. Collects the same profile details as
 // admin registration (RegisterScreen) plus an active/inactive status. Posts to
@@ -28,6 +29,7 @@ import { addTechnician } from '../../redux/slices/techniciansSlice';
 // active) so the technician can immediately log in via the Technician tab with
 // the mobile + password the admin sets here.
 export default function AddTechnician({ onNavigate }) {
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
 
   const [form, setForm] = useState({
@@ -68,6 +70,7 @@ export default function AddTechnician({ onNavigate }) {
       confirmPassword,
     } = form;
 
+    setTried(true);
     // Validate required inputs (mirrors RegisterScreen).
     if (
       !fullName.trim() ||
@@ -84,8 +87,8 @@ export default function AddTechnician({ onNavigate }) {
     }
 
     const mobile = mobileNumber.replace(/\D/g, '');
-    if (mobile.length < 10) {
-      alert('Please enter a valid mobile number');
+    if (!isValidIndianMobileNumber(mobile)) {
+      alert('Please enter a valid 10-digit Indian mobile number');
       return;
     }
     if (password.length < 6) {
@@ -164,8 +167,8 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Full Name */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Full name</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Full name <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.fullName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Technician name"
@@ -179,24 +182,24 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Mobile Number */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Mobile number <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.mobileNumber).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
-                  placeholder="+91 98765 43210"
+                  placeholder="98765 43210"
                   placeholderTextColor="#999999"
                   value={form.mobileNumber}
-                  onChangeText={text => updateField('mobileNumber', text)}
+                  onChangeText={text => updateField('mobileNumber', normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
-                  maxLength={14}
+                  maxLength={10}
                 />
               </View>
             </View>
 
             {/* Shop / Business Name */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop / Business name</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Shop / Business name <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.shopName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter shop name"
@@ -210,8 +213,8 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Shop Address */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop address</Text>
-              <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+              <Text style={styles.fieldLabel}>Shop address <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, styles.textAreaWrapper, tried && !String(form.shopAddress).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Street, area, landmark"
@@ -228,8 +231,8 @@ export default function AddTechnician({ onNavigate }) {
             {/* City & State Row */}
             <View style={styles.rowContainer}>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>City</Text>
-                <View style={styles.inputWrapper}>
+                <Text style={styles.fieldLabel}>City <Text style={styles.required}>*</Text></Text>
+                <View style={[styles.inputWrapper, tried && !String(form.city).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
                     placeholder="City"
@@ -241,8 +244,8 @@ export default function AddTechnician({ onNavigate }) {
                 </View>
               </View>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>State</Text>
-                <View style={styles.inputWrapper}>
+                <Text style={styles.fieldLabel}>State <Text style={styles.required}>*</Text></Text>
+                <View style={[styles.inputWrapper, tried && !String(form.state).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
                     placeholder="State"
@@ -257,8 +260,8 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Password */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Password <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.password).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Set a password (min 6 chars)"
@@ -286,8 +289,8 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Confirm Password */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Confirm password</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Confirm password <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.confirmPassword).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Re-enter password"
@@ -337,6 +340,12 @@ export default function AddTechnician({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputWrapperError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -365,6 +374,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: wp('10%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

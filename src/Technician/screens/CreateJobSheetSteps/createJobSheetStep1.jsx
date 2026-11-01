@@ -12,23 +12,30 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
-import { updateJobDraft, resetJobDraft } from '../../../redux/slices/jobSheetSlice';
+import {
+  updateJobDraft,
+  resetJobDraft,
+  createJobSheetCustomer,
+} from '../../../redux/slices/jobSheetSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function CreateJobSheetStep1({ onNavigate, fresh }) {
+  const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const draftCustomer = useSelector(state => state.jobSheet.draft.customer) || {};
+  const draftConsentOtp = useSelector(state => state.jobSheet.draft.consent_otp);
 
   // Pre-fill from the saved draft so returning here (e.g. "Use another number"
   // on the verify screen, or "Edit details" from the review step) keeps
@@ -38,17 +45,19 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   const [alternateNumber, setAlternateNumber] = useState(draftCustomer.alternate_mobile || '');
   const [aadharNumber, setAadharNumber] = useState(draftCustomer.aadhaar_number || '');
 
-  // Customer photo: { uri, file_id, uploading }. Restore both the preview uri
-  // and the uploaded file_id so the thumbnail shows on revisit.
+  // Keep the photo locally and send its base64 with the customer record.
   const [photo, setPhoto] = useState(
     draftCustomer.photo_file_id || draftCustomer.photo_uri
       ? {
           uri: draftCustomer.photo_uri || null,
           file_id: draftCustomer.photo_file_id || null,
+          base64: draftCustomer.photo_base64 || null,
           uploading: false,
         }
       : null,
   );
+
+  const [submitting, setSubmitting] = useState(false);
 
   // Only wipe the draft when starting a brand-new job sheet (entered from the
   // jobs list / home / + button, which pass `fresh`). Navigating back here to
@@ -65,8 +74,8 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
   }, [fresh, dispatch]);
 
   const handleCapturePhoto = () => {
-    launchImageLibrary(
-      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+    chooseImageSource(
+      { mediaType: 'photo', includeBase64: true, quality: 0.65, maxWidth: 1200, maxHeight: 1200 },
       async response => {
         if (response.didCancel) return;
         if (response.errorCode) {
@@ -76,24 +85,9 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setPhoto({ uri: asset.uri, uploading: true });
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'customer.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setPhoto({ uri: asset.uri, file_id: data.data.file_id, uploading: false });
-          } else {
-            setPhoto({ uri: asset.uri, uploading: false });
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setPhoto({ uri: asset.uri, uploading: false });
-          Alert.alert('Upload failed', err.message);
-        }
+        // The customer endpoint accepts the image as base64. Upload it with
+        // the customer form instead of sending a separate upload_file call.
+        setPhoto({ uri: asset.uri, base64: asset.base64, uploading: false });
       },
     );
   };
@@ -104,12 +98,90 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    setTried(true);
+    if (!customerName.trim() || !mobileNumber.trim()) {
+      Alert.alert('Missing details', 'Please enter the customer name and mobile number.');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(customerName.trim())) {
+      Alert.alert('Invalid name', 'Customer name should only contain letters.');
+      return;
+    }
+
+    const mobileDigits = normalizeMobileNumber(mobileNumber);
+    if (!isValidIndianMobileNumber(mobileDigits)) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+
+    const alternateDigits = alternateNumber.replace(/\D/g, '');
+    if (alternateDigits && !isValidIndianMobileNumber(alternateDigits)) {
+      Alert.alert('Invalid alternate number', 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+
+    const aadharDigits = aadharNumber.replace(/\D/g, '');
+    if (aadharDigits && aadharDigits.length !== 12) {
+      Alert.alert('Invalid Aadhar number', 'Please enter a valid 12-digit Aadhar number.');
+      return;
+    }
+
+    // Returning to this step with nothing changed: keep the saved customer
+    // (no duplicate record) and skip the OTP if it was already verified.
+    const unchanged =
+      draftCustomer.customer_id &&
+      draftCustomer.full_name === customerName.trim() &&
+      draftCustomer.mobile === mobileDigits &&
+      (draftCustomer.alternate_mobile || '') === normalizeMobileNumber(alternateNumber) &&
+      (draftCustomer.aadhaar_number || '').replace(/\D/g, '') === aadharDigits &&
+      (draftCustomer.photo_uri || null) === ((photo && photo.uri) || null) &&
+      !(photo && photo.base64 && !draftCustomer.photo_base64);
+    if (unchanged) {
+      if (onNavigate) onNavigate(draftConsentOtp ? 'createJobSheetStep2' : 'verifyMobileNumber');
+      return;
+    }
+
+    // Create the customer record up front (POST /public_app/create_job_sheet_customer)
+    // so later steps and the final create_job_sheet call can reference its id.
+    setSubmitting(true);
+    const result = await dispatch(
+      createJobSheetCustomer({
+        customer_name: customerName.trim(),
+        customer_number: mobileDigits,
+        customer_alternatenumber: alternateDigits,
+        member_id: user.member_id,
+        // Previously the photo was uploaded but never attached to the
+        // customer, and the Aadhaar number wasn't sent at all.
+        aadharnumber: aadharDigits,
+        customer_image: photo && photo.base64 ? photo.base64 : null,
+        photo_file_id: photo && photo.file_id ? photo.file_id : null,
+      }),
+    );
+    setSubmitting(false);
+
+    if (!createJobSheetCustomer.fulfilled.match(result)) {
+      const message =
+        (result.payload && result.payload.message) ||
+        'Could not save customer details. Please try again.';
+      Alert.alert('Could not continue', message);
+      return;
+    }
+
+    // This backend returns the raw MySQL insert result (OkPacket) here, not a
+    // record — the new customer's id is insertId (see the same fix in
+    // purchaseEntryStep1.jsx for create_purchase_customer).
+    const customerId =
+      result.payload &&
+      (result.payload.insertId || result.payload.customer_id || result.payload.id);
+
     // Save customer details into the draft, then go verify the mobile number.
     const customer = {
+      customer_id: customerId,
       full_name: customerName.trim(),
-      mobile: mobileNumber,
-      alternate_mobile: alternateNumber,
+      mobile: normalizeMobileNumber(mobileNumber),
+      alternate_mobile: normalizeMobileNumber(alternateNumber),
       aadhaar_last4: aadharNumber.replace(/\D/g, '').slice(-4),
       // Keep the full value + photo preview uri so revisiting this step can
       // restore exactly what the technician entered (the backend uses
@@ -117,6 +189,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
       aadhaar_number: aadharNumber,
       photo_file_id: photo && photo.file_id ? photo.file_id : null,
       photo_uri: photo && photo.uri ? photo.uri : null,
+      photo_base64: photo && photo.base64 ? photo.base64 : null,
       consent: true,
     };
     dispatch(updateJobDraft({ customer }));
@@ -134,8 +207,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -143,15 +215,17 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
             <Text style={styles.headerTitle}>New Job Sheet</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 1 OF 8 · CUSTOMER</Text>
+            <Text style={styles.stepText}>STEP 1 OF 7 · CUSTOMER</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '12.5%' }]} />
+            <View style={[styles.progressBar, { width: '14.29%' }]} />
           </View>
 
           {/* Content Section */}
@@ -169,12 +243,13 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                 <Text style={styles.label}>
                   Customer Name <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
-                  style={styles.input}
+                <TextInput {...nav.props(0)}
+                  style={[styles.input, tried && !String(customerName).trim() && styles.inputError]}
                   placeholder="Enter customer name"
                   placeholderTextColor="#D1D5DB"
                   value={customerName}
-                  onChangeText={setCustomerName}
+                  onChangeText={text => setCustomerName(text.replace(/[^a-zA-Z\s]/g, ''))}
+                  autoCapitalize="words"
                 />
               </View>
 
@@ -183,39 +258,42 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                 <Text style={styles.label}>
                   Mobile Number <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
-                  style={styles.input}
+                <TextInput {...nav.props(1)}
+                  style={[styles.input, tried && !String(mobileNumber).trim() && styles.inputError]}
                   placeholder="Enter mobile number"
                   placeholderTextColor="#D1D5DB"
                   value={mobileNumber}
-                  onChangeText={setMobileNumber}
+                  onChangeText={text => setMobileNumber(normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
 
               {/* Alternate Number */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Alternate Number</Text>
-                <TextInput
+                <TextInput {...nav.props(2)}
                   style={styles.input}
                   placeholder="Optional"
                   placeholderTextColor="#D1D5DB"
                   value={alternateNumber}
-                  onChangeText={setAlternateNumber}
+                  onChangeText={text => setAlternateNumber(normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
 
               {/* Aadhar Number */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Aadhar Number</Text>
-                <TextInput
+                <TextInput {...nav.props(3)}
                   style={styles.input}
                   placeholder="Enter aadhar number"
                   placeholderTextColor="#D1D5DB"
                   value={aadharNumber}
                   onChangeText={setAadharNumber}
                   keyboardType="number-pad"
+                  maxLength={12}
                 />
               </View>
 
@@ -242,9 +320,9 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                       <ActivityIndicator size="small" color={Colors.primary} />
                       <Text style={styles.cameraSubtext}>Uploading…</Text>
                     </View>
-                  ) : photo && photo.file_id ? (
+                  ) : photo && (photo.file_id || photo.base64) ? (
                     <Text style={[styles.cameraSubtext, styles.photoUploaded]}>
-                      ✓ Uploaded
+                      ✓ Photo ready
                     </Text>
                   ) : (
                     <Text style={styles.cameraSubtext}>JPG or PNG - Up to 5 MB</Text>
@@ -270,16 +348,28 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinue}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
@@ -287,8 +377,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -312,6 +402,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

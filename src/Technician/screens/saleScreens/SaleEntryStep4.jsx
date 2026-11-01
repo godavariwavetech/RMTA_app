@@ -5,22 +5,26 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   Share,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import PdfSizeModal from '../../../Components/PdfSizeModal';
+import { convertToPdf, pdfBodyStyle, pdfHeadStyle } from '../../../utils/pdfSizes';
+import FileShare from 'react-native-share';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
+import StepNav from '../../../Components/StepNav';
 
-export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, saleData }) {
+export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, saleData, sale: saleResult }) {
   const user = useSelector(state => state.auth.user) || {};
   // The sale flow saves every step into sale.draft; use it as the source of
   // truth so the invoice survives param resets (reloads / back-and-forth).
@@ -36,11 +40,63 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
     day: '2-digit'
   }));
   const [storeName] = useState(user.shop_name || 'Your Store');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
-  const handleDownloadPDF = () => {
-    console.log('Download PDF clicked');
-    // TODO: Implement PDF generation and download
-    Alert.alert('Download', 'PDF download will be implemented soon');
+  const buildInvoiceHtml = sizeKey => `
+    <html>
+      <head>${pdfHeadStyle(sizeKey)}</head>
+      <body style="${pdfBodyStyle(sizeKey)}">
+        <h1 style="margin-bottom: 4px;">${invoiceId}</h1>
+        <p style="color: #6B7280; margin-top: 0;">${invoiceDate} · ${storeName}</p>
+        <h2 style="border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">Invoice</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 8px 0; color: #6B7280;">Buyer</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${buyer.buyerName || 'N/A'}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6B7280;">Device</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${deviceTitle}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6B7280;">IMEI</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${device.imei || 'N/A'}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6B7280;">Sale Amount</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">₹${sale.salePrice || '0'}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6B7280;">Payment</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${paymentMethodDisplay}</td></tr>
+          ${sale.transactionId ? `<tr><td style="padding: 8px 0; color: #6B7280;">Transaction ID</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${sale.transactionId}</td></tr>` : ''}
+          ${sale.warranty ? `<tr><td style="padding: 8px 0; color: #6B7280;">Warranty</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${sale.warranty}</td></tr>` : ''}
+        </table>
+      </body>
+    </html>
+  `;
+
+  const generateInvoicePdf = sizeKey =>
+    convertToPdf({ html: buildInvoiceHtml(sizeKey), fileName: invoiceId, sizeKey });
+
+  // Download / Print first ask which paper size to make the PDF for.
+  const [pdfAction, setPdfAction] = useState(null); // 'download' | 'print' | null
+  const handlePdfSizeSelected = sizeKey => {
+    const action = pdfAction;
+    setPdfAction(null);
+    if (action === 'download') handleDownloadPDF(sizeKey);
+    else if (action === 'print') handlePrint(sizeKey);
+  };
+
+  const handleDownloadPDF = async sizeKey => {
+    if (generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      const file = await generateInvoicePdf();
+      try {
+        // Best-effort share sheet (works reliably on iOS; some Android
+        // versions restrict sharing raw file:// paths).
+        await FileShare.open({
+          title: `Sale Invoice ${invoiceId}`,
+          url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`,
+          type: 'application/pdf',
+          failOnCancel: false,
+        });
+      } catch (shareErr) {
+        Alert.alert('PDF saved', `Saved to:\n${file.filePath}`);
+      }
+    } catch (err) {
+      Alert.alert('Could not create PDF', err.message || 'Please try again.');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const handleShare = async () => {
@@ -67,26 +123,50 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
     }
   };
 
-  const handlePrint = () => {
-    console.log('Print clicked');
-    // TODO: Implement printing functionality
-    Alert.alert('Print', 'Print functionality will be implemented soon');
+  // No dedicated print library — generate the same PDF and hand it to the
+  // share sheet, where most Android print services accept a PDF directly.
+  const handlePrint = async sizeKey => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      const file = await generateInvoicePdf();
+      try {
+        await FileShare.open({
+          title: `Print Invoice ${invoiceId}`,
+          url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`,
+          type: 'application/pdf',
+          failOnCancel: false,
+        });
+      } catch (shareErr) {
+        Alert.alert('PDF saved', `Open this file and print from there:\n${file.filePath}`);
+      }
+    } catch (err) {
+      Alert.alert('Could not prepare for printing', err.message || 'Please try again.');
+    } finally {
+      setPrinting(false);
+    }
   };
 
-  const handleConfirmOTP = () => {
+  // The sale is already saved to the DB at step 3 (Create invoice); this just
+  // shows the completion screen — no separate OTP confirmation call.
+  const handleComplete = () => {
     if (onNavigate) {
-      onNavigate('buyerConfirmationOTP', {
-        buyerData: buyer,
-        deviceData: device,
-        saleData: sale,
-        invoiceId: invoiceId,
+      onNavigate('replaceStack', {
+        target: 'saleCompleted',
+        screenParams: {
+          buyerData: buyer,
+          deviceData: device,
+          saleData: sale,
+          invoiceId: invoiceId,
+          sale: saleResult,
+        },
       });
     }
   };
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep3');
+      onNavigate('goBack');
     }
   };
 
@@ -105,8 +185,7 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -114,6 +193,8 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
             <Text style={styles.headerTitle}>Invoice</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
@@ -186,10 +267,17 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
             <View style={styles.actionButtons}>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={handleDownloadPDF}
+                onPress={() => setPdfAction('download')}
+                disabled={generatingPdf}
               >
-                <Text style={styles.actionButtonTextPrimary}>Download</Text>
-                <Text style={styles.actionButtonTextSecondary}>PDF</Text>
+                {generatingPdf ? (
+                  <ActivityIndicator color={Colors.primary} />
+                ) : (
+                  <>
+                    <Text style={styles.actionButtonTextPrimary}>Download</Text>
+                    <Text style={styles.actionButtonTextSecondary}>PDF</Text>
+                  </>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -201,9 +289,14 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={handlePrint}
+                onPress={() => setPdfAction('print')}
+                disabled={printing}
               >
-                <Text style={styles.actionButtonText}>Print</Text>
+                {printing ? (
+                  <ActivityIndicator color={Colors.primary} />
+                ) : (
+                  <Text style={styles.actionButtonText}>Print</Text>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -211,15 +304,22 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
           </View>
         </ScrollView>
 
-        {/* Confirm with OTP Button */}
+        {/* Complete Sale Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.confirmButton}
-            onPress={handleConfirmOTP}
+            onPress={handleComplete}
           >
-            <Text style={styles.confirmButtonText}>Confirm with buyer OTP</Text>
+            <Text style={styles.confirmButtonText}>Complete sale</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
+        <PdfSizeModal
+          visible={pdfAction !== null}
+          onSelect={handlePdfSizeSelected}
+          onClose={() => setPdfAction(null)}
+        />
       </SafeAreaView>
     </>
   );
@@ -232,8 +332,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -255,6 +355,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

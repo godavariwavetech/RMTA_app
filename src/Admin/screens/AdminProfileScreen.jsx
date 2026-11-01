@@ -6,17 +6,18 @@ import {
   TouchableOpacity,
   StatusBar,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
+import { SkeletonDetails } from '../../Components/Skeleton';
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson, logoutUser } from '../../redux/slices/authSlice';
+import { confirmAction, showAppModal } from '../../utils/appModal';
 
 // Shows the full admin profile captured at registration. Fetches fresh data
 // from POST /public_app/admin_details using the logged-in admin's user_id.
@@ -44,7 +45,10 @@ export default function AdminProfileScreen({ onNavigate }) {
         if (!response.ok || (data && data.success === false)) {
           setError((data && data.message) || 'Could not load profile.');
         } else {
-          setDetails(data.data);
+          // This backend sometimes wraps the record in a single-element
+          // array ([{ ...profile }]) instead of returning it directly.
+          const record = Array.isArray(data.data) ? data.data[0] : data.data;
+          setDetails(record);
         }
       } catch (err) {
         if (active) setError(err.message);
@@ -64,7 +68,33 @@ export default function AdminProfileScreen({ onNavigate }) {
 
   const handleLogout = async () => {
     await dispatch(logoutUser()); // clear the persisted session
-    if (onNavigate) onNavigate('intro');
+    if (onNavigate) onNavigate('logout');
+  };
+
+  // Account deletion (App Store requirement). Placeholder for now: confirms,
+  // shows a dummy result, then signs out and returns to the login screen.
+  const handleDeleteAccount = () => {
+    confirmAction({
+      title: 'Delete account?',
+      message: 'This will permanently delete your account and its data. This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: () =>
+        showAppModal(
+          'Account deleted',
+          'Your account has been deleted. You will now be signed out.',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                await dispatch(logoutUser());
+                if (onNavigate) onNavigate('logout');
+              },
+            },
+          ],
+          { type: 'success' },
+        ),
+    });
   };
 
   // Fall back to the logged-in user object while the fetch is in flight.
@@ -119,10 +149,7 @@ export default function AdminProfileScreen({ onNavigate }) {
           </View>
 
           {loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator color={Colors.secondary} />
-              <Text style={styles.loadingText}>Loading profile…</Text>
-            </View>
+            <SkeletonDetails rows={5} />
           ) : error ? (
             <View style={styles.loadingBox}>
               <Text style={styles.errorText}>{error}</Text>
@@ -152,6 +179,9 @@ export default function AdminProfileScreen({ onNavigate }) {
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Log out</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+            <Text style={styles.deleteButtonText}>Delete account</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </>
@@ -180,6 +210,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: wp('10%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),
@@ -288,6 +321,20 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     fontSize: wp('4.2%'),
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  deleteButton: {
+    marginTop: hp('1.2%'),
+    paddingVertical: hp('1.6%'),
+    borderRadius: wp('3%'),
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    fontSize: wp('4%'),
     fontWeight: '700',
     color: '#DC2626',
   },

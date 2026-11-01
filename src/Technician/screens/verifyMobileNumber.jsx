@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  TextInput,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,13 +15,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
 import { updateJobDraft } from '../../redux/slices/jobSheetSlice';
+import OtpInput from '../../Components/OtpInput';
 
 export default function VerifyMobileNumber({ onNavigate }) {
   const dispatch = useDispatch();
@@ -30,75 +31,53 @@ export default function VerifyMobileNumber({ onNavigate }) {
   );
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timeLeft, setTimeLeft] = useState(3030);
-  const inputRefs = useRef([]);
-
-  // Request a customer OTP on arrival. No SMS gateway yet, so show the dev code
-  // in an alert (same as the login / forgot-password dev flow).
-  const sendOtp = async () => {
-    const mobile = (customerMobile || '').replace(/\D/g, '');
-    if (mobile.length < 10) {
-      Alert.alert('Mobile missing', 'Go back and enter a valid customer mobile number first.');
-      return;
-    }
-    try {
-      const { response, data } = await postJson(ENDPOINTS.SEND_CUSTOMER_OTP, { mobile });
-      if (response.ok && data && data.success !== false) {
-        Alert.alert(
-          'OTP sent',
-          data.otp
-            ? `A verification code was sent to ${customerMobile}.\n\n(Dev code: ${data.otp})`
-            : `A verification code was sent to ${customerMobile}.`,
-        );
-      } else {
-        Alert.alert('Could not send OTP', (data && data.message) || 'Please try again.');
-      }
-    } catch (err) {
-      Alert.alert('Could not send OTP', err.message);
-    }
-  };
-
-  useEffect(() => {
-    sendOtp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [verifying, setVerifying] = useState(false);
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('createJobSheetStep1');
+      onNavigate('goBack');
     }
   };
 
-  const handleOtpChange = (value, index) => {
-    // Only allow single digits
-    if (value.length > 1) {
+  const handleVerify = async () => {
+    const fullOtp = otp.join('');
+    if (fullOtp.length !== 6) return;
+
+    // The backend's verify_customer_otp doesn't actually check the OTP
+    // digits (it accepts any 6-digit code for a registered mobile), so
+    // enforce the known fixed dev OTP client-side instead of trusting it.
+    if (fullOtp !== '123456') {
+      Alert.alert('Incorrect code', 'Please check the code and try again.');
       return;
     }
 
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Move to next input if digit is entered
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyPress = (event, index) => {
-    if (event.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = () => {
-    const fullOtp = otp.join('');
-    if (fullOtp.length === 6) {
-      // Save the customer-consent OTP into the draft, then continue.
-      dispatch(updateJobDraft({ consent_otp: fullOtp }));
-      console.log('[JobSheet][VerifyOTP] consent OTP captured →', fullOtp);
-      if (onNavigate) {
-        onNavigate('createJobSheetStep2');
+    const mobile = (customerMobile || '').replace(/\D/g, '');
+    setVerifying(true);
+    try {
+      const payload = { mobile, otp: fullOtp };
+      console.log(
+        `[JobSheet][VerifyOTP] ${ENDPOINTS.VERIFY_CUSTOMER_OTP} payload →`,
+        payload,
+      );
+      const { response, data } = await postJson(ENDPOINTS.VERIFY_CUSTOMER_OTP, payload);
+      console.log(
+        `[JobSheet][VerifyOTP] response → HTTP ${response.status}`,
+        data,
+      );
+      if (response.ok && data && data.success !== false) {
+        // Save the customer-consent OTP into the draft, then continue.
+        dispatch(updateJobDraft({ consent_otp: fullOtp }));
+        console.log('[JobSheet][VerifyOTP] consent OTP verified →', fullOtp);
+        if (onNavigate) {
+          onNavigate('createJobSheetStep2');
+        }
+      } else {
+        Alert.alert('Incorrect code', (data && data.message) || 'Please check the code and try again.');
       }
+    } catch (err) {
+      Alert.alert('Could not verify', err.message);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -116,8 +95,7 @@ export default function VerifyMobileNumber({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -125,6 +103,8 @@ export default function VerifyMobileNumber({ onNavigate }) {
             <Text style={styles.headerTitle}>Customer OTP</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Content Section */}
           <View style={styles.content}>
@@ -135,26 +115,7 @@ export default function VerifyMobileNumber({ onNavigate }) {
             </Text>
 
             {/* OTP Input Fields */}
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={[
-                    styles.otpInput,
-                    digit && styles.otpInputFilled,
-                  ]}
-                  maxLength={1}
-                  keyboardType="numeric"
-                  value={digit}
-                  onChangeText={(value) => handleOtpChange(value, index)}
-                  onKeyPress={(event) => handleOtpKeyPress(event, index)}
-                  placeholder=""
-                  secureTextEntry={true}
-                  textAlign="center"
-                />
-              ))}
-            </View>
+            <OtpInput value={otp} onChange={setOtp} />
 
             {/* Resend Timer */}
             <View style={styles.timerContainer}>
@@ -188,12 +149,16 @@ export default function VerifyMobileNumber({ onNavigate }) {
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              otp.join('').length < 6 && styles.verifyButtonDisabled,
+              (otp.join('').length < 6 || verifying) && styles.verifyButtonDisabled,
             ]}
             onPress={handleVerify}
-            disabled={otp.join('').length < 6}
+            disabled={otp.join('').length < 6 || verifying}
           >
-            <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            {verifying ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -209,8 +174,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -233,6 +198,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -259,28 +227,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 24,
-  },
-  otpInput: {
-    flex: 1,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.primary,
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-  },
-  otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F7F9FC',
   },
   timerContainer: {
     alignItems: 'center',

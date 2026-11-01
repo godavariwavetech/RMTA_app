@@ -8,21 +8,36 @@ import {
   Image,
   StatusBar,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { updateSaleDraft } from '../../../redux/slices/saleSlice';
+import { ENDPOINTS } from '../../../Constants/config';
+import { postJson } from '../../../redux/slices/authSlice';
+import { updateSaleDraft, resetSaleDraft } from '../../../redux/slices/saleSlice';
+import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
+  const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
-  const draftSale = useSelector(state => state.sale.draft.sale) || {};
+  const user = useSelector(state => state.auth.user) || {};
+  // Fall back to the Redux draft when buyerData/deviceData weren't passed in
+  // nav params (e.g. navigating back from step 4, which doesn't re-send them).
+  const draft = useSelector(state => state.sale.draft) || {};
+  const buyer = buyerData || draft.buyer || {};
+  const device = deviceData || draft.device || {};
+  const draftSale = draft.sale || {};
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     salePrice: draftSale.salePrice || '',
     paymentMode: draftSale.paymentMode || 'cash', // 'cash', 'upi', 'bank'
@@ -51,29 +66,69 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
     }
   };
 
-  const handleCreateInvoice = () => {
-    if (formData.salePrice && onNavigate) {
-      console.log('[Sale][Step3] sale captured →', formData);
-      dispatch(updateSaleDraft({ sale: formData }));
+  const handleCreateInvoice = async () => {
+    if (!onNavigate || submitting) return;
+    setTried(true);
+    if (!(Number(formData.salePrice) > 0)) {
+      Alert.alert('Missing details', 'Please enter the sale price.');
+      return;
+    }
+    if (formData.paymentMode !== 'cash' && !String(formData.transactionId || '').trim()) {
+      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
+      return;
+    }
+    dispatch(updateSaleDraft({ sale: formData }));
+
+    // deviceData.id is the purchase/inventory record's id (from
+    // inventory_list / search_purchase), used here as purchase_id.
+    const payload = {
+      member_id: user.member_id,
+      purchase_id: device?.id,
+      buyer_id: buyer?.customer_id,
+      sale_price: formData.salePrice || '0',
+      payment_mode: formData.paymentMode || 'cash',
+      warranty_notes: formData.warranty || null,
+    };
+    console.log(
+      `[Sale][Step3] create_sale_sheets POST ${ENDPOINTS.CREATE_SALE} payload →`,
+      payload,
+    );
+    setSubmitting(true);
+    try {
+      const { response, data } = await postJson(ENDPOINTS.CREATE_SALE, payload);
+      console.log(
+        `[Sale][Step3] create_sale_sheets response → HTTP ${response.status}`,
+        data,
+      );
+      setSubmitting(false);
+      if (!response.ok || (data && data.success === false)) {
+        Alert.alert('Could not complete sale', (data && data.message) || 'Please try again.');
+        return;
+      }
+      dispatch(resetSaleDraft());
       onNavigate('saleEntryStep4', {
-        buyerData: buyerData,
-        deviceData: deviceData,
+        buyerData: buyer,
+        deviceData: device,
         saleData: formData,
+        sale: data.data,
       });
+    } catch (err) {
+      setSubmitting(false);
+      Alert.alert('Could not complete sale', err.message);
     }
   };
 
   const handleBackPress = () => {
     dispatch(updateSaleDraft({ sale: formData }));
     if (onNavigate) {
-      onNavigate('saleEntryStep2');
+      onNavigate('goBack');
     }
   };
 
   const completedSteps = 3;
-  const deviceTitle = `${deviceData?.brand || 'Device'} ${deviceData?.model || ''}`;
-  const deviceSubtitle = `${deviceData?.storage || ''} - ${deviceData?.color || ''}`;
-  const deviceImei = deviceData?.imei || '';
+  const deviceTitle = `${device.brand || 'Device'} ${device.model || ''}`;
+  const deviceSubtitle = `${device.storage || ''} - ${device.color || ''}`;
+  const deviceImei = device.imei || '';
 
   return (
     <>
@@ -83,8 +138,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -92,6 +146,8 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             <Text style={styles.headerTitle}>Sale Details</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
@@ -108,7 +164,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {/* Device Summary Card */}
             <View style={styles.deviceCard}>
               <Image
-                source={deviceData?.deviceImage}
+                source={device.deviceImage}
                 style={styles.deviceImage}
               />
               <View style={styles.deviceInfo}>
@@ -123,15 +179,15 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
               <Text style={styles.label}>
                 Sale Price <Text style={styles.required}>*</Text>
               </Text>
-              <View style={styles.priceInputContainer}>
+              <View style={[styles.priceInputContainer, tried && !(Number(formData.salePrice) > 0) && styles.inputError]}>
                 <Text style={styles.currencySymbol}>₹</Text>
-                <TextInput
+                <TextInput {...nav.props(0)}
                   style={styles.priceInput}
                   placeholder="21,000"
                   placeholderTextColor="#9CA3AF"
                   value={formData.salePrice}
-                  onChangeText={(value) => handleInputChange('salePrice', value)}
-                  keyboardType="numeric"
+                  onChangeText={(value) => handleInputChange('salePrice', sanitizeAmount(value))}
+                  keyboardType="decimal-pad"
                 />
               </View>
             </View>
@@ -201,8 +257,8 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
                 <Text style={styles.label}>
                   Transaction ID <Text style={styles.required}>*</Text>
                 </Text>
-                <TextInput
-                  style={styles.input}
+                <TextInput {...nav.props(1)}
+                  style={[styles.input, tried && !String(formData.transactionId || '').trim() && styles.inputError]}
                   placeholder={formData.paymentMode === 'upi' ? 'UPI Transaction ID' : 'Bank Reference Number'}
                   placeholderTextColor="#9CA3AF"
                   value={formData.transactionId}
@@ -221,7 +277,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {/* Warranty / Sale Notes Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Warranty / sale notes</Text>
-              <TextInput
+              <TextInput {...nav.props(2)}
                 style={[
                   styles.input,
                   styles.textArea,
@@ -242,31 +298,41 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
 
         {/* Create Invoice Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={[
               styles.createInvoiceButton,
-              !formData.salePrice && styles.createInvoiceButtonDisabled,
+              submitting && styles.createInvoiceButtonDisabled,
             ]}
             onPress={handleCreateInvoice}
-            disabled={!formData.salePrice}
+            disabled={submitting}
           >
-            <Text style={styles.createInvoiceButtonText}>Create invoice</Text>
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.createInvoiceButtonText}>Create invoice</Text>
+            )}
           </TouchableOpacity>
+          </StepNav>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -288,6 +354,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

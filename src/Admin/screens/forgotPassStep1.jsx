@@ -15,10 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { sendForgotOtp } from '../../redux/slices/authSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../utils/mobileValidation';
 
 export default function ForgotPassStep1({ onNavigate }) {
   const dispatch = useDispatch();
@@ -34,8 +35,8 @@ export default function ForgotPassStep1({ onNavigate }) {
   const handleSendVerificationCode = async () => {
     if (!onNavigate) return;
     const mobile = mobileNumber.replace(/\D/g, '');
-    if (mobile.length < 10) {
-      alert('Please enter a valid mobile number');
+    if (!isValidIndianMobileNumber(mobile)) {
+      alert('Please enter a valid 10-digit Indian mobile number');
       return;
     }
 
@@ -74,13 +75,7 @@ export default function ForgotPassStep1({ onNavigate }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContentContainer}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -91,6 +86,13 @@ export default function ForgotPassStep1({ onNavigate }) {
               <Text style={styles.headerTitle}>Reset password</Text>
               <View style={styles.placeholderButton} />
             </View>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContentContainer}
+          >
+
 
             {/* Main Title */}
             <View style={styles.titleSection}>
@@ -102,7 +104,7 @@ export default function ForgotPassStep1({ onNavigate }) {
 
             {/* Mobile Number Input */}
             <View style={styles.mobileSection}>
-              <Text style={styles.mobileLabel}>Registered mobile number</Text>
+              <Text style={styles.mobileLabel}>Registered mobile number <Text style={styles.required}>*</Text></Text>
               <View style={styles.mobileNumberContainer}>
                 <TextInput
                   style={styles.mobileNumber}
@@ -110,8 +112,8 @@ export default function ForgotPassStep1({ onNavigate }) {
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                   value={mobileNumber}
-                  onChangeText={setMobileNumber}
-                  maxLength={14}
+                  onChangeText={text => setMobileNumber(normalizeMobileNumber(text))}
+                  maxLength={10}
                 />
               </View>
             </View>
@@ -148,6 +150,9 @@ export default function ForgotPassStep1({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -181,6 +186,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     // color: Colors.secondary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

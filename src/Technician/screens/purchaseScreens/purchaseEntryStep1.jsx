@@ -12,20 +12,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
-import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import { updatePurchaseDraft, createPurchaseCustomer } from '../../../redux/slices/purchaseSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function PurchaseEntryStep1({ onNavigate }) {
+  const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
@@ -37,6 +39,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
     address: draftSeller.address || '',
     sellerPhoto: draftSeller.sellerPhoto || null,
   });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -45,18 +48,97 @@ export default function PurchaseEntryStep1({ onNavigate }) {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('[Purchase][Step1] seller captured →', formData);
-    dispatch(updatePurchaseDraft({ seller: formData }));
+  const handleContinue = async () => {
+    setTried(true);
+    if (!formData.sellerName.trim() || !formData.sellerMobile.trim() || !formData.address.trim()) {
+      Alert.alert('Missing details', 'Please enter the seller name, mobile number and address.');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(formData.sellerName.trim())) {
+      Alert.alert('Invalid name', 'Seller name should only contain letters.');
+      return;
+    }
+
+    const mobileDigits = normalizeMobileNumber(formData.sellerMobile);
+    if (!isValidIndianMobileNumber(mobileDigits)) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+
+    const aadharDigits = formData.aadhaarNumber.replace(/\D/g, '');
+    if (aadharDigits && aadharDigits.length !== 12) {
+      Alert.alert('Invalid Aadhaar number', 'Please enter a valid 12-digit Aadhaar number.');
+      return;
+    }
+
+    // Returning to this step with nothing changed: reuse the saved seller
+    // instead of creating a duplicate customer record.
+    const unchanged =
+      draftSeller.customer_id &&
+      (draftSeller.sellerName || '').trim() === formData.sellerName.trim() &&
+      draftSeller.sellerMobile === mobileDigits &&
+      (draftSeller.address || '').trim() === formData.address.trim() &&
+      (draftSeller.aadhaarNumber || '').replace(/\D/g, '') === aadharDigits &&
+      ((draftSeller.sellerPhoto && draftSeller.sellerPhoto.uri) || null) ===
+        ((formData.sellerPhoto && formData.sellerPhoto.uri) || null) &&
+      !(formData.sellerPhoto && formData.sellerPhoto.base64);
+    if (unchanged) {
+      if (onNavigate) onNavigate('verifySellerMobileNumber', { sellerData: draftSeller });
+      return;
+    }
+
+    // Create the customer record up front (POST /public_app/create_purchase_customer)
+    // so later steps and the final create_purchase call can reference its id.
+    setSubmitting(true);
+    const result = await dispatch(
+      createPurchaseCustomer({
+        customer_name: formData.sellerName.trim(),
+        mobile_number: mobileDigits,
+        member_id: user.member_id,
+        aadharnumber: aadharDigits,
+        address: formData.address.trim(),
+        customer_image: formData.sellerPhoto && formData.sellerPhoto.base64 ? formData.sellerPhoto.base64 : null,
+        photo_file_id: formData.sellerPhoto && formData.sellerPhoto.file_id ? formData.sellerPhoto.file_id : null,
+      }),
+    );
+    setSubmitting(false);
+
+    if (!createPurchaseCustomer.fulfilled.match(result)) {
+      const message =
+        (result.payload && result.payload.message) ||
+        'Could not save seller details. Please try again.';
+      Alert.alert('Could not continue', message);
+      return;
+    }
+
+    // The backend returns the raw MySQL insert result (OkPacket), not a
+    // record — the new customer's id is insertId.
+    const customerId =
+      result.payload &&
+      (result.payload.insertId ||
+        result.payload.seller_id ||
+        result.payload.customer_id ||
+        result.payload.id);
+    const savedSellerPhoto = formData.sellerPhoto
+      ? { uri: formData.sellerPhoto.uri || null, file_id: formData.sellerPhoto.file_id || null }
+      : null;
+    const seller = {
+      ...formData,
+      sellerPhoto: savedSellerPhoto,
+      sellerMobile: mobileDigits,
+      customer_id: customerId,
+    };
+    dispatch(updatePurchaseDraft({ seller }));
     if (onNavigate) {
       onNavigate('verifySellerMobileNumber', {
-        sellerData: formData,
+        sellerData: seller,
       });
     }
   };
 
   const handleCapturePhoto = () => {
-    launchImageLibrary(
+    chooseImageSource(
       { mediaType: 'photo', includeBase64: true, quality: 0.7 },
       async response => {
         if (response.didCancel) return;
@@ -67,27 +149,10 @@ export default function PurchaseEntryStep1({ onNavigate }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setFormData(prev => ({ ...prev, sellerPhoto: { uri: asset.uri, uploading: true } }));
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'seller.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setFormData(prev => ({
-              ...prev,
-              sellerPhoto: { uri: asset.uri, file_id: data.data.file_id, uploading: false },
-            }));
-          } else {
-            setFormData(prev => ({ ...prev, sellerPhoto: { uri: asset.uri, uploading: false } }));
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setFormData(prev => ({ ...prev, sellerPhoto: { uri: asset.uri, uploading: false } }));
-          Alert.alert('Upload failed', err.message);
-        }
+        setFormData(prev => ({
+          ...prev,
+          sellerPhoto: { uri: asset.uri, base64: asset.base64, uploading: false },
+        }));
       },
     );
   };
@@ -95,7 +160,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
   const handleBack = () => {
     dispatch(updatePurchaseDraft({ seller: formData }));
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('goBack');
     }
   };
 
@@ -115,17 +180,22 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.backButtonText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Purchase Entry</Text>
-          <View style={styles.placeholderButton} />
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => onNavigate && onNavigate('viewPurchaseHistory')}
+          >
+            <Text style={styles.historyButtonText}>History</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Step Indicator */}
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepText}>STEP {completedSteps} OF 8 · SELLER</Text>
+          <Text style={styles.stepText}>STEP {completedSteps} OF 7 · SELLER</Text>
         </View>
 
         {/* Progress Bar */}
         <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: '12.5%' }]} />
+          <View style={[styles.progressBar, { width: '14.3%' }]} />
         </View>
 
         {/* Form Content */}
@@ -142,12 +212,13 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Seller Name <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
-              style={styles.input}
+            <TextInput {...nav.props(0)}
+              style={[styles.input, tried && !String(formData.sellerName).trim() && styles.inputError]}
               placeholder="Enter seller name"
               placeholderTextColor="#9CA3AF"
               value={formData.sellerName}
-              onChangeText={(value) => handleInputChange('sellerName', value)}
+              onChangeText={(value) => handleInputChange('sellerName', value.replace(/[^a-zA-Z\s]/g, ''))}
+              autoCapitalize="words"
             />
           </View>
 
@@ -156,13 +227,14 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Seller Mobile <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="+91 98765 43210"
+            <TextInput {...nav.props(1)}
+              style={[styles.input, tried && !String(formData.sellerMobile).trim() && styles.inputError]}
+              placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
               value={formData.sellerMobile}
-              onChangeText={(value) => handleInputChange('sellerMobile', value)}
+              onChangeText={(value) => handleInputChange('sellerMobile', normalizeMobileNumber(value))}
               keyboardType="phone-pad"
+              maxLength={10}
             />
           </View>
 
@@ -194,8 +266,8 @@ export default function PurchaseEntryStep1({ onNavigate }) {
                   <ActivityIndicator size="small" color="#0066FF" />
                   <Text style={styles.photoUploadSubtitle}>Uploading…</Text>
                 </View>
-              ) : formData.sellerPhoto && formData.sellerPhoto.file_id ? (
-                <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Uploaded</Text>
+              ) : formData.sellerPhoto && (formData.sellerPhoto.file_id || formData.sellerPhoto.base64) ? (
+                <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>Photo ready</Text>
               ) : (
                 <Text style={styles.photoUploadSubtitle}>JPG or PNG • Up to 5 MB</Text>
               )}
@@ -205,7 +277,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
           {/* Aadhaar Number Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Aadhaar Number</Text>
-            <TextInput
+            <TextInput {...nav.props(2)}
               style={styles.input}
               placeholder="Enter Aadhaar number"
               placeholderTextColor="#9CA3AF"
@@ -213,6 +285,7 @@ export default function PurchaseEntryStep1({ onNavigate }) {
               onChangeText={(value) => handleInputChange('aadhaarNumber', value)}
               secureTextEntry={true}
               keyboardType="numeric"
+              maxLength={12}
             />
           </View>
 
@@ -221,11 +294,11 @@ export default function PurchaseEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Address <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(3)}
               style={[
                 styles.input,
                 styles.textArea,
-              ]}
+              tried && !String(formData.address).trim() && styles.inputError]}
               placeholder="Enter seller address"
               placeholderTextColor="#9CA3AF"
               value={formData.address}
@@ -244,24 +317,33 @@ export default function PurchaseEntryStep1({ onNavigate }) {
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
+            disabled={submitting}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -283,6 +365,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -291,6 +376,13 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  historyButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#EEF3FF',
+  },
+  historyButtonText: { fontSize: 13, fontWeight: '700', color: '#2F5DDC' },
   placeholderButton: {
     width: 44,
   },

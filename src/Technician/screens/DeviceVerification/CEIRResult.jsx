@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
 
@@ -36,10 +36,10 @@ export default function CEIRResult({ onNavigate, imeiNumber }) {
     status: 'not_blocked',
     imei: imeiNumber || '356789123456789',
     blockStatus: 'Not blocked',
-    checkedDate: new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    checkedDate: new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     }),
     message: 'Sample result · Device not blocked',
   };
@@ -49,7 +49,7 @@ export default function CEIRResult({ onNavigate, imeiNumber }) {
   };
 
   const getStatusIcon = () => {
-    return ceirData.status === 'not_blocked' 
+    return ceirData.status === 'not_blocked'
       ? require('../../../Assets/icons/shieldTick.png')
       : require('../../../Assets/icons/invalid.png');
   };
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   /* Header */
   header: {
     paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -208,6 +208,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: Colors.primary,

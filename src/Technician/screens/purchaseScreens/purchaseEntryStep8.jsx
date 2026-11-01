@@ -13,20 +13,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
 
 export default function PurchaseEntryStep8({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData }) {
   const handleViewPurchaseHistory = () => {
     if (onNavigate) {
-      onNavigate('viewPurchaseHistory');
+      onNavigate('replaceStack', { target: 'viewPurchaseHistory' });
     }
   };
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('resetTo', { target: 'home' });
     }
   };
 
@@ -44,8 +44,7 @@ export default function PurchaseEntryStep8({ onNavigate, sellerData, deviceData,
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -53,6 +52,8 @@ export default function PurchaseEntryStep8({ onNavigate, sellerData, deviceData,
             <Text style={styles.headerTitle}>Purchase Completed</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Form Content */}
           <View style={styles.content}>
@@ -64,7 +65,7 @@ export default function PurchaseEntryStep8({ onNavigate, sellerData, deviceData,
                   style={styles.checkmarkIcon}
                 />
               </View>
-              
+
               <Text style={styles.successTitle}>Purchase completed</Text>
               <Text style={styles.successMessage}>
                 {deviceBrand} {deviceModel} has been added to your inventory.
@@ -125,8 +126,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -148,6 +149,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

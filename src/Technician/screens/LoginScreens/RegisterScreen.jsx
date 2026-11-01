@@ -12,20 +12,24 @@ import {
   Platform,
   ImageBackground,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { chooseImageSource } from '../../../utils/imagePicker';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { Colors } from '../../../Constants/Colors';
 import { useDispatch } from 'react-redux';
 import { registerMember } from '../../../redux/slices/authSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 // Base URL + endpoint paths now live in src/Constants/config.js and the API
 // call lives in the auth slice (redux/slices/authSlice.js).
 
 export default function RegisterScreen({ onNavigate, userInd }) {
+  const [tried, setTried] = useState(false);
   // Only the fields the backend's POST /public_app/member_registertion accepts.
   // (confirmPassword is UI-only — used to validate, never sent.)
   const [form, setForm] = useState({
@@ -41,6 +45,12 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [legalView, setLegalView] = useState(null);
+
+  // Shop photo / person photo: { uri, base64 } or null. Sent to the backend
+  // as raw base64 under shop_image / person_image — no separate upload step.
+  const [shopImage, setShopImage] = useState(null);
+  const [personImage, setPersonImage] = useState(null);
 
   const dispatch = useDispatch();
 
@@ -50,6 +60,22 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
   const updateField = (key, value) => {
     setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handlePickImage = setter => {
+    chooseImageSource(
+      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
+          return;
+        }
+        const asset = response.assets && response.assets[0];
+        if (!asset || !asset.base64) return;
+        setter({ uri: asset.uri, base64: asset.base64 });
+      },
+    );
   };
 
   const handleBackPress = () => {
@@ -78,6 +104,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       confirmPassword,
     } = form;
 
+    setTried(true);
     // Validate required inputs
     if (
       !fullName.trim() ||
@@ -93,8 +120,23 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       return;
     }
 
-    if (mobileNumber.replace(/\D/g, '').length < 10) {
-      alert('Please enter a valid mobile number');
+    if (!/^[a-zA-Z\s]+$/.test(fullName.trim())) {
+      alert('Full name should only contain letters');
+      return;
+    }
+
+    if (!isValidIndianMobileNumber(mobileNumber)) {
+      alert('Please enter a valid 10-digit Indian mobile number');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(city.trim())) {
+      alert('City should only contain letters');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(state.trim())) {
+      alert('State should only contain letters');
       return;
     }
 
@@ -117,7 +159,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
     // accepts: POST /public_app/member_registertion reads only these keys.
     const registrationData = {
       full_name: fullName.trim(),
-      mobile: mobileNumber.trim(),
+      mobile: normalizeMobileNumber(mobileNumber),
       shop_name: shopName.trim(),
       address: shopAddress.trim(),
       city: city.trim(),
@@ -125,10 +167,9 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       password,
       membership_status: 'pending',
       user_ind, // 1 = admin, 0 = technician (separate account namespaces)
+      shop_image: shopImage ? shopImage.base64 : null,
+      person_image: personImage ? personImage.base64 : null,
     };
-
-    console.log('📝 Register button pressed — registration data:');
-    console.log(JSON.stringify(registrationData, null, 2));
 
     // Dispatch the registration thunk (defined in redux/slices/authSlice.js).
     // It handles the fetch, timeout, duplicate/error responses, and stores the
@@ -137,17 +178,21 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
     if (registerMember.fulfilled.match(result)) {
       // Success means the mobile number did NOT already exist and the account
-      // was created. Branch on the returned membership_status:
-      //   'pending' → account awaiting admin approval → StatusPendingScreen
-      //   otherwise → straight into the app (Admin home).
-      console.log('🟢 DB WRITE OK — record stored', result.payload);
-      const membershipStatus =
-        result.payload && result.payload.membership_status;
-      if (membershipStatus === 'pending') {
-        onNavigate('statusPending');
-      } else {
-        onNavigate(user_ind === 1 ? 'adminHome' : 'home');
-      }
+      // was created. Send them to Login (matching tab) to sign in with the
+      // mobile + password they just set.
+      Alert.alert(
+        'Registration successful',
+        'You can now log in with your mobile number and password.',
+        [
+          {
+            text: 'OK',
+            onPress: () =>
+              onNavigate('login', {
+                loginMode: user_ind === 1 ? 'admin' : 'technician',
+              }),
+          },
+        ],
+      );
     } else {
       // Rejected: duplicate mobile (409), server error (500), or network/timeout.
       const payload = result.payload;
@@ -155,8 +200,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
         (payload && payload.message) ||
         'Registration failed. Please try again.';
 
-      if (payload && payload.status === 409) {
-        // Account already exists → on OK, take them to Login with the matching tab.
+      if (payload && (payload.status === 409 || payload.status === 300)) {
+        // Account already exists (409 or 300) → on OK, take them to Login with the matching tab.
         Alert.alert('Account already exists', message, [
           {
             text: 'OK',
@@ -165,7 +210,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 loginMode: user_ind === 1 ? 'admin' : 'technician',
               }),
           },
-        ]);
+        ], { type: 'warning' });
       } else {
         alert(message);
       }
@@ -184,12 +229,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.scrollView}
-          >
-            {/* Header */}
+          {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={handleBackPress}
@@ -200,6 +240,12 @@ export default function RegisterScreen({ onNavigate, userInd }) {
               <Text style={styles.headerTitle}>Register Now</Text>
               <View style={styles.placeholderButton} />
             </View>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.scrollView}
+          >
+
 
             {/* Welcome Card */}
             <View style={styles.welcomeCard}>
@@ -226,14 +272,14 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Full Name Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Full name</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Full name <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.fullName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your full name"
                   placeholderTextColor="#999999"
                   value={form.fullName}
-                  onChangeText={text => updateField('fullName', text)}
+                  onChangeText={text => updateField('fullName', text.replace(/[^a-zA-Z\s]/g, ''))}
                   autoCapitalize="words"
                 />
               </View>
@@ -241,23 +287,24 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Mobile number <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.mobileNumber).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
-                  placeholder="+91 98765 43210"
+                  placeholder="98765 43210"
                   placeholderTextColor="#999999"
                   value={form.mobileNumber}
-                  onChangeText={text => updateField('mobileNumber', text)}
+                  onChangeText={text => updateField('mobileNumber', normalizeMobileNumber(text))}
                   keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </View>
             </View>
 
             {/* Shop / Business Name Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop / Business name</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Shop / Business name <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.shopName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your shop name"
@@ -271,8 +318,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Shop Address Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop address</Text>
-              <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+              <Text style={styles.fieldLabel}>Shop address <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, styles.textAreaWrapper, tried && !String(form.shopAddress).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Street, area, landmark"
@@ -289,37 +336,83 @@ export default function RegisterScreen({ onNavigate, userInd }) {
             {/* City & State Row */}
             <View style={styles.rowContainer}>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>City</Text>
-                <View style={styles.inputWrapper}>
+                <Text style={styles.fieldLabel}>City <Text style={styles.required}>*</Text></Text>
+                <View style={[styles.inputWrapper, tried && !String(form.city).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
                     placeholder="City"
                     placeholderTextColor="#999999"
                     value={form.city}
-                    onChangeText={text => updateField('city', text)}
+                    onChangeText={text => updateField('city', text.replace(/[^a-zA-Z\s]/g, ''))}
                     autoCapitalize="words"
                   />
                 </View>
               </View>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>State</Text>
-                <View style={styles.inputWrapper}>
+                <Text style={styles.fieldLabel}>State <Text style={styles.required}>*</Text></Text>
+                <View style={[styles.inputWrapper, tried && !String(form.state).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
                     placeholder="State"
                     placeholderTextColor="#999999"
                     value={form.state}
-                    onChangeText={text => updateField('state', text)}
+                    onChangeText={text => updateField('state', text.replace(/[^a-zA-Z\s]/g, ''))}
                     autoCapitalize="words"
                   />
                 </View>
               </View>
             </View>
 
+            {/* Shop Photo & Person Photo Row */}
+            <View style={styles.rowContainer}>
+              <View style={styles.rowFieldContainer}>
+                <Text style={styles.fieldLabel}>Shop photo</Text>
+                <TouchableOpacity
+                  style={styles.photoPicker}
+                  onPress={() => handlePickImage(setShopImage)}
+                  activeOpacity={0.8}
+                >
+                  {shopImage ? (
+                    <Image source={{ uri: shopImage.uri }} style={styles.photoPreview} />
+                  ) : (
+                    <>
+                      <Image
+                        source={require('../../../Assets/icons/camera.png')}
+                        style={styles.photoPickerIcon}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.photoPickerText}>Upload</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={styles.rowFieldContainer}>
+                <Text style={styles.fieldLabel}>Person photo</Text>
+                <TouchableOpacity
+                  style={styles.photoPicker}
+                  onPress={() => handlePickImage(setPersonImage)}
+                  activeOpacity={0.8}
+                >
+                  {personImage ? (
+                    <Image source={{ uri: personImage.uri }} style={styles.photoPreview} />
+                  ) : (
+                    <>
+                      <Image
+                        source={require('../../../Assets/icons/camera.png')}
+                        style={styles.photoPickerIcon}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.photoPickerText}>Upload</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Password <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.password).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Create a password"
@@ -347,8 +440,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Confirm Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Confirm password</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Confirm password <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.inputWrapper, tried && !String(form.confirmPassword).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Re-enter password"
@@ -375,26 +468,39 @@ export default function RegisterScreen({ onNavigate, userInd }) {
             </View>
 
             {/* Terms & Conditions */}
-            <TouchableOpacity
-              style={styles.termsContainer}
-              onPress={() => setAcceptedTerms(!acceptedTerms)}
-              activeOpacity={0.7}
-            >
-              <View
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
                 style={[
                   styles.checkbox,
                   acceptedTerms && styles.checkboxChecked,
                 ]}
+                onPress={() => setAcceptedTerms(!acceptedTerms)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: acceptedTerms }}
+                activeOpacity={0.75}
               >
                 {acceptedTerms && <Text style={styles.checkboxTick}>✓</Text>}
-              </View>
+              </TouchableOpacity>
               <Text style={styles.termsText}>
                 I agree to the{' '}
-                <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>.
+                <Text
+                  style={styles.termsLink}
+                  accessibilityRole="link"
+                  onPress={() => setLegalView('terms')}
+                >
+                  Terms & Conditions
+                </Text>{' '}
+                and{' '}
+                <Text
+                  style={styles.termsLink}
+                  accessibilityRole="link"
+                  onPress={() => setLegalView('privacy')}
+                >
+                  Privacy Policy
+                </Text>.
               </Text>
-            </TouchableOpacity>
-            
+            </View>
+
 
             {/* Sign In Link */}
             <TouchableOpacity
@@ -419,11 +525,47 @@ export default function RegisterScreen({ onNavigate, userInd }) {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <Modal
+        visible={!!legalView}
+        animationType="slide"
+        onRequestClose={() => setLegalView(null)}
+      >
+        <SafeAreaView style={styles.legalScreen}>
+          <View style={styles.legalHeader}>
+            <TouchableOpacity
+              onPress={() => setLegalView(null)}
+              style={styles.legalBackButton}
+              accessibilityRole="button"
+              accessibilityLabel="Back to registration"
+            >
+              <Text style={styles.legalBackText}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalTitle}>
+              {legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+            </Text>
+            <View style={styles.legalHeaderSpacer} />
+          </View>
+          <ScrollView contentContainerStyle={styles.legalContent}>
+            <Text style={styles.legalNoticeTitle}>Document unavailable</Text>
+            <Text style={styles.legalNotice}>
+              The current RMTA {legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+              {' '}document has not been added to the app. Please contact an RMTA administrator
+              for the current document before registering.
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputWrapperError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -450,6 +592,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: wp('10%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),
@@ -554,6 +699,31 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: hp('8%'),
   },
+  photoPicker: {
+    height: hp('11%'),
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: wp('2.5%'),
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  photoPickerIcon: {
+    width: wp('6%'),
+    height: wp('6%'),
+    marginBottom: hp('0.5%'),
+  },
+  photoPickerText: {
+    fontSize: wp('3.3%'),
+    fontWeight: '600',
+    color: Colors.secondary,
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   roleRow: {
     flexDirection: 'row',
     gap: wp('3%'),
@@ -626,6 +796,53 @@ const styles = StyleSheet.create({
   termsLink: {
     color: Colors.secondary,
     fontWeight: '600',
+  },
+  legalScreen: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  legalHeader: {
+    minHeight: hp('7%'),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: wp('4%'),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  legalBackButton: {
+    width: wp('10%'),
+    paddingVertical: hp('0.5%'),
+  },
+  legalBackText: {
+    fontSize: wp('8%'),
+    color: '#1F2937',
+  },
+  legalTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#1F2937',
+    fontSize: wp('4.5%'),
+    fontWeight: '700',
+  },
+  legalHeaderSpacer: {
+    width: wp('10%'),
+  },
+  legalContent: {
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('3%'),
+  },
+  legalNoticeTitle: {
+    color: '#1F2937',
+    fontSize: wp('5%'),
+    fontWeight: '700',
+    marginBottom: hp('1.5%'),
+  },
+  legalNotice: {
+    color: '#4B5563',
+    fontSize: wp('3.8%'),
+    lineHeight: hp('2.8%'),
   },
   signInLinkButton: {
     marginHorizontal: wp('4%'),

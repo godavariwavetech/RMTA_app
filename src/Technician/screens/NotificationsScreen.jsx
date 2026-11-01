@@ -1,100 +1,214 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
+  SectionList,
+  StatusBar,
   StyleSheet,
   Text,
-  View,
-  ScrollView,
   TouchableOpacity,
-  Image,
-  StatusBar,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  widthPercentageToDP as wp,
-  heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
-
 import { Colors } from '../../Constants/Colors';
 import BottomNav from '../../Components/BottomNav';
+import useRefresh from '../../utils/useRefresh';
+import {
+  clearNotificationHistory,
+  getNotificationHistory,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../../services/notifications';
+
+// Look of each kind of notification: an emoji tile and its colours.
+const TYPES = {
+  chat: { glyph: '💬', bg: '#DBEAFE', fg: '#1D4ED8' },
+  job: { glyph: '🛠️', bg: '#FEF3C7', fg: '#B45309' },
+  purchase: { glyph: '📥', bg: '#EDE9FE', fg: '#6D28D9' },
+  sale: { glyph: '📤', bg: '#FFEDD5', fg: '#C2410C' },
+  member: { glyph: '✅', bg: '#DCFCE7', fg: '#15803D' },
+  general: { glyph: '🔔', bg: '#E0E7FF', fg: '#4338CA' },
+};
+const typeOf = n => TYPES[n.type] || TYPES.general;
+
+const dayKey = ms => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
+
+// "now", "5 min ago", "2 h ago", "Yesterday", "24 Oct".
+const timeAgo = ms => {
+  const diff = Date.now() - ms;
+  if (diff < 60 * 1000) return 'now';
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} min ago`;
+  if (dayKey(ms) === dayKey(Date.now())) return `${Math.floor(diff / 3600000)} h ago`;
+  if (dayKey(ms) === dayKey(Date.now() - 86400000)) return 'Yesterday';
+  return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+};
 
 export default function NotificationsScreen({ onNavigate }) {
-  const [selectedNavItem, setSelectedNavItem] = React.useState('home');
+  const { tick, refreshControl } = useRefresh();
+  const [selectedNavItem, setSelectedNavItem] = useState('home');
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
-  const handleNavigation = (screen) => {
+  const load = useCallback(async () => {
+    setItems(await getNotificationHistory());
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load, tick]);
+
+  const handleNavigation = screen => {
     setSelectedNavItem(screen);
-    if (onNavigate) {
-      onNavigate(screen);
-    }
+    if (onNavigate) onNavigate(screen);
   };
-  const notifications = [
-    {
-      id: 1,
-      icon: require('../../Assets/icons/clipboard.png'),
-      title: 'Job ready for quality check',
-      subtitle: 'JS-2406240001 - 10 minutes ago',
-      bgColor: '#DBEAFE',
-    },
-    {
-      id: 2,
-      icon: require('../../Assets/icons/circle-check.png'),
-      title: 'Membership is active',
-      subtitle: 'Your ID is valid until 31 Dec 2027',
-      bgColor: '#DCFCE7',
-    },
-    {
-      id: 3,
-      icon: require('../../Assets/icons/pending.png'),
-      title: 'Purchase saved',
-      subtitle: 'OnePlus 9R - ₹18,500',
-      bgColor: '#FEF08A',
-    },
-  ];
 
-  const today = new Date();
-  const dateString = `Today · ${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
+  const unread = items.filter(n => !n.read).length;
+
+  const openItem = async item => {
+    if (!item.read) {
+      await markNotificationRead(item.id);
+      load();
+    }
+    if (item.type === 'chat') onNavigate && onNavigate('chat');
+  };
+
+  const markAll = async () => {
+    await markAllNotificationsRead();
+    load();
+  };
+
+  const clearAll = () => {
+    Alert.alert('Clear all notifications?', 'This removes every notification from this list.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          await clearNotificationHistory();
+          load();
+        },
+      },
+    ]);
+  };
+
+  // Today, Yesterday, then older days.
+  const sections = [];
+  items.forEach(n => {
+    const key = dayKey(n.at);
+    const last = sections[sections.length - 1];
+    if (last && last.key === key) {
+      last.data.push(n);
+    } else {
+      const title =
+        key === dayKey(Date.now())
+          ? 'Today'
+          : key === dayKey(Date.now() - 86400000)
+          ? 'Yesterday'
+          : new Date(n.at).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+      sections.push({ key, title, data: [n] });
+    }
+  });
+
+  const renderItem = ({ item, index, section }) => {
+    const look = typeOf(item);
+    const first = index === 0;
+    const last = index === section.data.length - 1;
+    return (
+      <TouchableOpacity
+        style={[styles.row, first && styles.rowFirst, last && styles.rowLast, !item.read && styles.rowUnread]}
+        activeOpacity={0.7}
+        onPress={() => openItem(item)}
+      >
+        <View style={[styles.tile, { backgroundColor: look.bg }]}>
+          <Text style={styles.tileGlyph}>{look.glyph}</Text>
+        </View>
+        <View style={styles.rowBody}>
+          <View style={styles.rowTop}>
+            <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.rowTime}>{timeAgo(item.at)}</Text>
+          </View>
+          {!!item.body && (
+            <Text style={styles.rowText} numberOfLines={2}>
+              {item.body}
+            </Text>
+          )}
+        </View>
+        {!item.read && <View style={styles.dot} />}
+        {!last && <View style={styles.divider} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <>
-      <StatusBar
-        backgroundColor={Colors.primary}
-        barStyle="light-content"
-        translucent={true}
-      />
+      <StatusBar backgroundColor={Colors.primary} barStyle="light-content" translucent={true} />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => onNavigate('home')} style={styles.backButton}>
+        {/* Navy header: title, how many are unread, and quick actions */}
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => onNavigate && onNavigate('home')} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Notifications</Text>
-            <View style={styles.placeholderButton} />
+            <View style={styles.headerTitles}>
+              <Text style={styles.headerTitle}>Notifications</Text>
+              <Text style={styles.headerSub}>
+                {unread > 0 ? `${unread} unread` : "You're all caught up"}
+              </Text>
+            </View>
           </View>
-
-          {/* Status Section */}
-          <View style={styles.statusSection}>
-            <Text style={styles.statusTitle}>You're up to date</Text>
-            <Text style={styles.statusDate}>{dateString}</Text>
-          </View>
-
-          {/* Notifications List */}
-          <View style={styles.notificationsList}>
-            {notifications.map((notification) => (
-              <TouchableOpacity key={notification.id} style={styles.notificationItem}>
-                <View style={[styles.notificationIcon, { backgroundColor: notification.bgColor }]}>
-                  <Image source={notification.icon} style={styles.notificationIconImage} />
-                </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  <Text style={styles.notificationSubtitle}>{notification.subtitle}</Text>
-                </View>
+          {items.length > 0 && (
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.actionBtn, unread === 0 && styles.actionOff]}
+                onPress={markAll}
+                disabled={unread === 0}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.actionText}>✓  Mark all read</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+              <TouchableOpacity style={styles.actionBtn} onPress={clearAll} activeOpacity={0.8}>
+                <Text style={styles.actionText}>🗑  Clear all</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+        <SectionList
+          sections={sections}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionDot} />
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+            </View>
+          )}
+          stickySectionHeadersEnabled={false}
+          refreshControl={refreshControl}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            loaded ? (
+              <View style={styles.emptyBox}>
+                <View style={styles.emptyRingOuter}>
+                  <View style={styles.emptyRingInner}>
+                    <Text style={styles.emptyGlyph}>🔔</Text>
+                  </View>
+                </View>
+                <Text style={styles.emptyTitle}>You're up to date</Text>
+                <Text style={styles.emptyText}>
+                  Job updates, chat messages and announcements will show up here.
+                </Text>
+              </View>
+            ) : null
+          }
+        />
 
         {/* Bottom Navigation */}
         <BottomNav selectedItem={selectedNavItem} onNavigate={handleNavigation} />
@@ -104,103 +218,94 @@ export default function NotificationsScreen({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F9FC',
-    flexDirection: 'column',
-  },
+  container: { flex: 1, backgroundColor: '#F4F6FB' },
+
   header: {
-    // backgroundColor: Colors.primary,
-    paddingHorizontal: wp('3%'),
-    paddingTop: hp('2%'),
-    paddingBottom: hp('3%'),
-    flexDirection: 'row',
-    alignItems: 'center',
-    // justifyContent: 'space-between',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
   },
-  backButton: {
-    padding: 8,
-    width: wp('10%'),
-    height: wp('12%'),
-    justifyContent: 'center',
-    alignItems: 'center',
-    // color: '#0000'
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 6 },
+  backButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
+  backButtonText: { color: '#FFFFFF', fontSize: 32, lineHeight: 36, includeFontPadding: false },
+  headerTitles: { marginLeft: 4 },
+  headerTitle: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
+  headerSub: { color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '600', marginTop: 1 },
+  actions: { flexDirection: 'row', marginTop: 14 },
+  actionBtn: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
   },
-  backButtonText: {
-    fontSize: 32,
-    color: '#FFFFFF',
-    fontWeight: '300',
-    color: '#0000'
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    flex: 1,
-    textAlign: 'center',
-    color: '#0000'
-  },
-  placeholderButton: {
-    width: 44,
-  },
-  statusSection: {
-    paddingHorizontal: wp('5%'),
-    paddingVertical: hp('3%'),
-  },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  statusDate: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-  notificationsList: {
-    paddingHorizontal: wp('5%'),
-    paddingVertical: hp('1%'),
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  actionOff: { opacity: 0.4 },
+  actionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+
+  listContent: { paddingHorizontal: 16, paddingBottom: 130, flexGrow: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 10, marginLeft: 4 },
+  sectionDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.secondary, marginRight: 8 },
+  sectionTitle: { fontSize: 13, fontWeight: '800', color: '#475569', letterSpacing: 0.3, textTransform: 'uppercase' },
+
+  row: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  notificationIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    shadowColor: '#1E3A8A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 9,
+    elevation: 3,
   },
-  notificationIconImage: {
-    width: 28,
-    height: 28,
-    resizeMode: 'contain',
+  rowUnread: { backgroundColor: '#F5F8FF' },
+  rowFirst: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  rowLast: { borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  tile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  tileGlyph: { fontSize: 20 },
+  rowBody: { flex: 1 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#334155', marginRight: 8 },
+  rowTitleUnread: { fontWeight: '800', color: '#0F172A' },
+  rowTime: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
+  rowText: { fontSize: 13, lineHeight: 18, color: '#64748B', marginTop: 3 },
+  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.secondary, marginLeft: 8 },
+  divider: {
+    position: 'absolute',
+    left: 70,
+    right: 14,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
   },
-  notificationContent: {
-    flex: 1,
+
+  emptyBox: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 30 },
+  emptyRingOuter: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: '#E0E7FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
-  notificationTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
+  emptyRingInner: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1E3A8A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  notificationSubtitle: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  bottomSpacer: {
-    height: 120,
-  },
+  emptyGlyph: { fontSize: 40 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.primary, marginBottom: 6 },
+  emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 },
 });

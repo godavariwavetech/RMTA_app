@@ -13,13 +13,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 
 import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
+import { generatePDF } from 'react-native-html-to-pdf';
+import Share from 'react-native-share';
+import { showAppModal } from '../../utils/appModal';
+import useRefresh from '../../utils/useRefresh';
 
 export default function AdminReports({ onNavigate }) {
+  const { tick, refreshControl } = useRefresh();
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [report, setReport] = useState(null);
 
@@ -41,11 +46,20 @@ export default function AdminReports({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [selectedPeriod]);
+  }, [selectedPeriod, tick]);
 
-  const handleExportReport = () => {
-    if (onNavigate) {
-      onNavigate('exportReport');
+  const handleExportReport = async () => {
+    try {
+      const rows = reportData.weekRepairs.map(row => `<tr><td>${row.day}</td><td>${row.value}</td></tr>`).join('');
+      const file = await generatePDF({
+        fileName: `RMTA_Admin_Repair_Report_${Date.now()}`,
+        base64: false,
+        html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Association Repair Report</h1><p>${reportData.period}</p><h2>Summary</h2><p>Repair revenue: ${reportData.repairRevenue}</p><p>Jobs closed: ${reportData.jobsClosed}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${rows}</table></body></html>`,
+      });
+      if (!file?.filePath) throw new Error('PDF file was not created.');
+      await Share.open({ title: 'RMTA Association Repair Report', url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`, type: 'application/pdf', failOnCancel: false });
+    } catch (error) {
+      if (error?.message !== 'User did not share') showAppModal('Export failed', error?.message || 'Could not create or share the report. Please try again.');
     }
   };
 
@@ -139,18 +153,19 @@ export default function AdminReports({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.headerSection}>
             <TouchableOpacity onPress={handleBackPress}>
               <Image source={require('../../Assets/icons/back.png')} style={{height: wp('5%'), width: wp('5%')}} />
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Admin Reports</Text>
           </View>
+        <ScrollView refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Your Shop at a Glance Section */}
           <View style={styles.section}>

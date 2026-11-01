@@ -7,91 +7,170 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  Switch,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
+import { useI18n } from '../../i18n';
 import BottomNav from '../../Components/BottomNav';
-import { setTechnicianStatus } from '../../redux/slices/techniciansSlice';
-import { setUserTechnicianStatus, postJson } from '../../redux/slices/authSlice';
+import ScrollTicker from '../../Components/ScrollTicker';
+import BannerCarousel from '../../Components/BannerCarousel';
+import useAccountProfile from '../../utils/useAccountProfile';
 import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
-import { saveUser } from '../../utils/authStorage';
-import { ENDPOINTS } from '../../Constants/config';
+import { getJson, postJson, setUserMenuIds } from '../../redux/slices/authSlice';
+import { ENDPOINTS, BASE_URL } from '../../Constants/config';
+import useRefresh from '../../utils/useRefresh';
+// Re-enable together with the NFC option in the QR tile below.
+// import { showAppActionSheet } from '../../utils/appModal';
 
-export default function TechnicianHomeScreen({ onNavigate }) {
+// Banners survive leaving and reopening the screen: the last fetched list is
+// kept here so the carousel renders it immediately instead of flashing the
+// built-in banners (or nothing) until the request finishes again.
+let bannerCache = null;
+
+// A technician (staff) account only sees the modules assigned to it, plus these
+// always-available actions: Notes, CEIR / IMEI, Digital ID, QR scan and Supporters.
+const COMMON_ACTIONS = [7, 4, 5, 6, 9];
+// Quick action id -> menu id from public_app/geappmenu
+// (1 New job Sheet, 2 Purchase, 3 Sale, 4 Reports, 5 Customer Directory).
+const ACTION_MENU = { 1: 1, 2: 2, 3: 3, 8: 4, 11: 5 };
+
+// menu_ids may arrive as an array, a JSON string or a comma-separated string.
+const toMenuIds = value => {
+  if (value === undefined || value === null) return null;
+  let list = value;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch (e) {
+      list = list.split(',');
+    }
+  }
+  if (!Array.isArray(list)) return null;
+  return list.map(Number).filter(n => !Number.isNaN(n));
+};
+
+export default function TechnicianHomeScreen({ onNavigate, active: screenActive = true }) {
+  const { tick, refreshControl } = useRefresh();
+  const { t } = useI18n();
   const [selectedNavItem, setSelectedNavItem] = useState('home');
+  // Home stays mounted (hidden) while other tabs are open. Rebuilding the bottom bar
+  // each time Home is shown again gives it exactly the state of a first launch, so the
+  // selected-tab highlight is drawn fresh instead of from the hidden view.
+  const [navKey, setNavKey] = useState(0);
+  useEffect(() => {
+    if (screenActive) setNavKey(k => k + 1);
+  }, [screenActive]);
 
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user);
 
-  // Full technician profile (the details the admin entered at add time),
-  // fetched fresh from POST /public_app/technician_details by user_id.
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!user || !user.user_id) return;
-      try {
-        const { response, data } = await postJson(ENDPOINTS.TECHNICIAN_DETAILS, {
-          user_id: user.user_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          setProfile(data.data);
-        }
-      } catch (e) {
-        // Keep the cached login details if the fetch fails.
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  // Full profile (admin_details for admins, technician_details for technicians).
+  const profile = useAccountProfile();
 
   // Today's summary counts (jobs/sales/purchases for this member today).
   const counts = useSelector(state => state.jobSheet.counts);
 
+  // Home is kept mounted while other screens are open, so refresh the counts (and
+  // reset the bottom-nav highlight) each time it is shown again, not only on mount.
   useEffect(() => {
+    if (!screenActive) return;
+    setSelectedNavItem('home');
     if (user && user.member_id) {
       dispatch(fetchJobCounts({ member_id: user.member_id }));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user, screenActive, tick]);
 
-  // Recent activity: latest job sheet created, IMEI verified, and phone sold.
-  // Any action that never happened comes back null and is simply omitted.
-  const [recent, setRecent] = useState({ job: null, imei: null, sale: null });
+  // A technician's assigned modules can change while they are signed in, so ask the
+  // server again each time Home is shown and update the saved list.
+  useEffect(() => {
+    if (!screenActive || !user || !user.tech_id || !user.member_id) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { response, data } = await postJson(ENDPOINTS.GET_TECHNICIAN_PERMISSIONS, {
+          member_id: user.member_id,
+          tech_id: user.tech_id,
+        });
+        const rows = Array.isArray(data) ? data : data && data.data;
+        if (cancelled || !response.ok || !Array.isArray(rows)) return;
+        const row = rows.find(r => r && String(r.id) === String(user.tech_id));
+        const ids = row ? toMenuIds(row.menu_ids) : null;
+        if (ids) dispatch(setUserMenuIds(ids));
+      } catch (e) {
+        // keep the modules from login
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, screenActive, tick, user && user.tech_id, user && user.member_id]);
+
+  // Home banners from GET /public_app/getbanners. Each row's picture URL may be
+  // absolute or relative to the server; rows flagged deleted (d_in) are skipped.
+  // While loading, or if the call fails or returns nothing, the built-in
+  // banners below are shown instead.
+  const [apiBanners, setApiBanners] = useState(bannerCache || []);
+  const [bannersLoaded, setBannersLoaded] = useState(bannerCache !== null);
 
   useEffect(() => {
+    if (!screenActive) return undefined;
     let active = true;
     (async () => {
-      if (!user || !user.member_id) return;
       try {
-        const { response, data } = await postJson(ENDPOINTS.RECENT_ACTIVITY, {
-          member_id: user.member_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          setRecent(data.data || { job: null, imei: null, sale: null });
+        const { response, data } = await getJson(ENDPOINTS.GET_BANNERS, undefined, 10000);
+        const rows = Array.isArray(data) ? data : data && (data.data || data.banners);
+        if (!active) return;
+        if (!response.ok || !Array.isArray(rows)) {
+          setBannersLoaded(true);
+          return;
         }
+        const imageOf = row =>
+          row.image || row.image_url || row.banner || row.banner_url || row.banner_image ||
+          row.photo || row.file || row.path || row.url || '';
+        const next = rows
+            .filter(row => row && !Number(row.d_in) && String(imageOf(row)).trim())
+            .map((row, i) => {
+              const v = String(imageOf(row)).trim();
+              const uri = /^https?:\/\//.test(v) ? v : `${BASE_URL}${v.replace(/^\//, '')}`;
+              return { id: `api-${row.id ?? i}`, image: { uri, cache: 'force-cache' } };
+            });
+        // Only replace what's on screen when the list really changed.
+        const same =
+          bannerCache &&
+          bannerCache.length === next.length &&
+          bannerCache.every((b, i) => b.id === next[i].id && b.image.uri === next[i].image.uri);
+        bannerCache = next;
+        // Warm the image cache so reopening Home shows the pictures at once.
+        next.forEach(b => Image.prefetch(b.image.uri).catch(() => {}));
+        if (!same) setApiBanners(next);
+        setBannersLoaded(true);
       } catch (e) {
-        // leave recent activity empty on failure
+        // keep the built-in banners
+        if (active) setBannersLoaded(true);
       }
     })();
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [screenActive, tick]);
 
-  // View model: prefer the freshly fetched profile, fall back to the cached
-  // login user, then to placeholders.
-  const d = profile || user || {};
+  // View model: start from the cached login user (always has the basics),
+  // then layer the freshly fetched profile on top — but only its non-empty
+  // fields, so a profile response missing e.g. full_name/shop_name can't
+  // blank out data we already had (was causing a flash-then-blank glitch).
+  const d = {
+    ...(user || {}),
+    ...Object.fromEntries(
+      Object.entries(profile || {}).filter(([, v]) => v !== null && v !== undefined && v !== ''),
+    ),
+  };
   const techName = d.full_name || 'Technician';
   const techInitials = techName
     .split(' ')
@@ -99,45 +178,6 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const techShop = d.shop_name || '—';
-  const techLocation = [d.city, d.state].filter(Boolean).join(', ') || '—';
-  const techRmtaId = d.member_code || '—';
-  const techValidUntil = d.valid_until;
-
-  // Active/inactive toggle. Technicians start inactive and turn themselves
-  // active here; the change persists to the backend (set_technician_status)
-  // and is reflected on the admin TechnicianList/TechnicianDetails screens.
-  const [isActive, setIsActive] = useState(
-    (user && user.technician_status) === 'active',
-  );
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-
-  const handleToggleStatus = async value => {
-    if (!user || !user.user_id) {
-      Alert.alert('Not available', 'Please log in again to change your status.');
-      return;
-    }
-    const nextStatus = value ? 'active' : 'inactive';
-    setIsActive(value); // optimistic
-    setUpdatingStatus(true);
-    const result = await dispatch(
-      setTechnicianStatus({ user_id: user.user_id, technician_status: nextStatus }),
-    );
-    setUpdatingStatus(false);
-
-    if (setTechnicianStatus.fulfilled.match(result)) {
-      dispatch(setUserTechnicianStatus(nextStatus));
-      // Keep the persisted session in sync so a refresh shows the right state.
-      saveUser({ ...user, technician_status: nextStatus });
-    } else {
-      setIsActive(!value); // revert on failure
-      const message =
-        (result.payload && result.payload.message) ||
-        'Could not update status. Please try again.';
-      Alert.alert('Update failed', message);
-    }
-  };
-
   const handleNavigation = (screen, params) => {
     setSelectedNavItem(screen);
     if (onNavigate) {
@@ -145,77 +185,82 @@ export default function TechnicianHomeScreen({ onNavigate }) {
     }
   };
 
+  // Home banners: picture banners and text banners that open a screen.
   const banners = [
-    { id: 1, image: require('../../Assets/images/TechnicianHomeBanner1.png') },
+    {
+      id: 1,
+      title: t('banner1Title'),
+      subtitle: t('banner1Sub'),
+      color: '#071A3D',
+      accent: '#21D4FD',
+      symbol: '⚙',
+      onPress: () => handleNavigation('createJobSheetStep1', { fresh: true }),
+    },
+    {
+      id: 2,
+      title: t('banner2Title'),
+      subtitle: t('banner2Sub'),
+      color: '#173B82',
+      accent: '#8BB8FF',
+      symbol: '✓',
+      onPress: () => handleNavigation('deviceVerification'),
+    },
+    {
+      id: 3,
+      title: t('banner3Title'),
+      subtitle: t('banner3Sub'),
+      color: '#3730A3',
+      accent: '#C4B5FD',
+      symbol: 'ID',
+      onPress: () => handleNavigation('myDigitalId'),
+    },
+    {
+      id: 4,
+      title: t('banner4Title'),
+      subtitle: t('banner4Sub'),
+      color: '#126B58',
+      accent: '#6EE7B7',
+      symbol: '▤',
+      onPress: () => handleNavigation('createJobSheetStep1', { fresh: true }),
+    },
   ];
 
+  // Pastel tile behind each quick-action icon, by action id.
+  const ACTION_TINTS = {7: '#FEF3C7', 1: '#DBEAFE', 2: '#D1FAE5', 3: '#FFEDD5', 4: '#E0E7FF', 5: '#DBEAFE', 6: '#EDE9FE', 8: '#FEE2E2', 9: '#CFFAFE', 10: '#DCFCE7', 11: '#FEF3C7', 12: '#E0E7FF'};
   const quickActions = [
-    { id: 1, icon: require('../../Assets/icons/quickActions1.png'), label: 'New job sheet' },
-    { id: 2, icon: require('../../Assets/icons/quickActions2.png'), label: 'Purchase' },
-    { id: 3, icon: require('../../Assets/icons/quickActions3.png'), label: 'Sale' },
-    { id: 4, icon: require('../../Assets/icons/quickActions4.png'), label: 'CEIR / IMEI' },
-    { id: 5, icon: require('../../Assets/icons/quickActions5.png'), label: 'Digital ID' },
-    { id: 6, icon: require('../../Assets/icons/quickActions6.png'), label: 'NFC card' },
-    { id: 7, icon: require('../../Assets/icons/quickActions7.png'), label: 'Scan QR' },
-    { id: 8, icon: require('../../Assets/icons/quickActions8.png'), label: 'Reports' },
+    { id: 7, icon: require('../../Assets/icons/qa_notes.png'), label: t('qaNotes') },
+    { id: 1, icon: require('../../Assets/icons/qa_job.png'), label: t('qaNewJobSheet') },
+    { id: 2, icon: require('../../Assets/icons/qa_purchase.png'), label: t('qaPurchase') },
+    { id: 3, icon: require('../../Assets/icons/qa_sale.png'), label: t('qaSale') },
+    { id: 4, icon: require('../../Assets/icons/qa_ceir.png'), label: t('qaCeirImei') },
+    { id: 5, icon: require('../../Assets/icons/qa_id.png'), label: t('qaDigitalId') },
+    { id: 6, icon: require('../../Assets/icons/qa_qr.png'), label: t('qaNfcQr') },
+    { id: 8, icon: require('../../Assets/icons/qa_reports.png'), label: t('qaReports') },
+    { id: 11, emoji: '📒', label: 'Customer directory' },
+    { id: 9, icon: require('../../Assets/icons/qa_supporters.png'), label: t('qaSupporters') },
+    { id: 10, emoji: '💬', label: 'Chat' },
+    { id: 12, emoji: '🧑‍🔧', label: 'Staff' },
   ];
 
-  // Format a count as a 2-digit string (e.g. 3 → "03").
-  const fmt = n => String(n || 0).padStart(2, '0');
+  // Staff accounts carry menu_ids from login: show only the assigned modules plus
+  // the common actions. Other accounts (no menu_ids) see everything.
+  const menuIds = toMenuIds(user && user.menu_ids);
+  const isStaff = !!(user && user.tech_id);
+  const visibleActions = menuIds
+    ? quickActions.filter(
+        a => COMMON_ACTIONS.includes(a.id) || (ACTION_MENU[a.id] && menuIds.includes(ACTION_MENU[a.id])),
+      )
+    : quickActions;
+
+  const fmt = n => String(n || 0);
   const todayStats = [
-    { id: 1, count: fmt(counts.jobs_today), label: 'Jobs today', icon: require('../../Assets/icons/clipboard.png'), color: '#DBEAFE', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 2, count: fmt(counts.completed), label: 'Completed', icon: require('../../Assets/icons/circle-check.png'), color: '#DCFCE7', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 3, count: fmt(counts.pending), label: 'Pending', icon: require('../../Assets/icons/pending.png'), color: '#f8f5daff', textColor: '#333333ff', borderColor: 'transparent' },
-    { id: 4, count: fmt(counts.sales), label: 'Sales', icon: require('../../Assets/icons/arrow-up-right.png'), color: '#FFF7ED', textColor: '#333333ff', borderColor: '#e5d4b8a1' },
-    { id: 5, count: fmt(counts.purchases), label: 'Purchases', icon: require('../../Assets/icons/arrow-down-left.png'), color: '#EDE9FE', textColor: '#333333ff', borderColor: '#d5ccef9a' },
+    { id: 1, count: fmt(counts.jobs_today), label: t('jobsToday'), icon: require('../../Assets/icons/clipboard.png'), accent: '#2563EB', tint: '#EFF6FF', border: '#BFDBFE' },
+    { id: 2, count: fmt(counts.completed), label: t('completed'), icon: require('../../Assets/icons/circle-check.png'), accent: '#16A34A', tint: '#F0FDF4', border: '#BBF7D0' },
+    { id: 3, count: fmt(counts.pending), label: t('pending'), icon: require('../../Assets/icons/pending.png'), accent: '#D97706', tint: '#FFFBEB', border: '#FDE68A' },
+    { id: 4, count: fmt(counts.sales), label: t('sales'), icon: require('../../Assets/icons/arrow-up-right.png'), accent: '#EA580C', tint: '#FFF7ED', border: '#FED7AA' },
+    { id: 5, count: fmt(counts.purchases), label: t('purchases'), icon: require('../../Assets/icons/arrow-down-left.png'), accent: '#7C3AED', tint: '#F5F3FF', border: '#DDD6FE' },
   ];
-
-  // Build the recent-activity list from whichever actions have happened,
-  // newest first. Each entry's subtitle shows the device and when it happened.
-  const fmtActivityTime = v => {
-    if (!v) return '';
-    const dt = new Date(v);
-    if (isNaN(dt.getTime())) return '';
-    return dt.toLocaleString('en-IN', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    });
-  };
-  const deviceLabel = (brand, model, fallback) =>
-    [brand, model].filter(Boolean).join(' ') || fallback;
-
-  const recentActivity = [];
-  if (recent.job) {
-    recentActivity.push({
-      id: 'job',
-      icon: require('../../Assets/icons/quickActions2.png'),
-      title: 'Job sheet created',
-      subtitle: `${deviceLabel(recent.job.device_brand, recent.job.device_model, 'Device')} · ${fmtActivityTime(recent.job.created_at)}`,
-      time: recent.job.created_at,
-      bgColor: '#DCFCE7',
-    });
-  }
-  if (recent.imei) {
-    recentActivity.push({
-      id: 'imei',
-      icon: require('../../Assets/icons/quickActions4.png'),
-      title: 'IMEI verified',
-      subtitle: `${deviceLabel(recent.imei.brand, recent.imei.model, 'Device check')} · ${fmtActivityTime(recent.imei.checked_at)}`,
-      time: recent.imei.checked_at,
-      bgColor: '#EDE9FE',
-    });
-  }
-  if (recent.sale) {
-    const saleTime = recent.sale.sold_at || recent.sale.created_at;
-    recentActivity.push({
-      id: 'sale',
-      icon: require('../../Assets/icons/quickActions3.png'),
-      title: 'Pre-owned phone sold',
-      subtitle: `${deviceLabel(recent.sale.device_brand, recent.sale.device_model, 'Device')} · ${fmtActivityTime(saleTime)}`,
-      time: saleTime,
-      bgColor: '#FEF3C7',
-    });
-  }
-  recentActivity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <>
@@ -225,15 +270,15 @@ export default function TechnicianHomeScreen({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
         {/* Header Section */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{techInitials}</Text>
+              <Image source={require('../../Assets/images/appLogo.png')} style={styles.avatarImage} />
             </View>
             <View style={styles.headerInfo}>
-              <Text style={styles.title}>Welcome back,</Text>
+              <Text style={styles.title}>{t('welcomeBackComma')}</Text>
               <Text style={styles.name}>{techName}</Text>
 
             </View>
@@ -247,100 +292,30 @@ export default function TechnicianHomeScreen({ onNavigate }) {
             </View>
           </View>
 
-          <View style={styles.storeCon}>
-            <Image source={require('../../Assets/icons/storeIcon.png')} style={styles.storeIcon} />
-            <View>
-              <Text style={{color: '#fff', marginLeft: wp('0.5%')}}>{techShop}</Text>
-              <View style={styles.locationCon}>
-                <Image source={require('../../Assets/icons/map-pin.png')} style={styles.mapPinIcon} />
-                <Text style={{color: '#B5C5DF'}}>{techLocation}</Text>
-              </View>
-            </View>
-
-          </View>
+          <ScrollTicker fallbackText={t('tickerText')} refreshKey={tick} />
         </View>
 
-        {/* ID Card Section */}
-        <TouchableOpacity 
-          style={styles.idCard}
-          onPress={() => handleNavigation('myDigitalId')}
-        >
-          <View style={styles.idCardContent}>
-
-            <View style={styles.idCardHeader}>
-              <View style={{display: 'flex', flexDirection: 'row', gap: wp('5%'), justifyContent: 'center'}}>
-                <Image source={require('../../Assets/images/appLogo.png')} style={styles.appLogo} />
-                <View style={{marginTop: hp('0.6%')}}>
-                  <Text style={styles.idName}>RMTA</Text>
-                  <Text style={styles.idDetail}>Digital Member</Text>
-                </View>
-              </View>
-
-              <View style={[styles.idBadge, !isActive && styles.idBadgeInactive]}>
-                {isActive && <Text style={styles.idBadgeCheckmark}>✓</Text>}
-                <Text
-                  style={[
-                    styles.idBadgeText,
-                    !isActive && styles.idBadgeTextInactive,
-                  ]}
-                >
-                  {isActive ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
-
-            </View>
-
-            <View style={styles.idCardBody}>
-              <View style={{marginTop: hp('0.6%')}}>
-                <Text style={styles.idName}>{techName}</Text>
-                <Text style={styles.idDetail}>{techRmtaId}</Text>
-                {techValidUntil ? (
-                  <Text style={styles.idDate}>
-                    Valid until {techValidUntil}
-                  </Text>
-                ) : null}
-              </View>
-
-              <View style={styles.qrCode}>
-                <Image source={require('../../Assets/images/qrCode.png')} style={styles.qrImage} />
-              </View>
-
-            </View>
-
-            
-          </View>
-
-        </TouchableOpacity>
-
-        {/* Active/Inactive status toggle */}
-        <View style={styles.statusToggleCard}>
-          <View style={styles.statusToggleInfo}>
-            <Text style={styles.statusToggleTitle}>
-              {isActive ? 'Active' : 'Inactive'}
-            </Text>
-            <Text style={styles.statusToggleSubtitle}>
-              {isActive
-                ? "You're active and visible to the association."
-                : 'Turn on to activate your membership.'}
-            </Text>
-          </View>
-          <Switch
-            value={isActive}
-            onValueChange={handleToggleStatus}
-            disabled={updatingStatus}
-            trackColor={{ false: '#D1D5DB', true: Colors.secondary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
+        {/* Featured banners */}
+        {bannersLoaded || apiBanners.length ? (
+          <BannerCarousel slides={apiBanners.length ? apiBanners : banners} />
+        ) : (
+          <View style={styles.bannerPlaceholder} />
+        )}
 
         {/* Quick Actions Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
+          <View style={styles.sectionUnderline} />
           <View style={styles.quickActionsGrid}>
-            {quickActions.map((action) => (
-              <TouchableOpacity 
-                key={action.id} 
-                style={styles.actionButton}
+            {visibleActions.map((action, index) => (
+              <TouchableOpacity
+                key={action.id}
+                style={[
+                  styles.actionButton,
+                  // Full rows stay evenly spread (4 per row); a partial last row
+                  // fills from the left with the same column gaps.
+                  (index + 1) % 4 !== 0 && styles.actionButtonGap,
+                ]}
                 onPress={() => {
                   if (action.id === 1) {
                     handleNavigation('createJobSheetStep1', { fresh: true });
@@ -353,131 +328,130 @@ export default function TechnicianHomeScreen({ onNavigate }) {
                   } else if (action.id === 5) {
                     handleNavigation('myDigitalId');
                   } else if (action.id === 6) {
-                    handleNavigation('scanNFC');
-                  } else if (action.id === 7) {
+                    // NFC scanning is switched off for now: this tile goes straight
+                    // to the QR scanner instead of asking NFC card vs QR code.
+                    // showAppActionSheet(t('chooseScanType'), t('selectScanWay'), [
+                    //   {
+                    //     text: t('nfcCard'),
+                    //     subtitle: t('readRmtaCard'),
+                    //     icon: '◉',
+                    //     onPress: () => handleNavigation('scanNFC'),
+                    //   },
+                    //   {
+                    //     text: t('scanQrCode'),
+                    //     subtitle: t('qrSub'),
+                    //     icon: '▦',
+                    //     onPress: () => handleNavigation('scanQR'),
+                    //   },
+                    // ]);
                     handleNavigation('scanQR');
+                  } else if (action.id === 7) {
+                    handleNavigation('notes');
                   } else if (action.id === 8) {
                     handleNavigation('reports');
+                  } else if (action.id === 9) {
+                    handleNavigation('supportUsers');
+                  } else if (action.id === 10) {
+                    handleNavigation('chat');
+                  } else if (action.id === 11) {
+                    handleNavigation('customerDirectory');
+                  } else if (action.id === 12) {
+                    handleNavigation('staff');
                   }
                 }}
               >
-                <View style={styles.actionIcon}>
-                  <Image source={action.icon} style={styles.actionIconImage} />
+                <View style={[styles.actionIcon, { backgroundColor: ACTION_TINTS[action.id] || '#EEF2FF' }]}>
+                  {action.icon ? (
+                    <Image source={action.icon} style={styles.actionIconImage} />
+                  ) : (
+                    <Text style={styles.actionEmoji}>{action.emoji}</Text>
+                  )}
                 </View>
-                <Text style={styles.actionLabel}>{action.label}</Text>
+                {/* Two lines tall: a one-line name is centred in it, so it sits a little lower. */}
+                <View style={styles.actionLabelBox}>
+                  <Text style={styles.actionLabel} numberOfLines={2}>
+                    {action.label}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Featured Banner */}
-        <View style={styles.bannerContainer}>
-          <TouchableOpacity style={styles.banner}>
-            <Image source={banners[0].image} style={styles.bannerImage} />
-          </TouchableOpacity>
-          <View style={styles.dotsContainer}>
-            {banners.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  index === 0 && styles.activeDot,
-                ]}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* Today's Summary Section */}
+        {/* Today's Summary Section (not shown to technician / staff logins) */}
+        {!isStaff && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's summary</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View all {'>'}</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>{t('todaysSummary')}</Text>
+            <View style={styles.dateChip}>
+              <Text style={styles.dateChipText}>{todayLabel}</Text>
+            </View>
           </View>
           <View style={styles.statsGrid}>
             {todayStats.slice(0, 3).map((stat) => (
-              <TouchableOpacity key={stat.id} style={[styles.statCard, { backgroundColor: stat.color }]}>
-                <View style={{display: 'flex', flexDirection: 'row', alignItems: 'center', gap: wp('1%')}}>
+              <TouchableOpacity
+                key={stat.id}
+                activeOpacity={0.85}
+                style={[styles.statCard, { backgroundColor: stat.tint, borderColor: stat.border }]}
+                onPress={() => handleNavigation('jobs')}
+              >
+                <View style={[styles.statIconCircle, { backgroundColor: stat.accent }]}>
                   <Image source={stat.icon} style={styles.statIcon} />
-                  <Text style={[styles.statCount, { color: stat.textColor }]}>{stat.count}</Text>
                 </View>
-                
-                <Text style={[styles.statLabelWide, ]}>{stat.label}</Text>
+                <Text style={[styles.statCount, { color: stat.accent }]}>{stat.count}</Text>
+                <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
           <View style={styles.statsGridBottom}>
             {todayStats.slice(3).map((stat) => (
-              <TouchableOpacity 
-                key={stat.id} 
-                style={[
-                  styles.statCardWide, 
-                  { 
-                    backgroundColor: stat.color,
-                    borderWidth: 2,
-                    borderColor: stat.borderColor
-                  }
-                ]}
+              <TouchableOpacity
+                key={stat.id}
+                activeOpacity={0.85}
+                onPress={() =>
+                  handleNavigation('purchaseAndSaleHistory', {
+                    initialTab: stat.id === 4 ? 'sales' : 'purchases',
+                    singleTab: true,
+                  })
+                }
+                style={[styles.statCardWide, { backgroundColor: stat.tint, borderColor: stat.border }]}
               >
-                
-                <View style={styles.statWideContent}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: wp('2%')}}>
-                    <Image source={stat.icon} style={styles.statIconWide} />
-                    <Text style={[styles.statLabelWide, ]}>{stat.label}</Text>
-                  </View>
-                  
-                  <Text style={[styles.statCountWide, { color: stat.textColor }]}>{stat.count}</Text>
+                <View style={[styles.statAccentBar, { backgroundColor: stat.accent }]} />
+                <View style={[styles.statIconCircle, styles.statIconWide, { backgroundColor: stat.accent }]}>
+                  <Image source={stat.icon} style={styles.statIcon} />
                 </View>
+                <View style={styles.statWideContent}>
+                  <Text style={[styles.statCountWide, { color: stat.accent }]}>{stat.count}</Text>
+                  <Text style={styles.statLabelWide}>{stat.label}</Text>
+                </View>
+                <Text style={[styles.statChevron, { color: stat.accent }]}>›</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
+        )}
 
-        {/* Recent Activity Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent activity</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View all {'>'}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.activityList}>
-            {recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
-                <TouchableOpacity key={activity.id} style={styles.activityItem}>
-                  <View style={[styles.activityIcon, { backgroundColor: activity.bgColor }]}>
-                    <Image source={activity.icon} style={styles.activityIconImage} />
-                  </View>
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>{activity.title}</Text>
-                    <Text style={styles.activitySubtitle}>{activity.subtitle}</Text>
-                  </View>
-                  <Text style={styles.chevron}>›</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.activityEmptyText}>
-                No recent activity yet. Create a job sheet, verify an IMEI, or record a sale to see it here.
-              </Text>
-            )}
-          </View>
-        </View>
-
-         <Text style={styles.bottomNavTitle}>One association. Stronger together.</Text>
+         <Text style={styles.bottomNavTitle}>{t('oneAssociation')}</Text>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Bottom Navigation - Sticky */}
-      <BottomNav selectedItem={selectedNavItem} onNavigate={handleNavigation} />
+      <BottomNav key={navKey} selectedItem={selectedNavItem} onNavigate={handleNavigation} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  bannerPlaceholder: {
+    height: 178,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 8,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
@@ -485,9 +459,9 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: wp('3%'),
+    paddingHorizontal: wp('4%'),
     paddingTop: hp('2%'),
-    paddingBottom: hp('10%'),
+    paddingBottom: hp('2%'),
   },
   headerContent: {
     flexDirection: 'row',
@@ -498,12 +472,17 @@ const styles = StyleSheet.create({
     width: wp('12%'),
     height: wp('12%'),
     borderRadius: wp('20%'),
-    backgroundColor: '#2F5DDC',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: wp('3%'),
     borderWidth: 1.3,
     borderColor: '#ffff'
+  },
+  avatarImage: {
+    width: wp('8%'),
+    height: wp('8%'),
+    resizeMode: 'contain',
   },
   avatarText: {
     color: '#FFFFFF',
@@ -558,144 +537,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  storeCon: {
-    width: wp('94%'),
-    backgroundColor: '#193057ff',
-    paddingVertical: hp('1.4%'),
-    paddingHorizontal: wp('5%'),
-    borderRadius: wp('2.6%'),
-    marginBottom: hp('2%'),
-    display: 'flex',
-    flexDirection: 'row',
-    gap: wp('3%'),
-    alignItems: 'center'
-  },
-
-  storeIcon: {
-    height: wp('6%'),
-    width: wp('6%'),
-  },
-
-  locationCon: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center'
-  },  
-
-  mapPinIcon: {
-    height: wp('4%'),
-    width: wp('4%'),
-  },
-
-  idCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    // position: 'relative',
-    // top: hp('-10%'),
-    marginHorizontal: wp('3%'),
-    marginTop: hp('-10%'),
-    marginBottom: hp('2%')
-  },
-  idCardContent: {
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    // marginBottom: 12,
-  },
-  idCardHeader : {
-    display:'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: wp('88%'),
-  },
-  idCardLeft: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  appLogo : {
-    height: wp('12%'),
-    width: wp('12%')
-  },
-
-  idCardBody :{
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: wp('88%'),
-    paddingVertical: hp('2%'),
-  },
-  // idAvatar: {
-  //   width: 40,
-  //   height: 40,
-  //   borderRadius: 20,
-  //   backgroundColor: '#6B7280',
-  //   justifyContent: 'center',
-  //   alignItems: 'center',
-  //   marginRight: 12,
-  // },
-  // idAvatarText: {
-  //   color: '#FFFFFF',
-  //   fontSize: 14,
-  //   fontWeight: '600',
-  // },
-  idName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  idDetail: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  idDate: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  qrCode: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  qrImage: {
-    width: 80,
-    height: 80,
-    resizeMode: 'contain',
-  },
-  idBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  idBadgeCheckmark: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  idBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#15803D',
-    marginLeft: 4,
-  },
-  idBadgeInactive: {
-    backgroundColor: '#F3F4F6',
-  },
-  idBadgeTextInactive: {
-    color: '#6B7280',
-    marginLeft: 0,
-  },
   statusToggleCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -745,137 +586,148 @@ const styles = StyleSheet.create({
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: 12,
+    justifyContent: 'flex-start',
+    marginTop: 8,
+  },
+  actionButtonGap: {
+    marginRight: '2.5%',
+  },
+  sectionUnderline: {
+    width: 26,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#2F5DDC',
+    marginTop: 5,
   },
   actionButton: {
     width: '23%',
     alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#fff',
-    paddingVertical: hp('2%'),
-    borderRadius: wp('4%'),
+    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 6,
+    paddingBottom: 4,
+    paddingHorizontal: 3,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#dddddd9d'
+    borderColor: '#E8ECF3',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   actionIcon: {
-    width: wp('4%'),
-    height: wp('12%'),
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    // backgroundColor: '#F3F4F6',
+    marginBottom: 3,
   },
   actionIconImage: {
-    width: wp('10%'),
-    height: wp('10%'),
+    width: 40,
+    height: 40,
     resizeMode: 'contain',
+  },
+  actionEmoji: { fontSize: 27 },
+  actionLabelBox: {
+    minHeight: 26,
+    justifyContent: 'center',
   },
   actionLabel: {
-    fontSize: 11,
-    color: '#4B5563',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#1F2937',
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  bannerContainer: {
-    paddingHorizontal: 16,
-    marginVertical: 8,
+  dateChip: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  banner: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  bannerImage: {
-    width: '100%',
-    height: 180,
-    resizeMode: 'cover',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D1D5DB',
-  },
-  activeDot: {
-    backgroundColor: '#bbbbbbff',
-    width: 8,
-  },
+  dateChipText: { fontSize: 11, fontWeight: '700', color: '#4F46E5' },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 12,
-    gap: 12,
+    marginTop: 8,
+    gap: 10,
   },
   statCard: {
-    width: '31%',
-    paddingVertical: 16,
+    flex: 1,
+    paddingVertical: 14,
     paddingHorizontal: 12,
-    borderRadius: 16,
-    marginBottom: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'flex-start',
   },
+  statIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  statIconWide: { marginBottom: 0 },
   statIcon: {
-    width: wp('5%'),
-    height: wp('5%'),
+    width: 17,
+    height: 17,
     resizeMode: 'contain',
-    marginBottom: 8,
+    tintColor: '#FFFFFF',
   },
   statCount: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 30,
+    fontWeight: '800',
+    lineHeight: 34,
   },
   statLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 2,
   },
   statsGridBottom: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 12,
+    gap: 10,
+    marginTop: 10,
   },
   statCardWide: {
     flex: 1,
-    paddingVertical: hp('1.5%'),
-    paddingHorizontal: wp('2%'),
-    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingLeft: 16,
+    borderRadius: 18,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    overflow: 'hidden',
   },
-  statIconWide: {
-    width: wp('6%'),
-    height: wp('6%'),
-    resizeMode: 'contain',
+  statAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
   },
   statWideContent: {
     flex: 1,
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   statLabelWide: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#596579'
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
-
   statCountWide: {
-    fontSize: 20,
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 28,
+  },
+  statChevron: {
+    fontSize: 24,
     fontWeight: '700',
-    marginTop: 4,
   },
   activityList: {
     marginTop: 12,
@@ -942,7 +794,7 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   bottomSpacer: {
-    height: 40,
+    height: 130,
   },
   bottomNavContainer: {
     backgroundColor: 'transparent',

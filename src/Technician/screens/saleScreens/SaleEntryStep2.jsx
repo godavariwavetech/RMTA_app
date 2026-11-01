@@ -8,34 +8,62 @@ import {
   Image,
   StatusBar,
   TextInput,
-  FlatList,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
+import { SkeletonCardList } from '../../../Components/Skeleton';
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS, buildUrl } from '../../../Constants/config';
+import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { updateSaleDraft } from '../../../redux/slices/saleSlice';
+import StepNav from '../../../Components/StepNav';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 const sampleImage = require('../../../Assets/images/sampleMobileImg.png');
+
+// Shared shape for both inventory_list and search_purchase rows.
+const mapRow = r => ({
+  id: r.id, // inventory_device_id — used when creating the sale
+  deviceImage: r.frontimage
+    ? { uri: r.frontimage }
+    : r.baackimage
+    ? { uri: r.baackimage }
+    : sampleImage,
+  brand: r.device_brand || '',
+  model: (r.device_model || '').trim(),
+  storage: r.storage || '',
+  color: r.color || '',
+  imei: r.imei1 || '',
+  purchasePrice: r.purchaseprice != null ? Number(r.purchaseprice) : 0,
+  condition: r.screen || '—',
+  ceirStatus: r.devicestatus === 'not_blocked' ? 'CEIR checked' : 'CEIR not checked',
+});
 
 export default function SaleEntryStep2({ onNavigate, buyerData }) {
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   const draftDevice = useSelector(state => state.sale.draft.device);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedDevice, setSelectedDevice] = useState(draftDevice || null);
   const [inventoryDevices, setInventoryDevices] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
 
-  // Load the member's available inventory (devices bought and not yet sold).
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  // Load the member's full available inventory once — POST /public_app/inventory_list.
+  // Shown whenever the search box is empty.
   useEffect(() => {
     let active = true;
     (async () => {
@@ -43,33 +71,25 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
         if (active) setLoading(false);
         return;
       }
+      const payload = { member_id: user.member_id };
+      console.log(
+        `[Sale][Step2] inventory_list POST ${ENDPOINTS.INVENTORY_LIST} payload →`,
+        payload,
+      );
       try {
-        const { response, data } = await postJson(ENDPOINTS.INVENTORY_LIST, {
-          member_id: user.member_id,
-        });
+        const { response, data } = await postJson(ENDPOINTS.INVENTORY_LIST, payload);
+        console.log(
+          `[Sale][Step2] inventory_list response → HTTP ${response.status}`,
+          data,
+        );
         if (active && response.ok && data && data.success !== false) {
           const rows = Array.isArray(data.data) ? data.data : [];
-          setInventoryDevices(
-            rows.map(r => ({
-              id: r.id, // inventory_device_id — used when creating the sale
-              deviceImage: r.device_photo_path
-                ? { uri: buildUrl(r.device_photo_path) }
-                : sampleImage,
-              brand: r.device_brand,
-              model: r.device_model,
-              storage: r.storage || '',
-              color: r.color || '',
-              imei: r.imei1 || '',
-              purchasePrice: r.purchase_price != null ? Number(r.purchase_price) : 0,
-              condition: r.overall_condition
-                ? r.overall_condition.charAt(0).toUpperCase() + r.overall_condition.slice(1)
-                : '—',
-              ceirStatus: r.ceir_status === 'not_blocked' ? 'CEIR checked' : 'CEIR not checked',
-            })),
-          );
+          setInventoryDevices(rows.map(mapRow));
+        } else if (active) {
+          setInventoryDevices([]);
         }
       } catch (e) {
-        // leave inventory empty on failure
+        if (active) setInventoryDevices([]);
       } finally {
         if (active) setLoading(false);
       }
@@ -79,12 +99,46 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
     };
   }, [user.member_id]);
 
-  // Filter devices based on search query
-  const filteredDevices = inventoryDevices.filter(device =>
-    (device.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (device.model || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (device.imei || '').includes(searchQuery)
-  );
+  // While the search box has text, hit search_purchase for those results
+  // instead of filtering the inventory_list locally.
+  useEffect(() => {
+    let active = true;
+    if (!debouncedQuery || !user.member_id) {
+      setSearchResults([]);
+      return undefined;
+    }
+    (async () => {
+      setSearching(true);
+      const payload = { member_id: String(user.member_id), search: debouncedQuery };
+      console.log(
+        `[Sale][Step2] search_purchase POST ${ENDPOINTS.SEARCH_PURCHASE} payload →`,
+        payload,
+      );
+      try {
+        const { response, data } = await postJson(ENDPOINTS.SEARCH_PURCHASE, payload);
+        console.log(
+          `[Sale][Step2] search_purchase response → HTTP ${response.status}`,
+          data,
+        );
+        if (active && response.ok && data && data.success !== false) {
+          const rows = Array.isArray(data.data) ? data.data : [];
+          setSearchResults(rows.map(mapRow));
+        } else if (active) {
+          setSearchResults([]);
+        }
+      } catch (e) {
+        if (active) setSearchResults([]);
+      } finally {
+        if (active) setSearching(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user.member_id, debouncedQuery]);
+
+  const isSearching = !!debouncedQuery;
+  const displayedDevices = isSearching ? searchResults : inventoryDevices;
 
   const handleDeviceSelect = (device) => {
     setSelectedDevice(device);
@@ -104,7 +158,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
   const handleBackPress = () => {
     if (selectedDevice) dispatch(updateSaleDraft({ device: selectedDevice }));
     if (onNavigate) {
-      onNavigate('verifyBuyerMobileNumber');
+      onNavigate('goBack');
     }
   };
 
@@ -151,7 +205,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
     return (
       <View style={styles.detailsSection}>
         <Text style={styles.detailsTitle}>Available stock</Text>
-        
+
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Purchase price</Text>
           <Text style={styles.detailValue}>₹{selectedDevice.purchasePrice.toLocaleString('en-IN')}</Text>
@@ -178,8 +232,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -187,6 +240,8 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
             <Text style={styles.headerTitle}>Select Device</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
@@ -215,7 +270,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
           {/* Content */}
           <View style={styles.content}>
             {/* Section Title */}
-            <Text style={styles.sectionTitle}>Choose from your inventory</Text>
+            <Text style={styles.sectionTitle}>Choose from your inventory <Text style={{ color: '#EF4444' }}>*</Text></Text>
 
             {/* Search Field */}
             <View style={styles.searchContainer}>
@@ -230,14 +285,15 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            <ImeiScanButton compact onScanned={setSearchQuery} />
             </View>
 
             {/* Device List */}
             <View style={styles.deviceList}>
-              {loading ? (
-                <ActivityIndicator color={Colors.primary} style={{ marginVertical: hp('4%') }} />
-              ) : filteredDevices.length > 0 ? (
-                filteredDevices.map((device) => (
+              {(isSearching ? searching : loading) ? (
+                <SkeletonCardList count={3} />
+              ) : displayedDevices.length > 0 ? (
+                displayedDevices.map((device) => (
                   <View key={device.id}>
                     {renderDeviceItem({ item: device })}
                   </View>
@@ -256,6 +312,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={[
               styles.continueButton,
@@ -264,8 +321,9 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
             onPress={handleContinue}
             disabled={!selectedDevice}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>
@@ -279,8 +337,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -302,6 +360,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,

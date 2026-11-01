@@ -7,22 +7,25 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  Share,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
+import { generatePDF } from 'react-native-html-to-pdf';
+import Share from 'react-native-share';
+import { showAppModal } from '../../../utils/appModal';
+import useRefresh from '../../../utils/useRefresh';
 
 export default function ReportDetails({ onNavigate, reportType }) {
+  const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const isAdmin = user.role === 'admin';
   const [report, setReport] = useState(null);
@@ -48,7 +51,7 @@ export default function ReportDetails({ onNavigate, reportType }) {
     return () => {
       active = false;
     };
-  }, [isAdmin, user.member_id]);
+  }, [isAdmin, user.member_id, tick]);
 
   const handleBack = () => {
     if (onNavigate) {
@@ -60,29 +63,16 @@ export default function ReportDetails({ onNavigate, reportType }) {
   const handleExportReport = async () => {
     try {
       const s = reportData.summary;
-      const lines = [
-        'RMTA — Repair Performance',
-        user.shop_name ? `Shop: ${user.shop_name}` : null,
-        `Period: ${reportData.period}`,
-        '',
-        'Summary:',
-        `  Completed: ${s.completed} jobs`,
-        `  In progress: ${s.inProgress} jobs`,
-        `  Ready for pickup: ${s.readyForPickup} jobs`,
-        `  Revenue: ${s.revenue}`,
-        '',
-        'Repairs this week:',
-        ...reportData.weekRepairs.map(r => `  ${r.day}: ${r.value}`),
-        '',
-        `${reportData.repairsCompleted} repairs completed · ${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}% this week`,
-      ].filter(l => l !== null);
-
-      await Share.share({
-        message: lines.join('\n'),
-        title: 'RMTA Repair Performance',
+      const chartRows = reportData.weekRepairs.map(r => `<tr><td>${r.day}</td><td>${r.value}</td></tr>`).join('');
+      const file = await generatePDF({
+        fileName: `RMTA_Repair_Performance_${Date.now()}`,
+        base64: false,
+        html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Repair Performance</h1><p>${user.shop_name || 'RMTA'} - ${reportData.period}</p><h2>Summary</h2><p>Completed: ${s.completed} jobs</p><p>In progress: ${s.inProgress} jobs</p><p>Ready for pickup: ${s.readyForPickup} jobs</p><p>Revenue: ${s.revenue}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${chartRows}</table></body></html>`,
       });
+      if (!file?.filePath) throw new Error('PDF file was not created.');
+      await Share.open({ title: 'RMTA Repair Performance', url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`, type: 'application/pdf', failOnCancel: false });
     } catch (e) {
-      Alert.alert('Export failed', 'Could not share the report. Please try again.');
+      if (e?.message !== 'User did not share') showAppModal('Export failed', e?.message || 'Could not create or share the report. Please try again.');
     }
   };
 
@@ -141,18 +131,19 @@ export default function ReportDetails({ onNavigate, reportType }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-        >
-          {/* Header */}
+        {/* Header */}
           <View style={styles.headerSection}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Image source={require('../../../Assets/icons/back.png')} style={{height: wp('5%'), width: wp('5%')}} />
             </TouchableOpacity>
             <Text style={styles.pageTitle}>Report Detail</Text>
           </View>
+        <ScrollView refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+        >
+
 
           {/* Report Title and Period */}
           <View style={styles.section}>
@@ -270,6 +261,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('7%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   pageTitle: {
     fontSize: wp('5%'),

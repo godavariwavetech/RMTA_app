@@ -8,30 +8,31 @@ import {
   Image,
   StatusBar,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
 import { updateJobDraft } from '../../../redux/slices/jobSheetSlice';
+import StepNav from '../../../Components/StepNav';
 
-const MAX_PHOTOS = 3;
+// One photo per category; create_job_sheets takes them as raw base64.
+const PHOTO_CATEGORIES = [
+  { id: 'front', title: 'Front view' },
+  { id: 'back', title: 'Back view' },
+  { id: 'damage', title: 'Visible damage' },
+];
 
 export default function CreateJobSheetStep3({ onNavigate }) {
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
-  const user = useSelector(state => state.auth.user) || {};
-  const draftConditionPhotos = useSelector(
-    state => state.jobSheet.draft.conditionPhotos,
-  );
+  const draftPhotos = useSelector(state => state.jobSheet.draft.photos);
   const draftConditions = useSelector(state => state.jobSheet.draft.conditions);
 
   // Nothing selected by default — the technician chooses each one. Overridden
@@ -63,75 +64,37 @@ export default function CreateJobSheetStep3({ onNavigate }) {
     return restored;
   });
 
-  // Up to 3 condition photos: { uri, file_id, uploading }. Restore any already
-  // uploaded in the draft so revisiting this step keeps them.
-  const [photos, setPhotos] = useState(
-    Array.isArray(draftConditionPhotos)
-      ? draftConditionPhotos
-          .filter(p => p && p.file_id)
-          .map(p => ({ uri: p.uri || null, file_id: p.file_id, uploading: false }))
-      : [],
-  );
-
-  const uploadOne = async asset => {
-    // Add a local preview immediately, keyed by its uri; mark as uploading.
-    setPhotos(prev => [...prev, { uri: asset.uri, uploading: true }]);
-    try {
-      const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-        base64: asset.base64,
-        mime_type: asset.type || 'image/jpeg',
-        original_name: asset.fileName || 'condition.jpg',
-        uploaded_by: user.user_id,
+  // Per-category photo state: { uri, base64 }. Restored from the draft so
+  // navigating back keeps them.
+  const [photos, setPhotos] = useState(() => {
+    const restored = {};
+    if (Array.isArray(draftPhotos)) {
+      draftPhotos.forEach(p => {
+        if (p && p.base64) {
+          restored[p.photo_type] = { uri: p.uri || null, base64: p.base64 };
+        }
       });
-      if (res.ok && data && data.success !== false) {
-        setPhotos(prev =>
-          prev.map(p =>
-            p.uri === asset.uri
-              ? { ...p, file_id: data.data.file_id, uploading: false }
-              : p,
-          ),
-        );
-      } else {
-        setPhotos(prev =>
-          prev.map(p => (p.uri === asset.uri ? { ...p, uploading: false } : p)),
-        );
-        Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-      }
-    } catch (err) {
-      setPhotos(prev =>
-        prev.map(p => (p.uri === asset.uri ? { ...p, uploading: false } : p)),
-      );
-      Alert.alert('Upload failed', err.message);
     }
-  };
+    return restored;
+  });
 
-  const handlePickPhotos = () => {
-    const remaining = MAX_PHOTOS - photos.length;
-    if (remaining <= 0) {
-      Alert.alert('Limit reached', `You can upload up to ${MAX_PHOTOS} photos.`);
-      return;
-    }
-    launchImageLibrary(
-      { mediaType: 'photo', includeBase64: true, quality: 0.7, selectionLimit: remaining },
-      async response => {
+  const pickPhoto = categoryId => {
+    chooseImageSource(
+      { mediaType: 'photo', includeBase64: true, quality: 0.7 },
+      response => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert('Photo error', response.errorMessage || 'Could not pick the image.');
           return;
         }
-        const assets = (response.assets || []).slice(0, remaining);
-        for (const asset of assets) {
-          if (asset && asset.base64) {
-            // eslint-disable-next-line no-await-in-loop
-            await uploadOne(asset);
-          }
-        }
+        const asset = response.assets && response.assets[0];
+        if (!asset || !asset.base64) return;
+        setPhotos(prev => ({
+          ...prev,
+          [categoryId]: { uri: asset.uri, base64: asset.base64 },
+        }));
       },
     );
-  };
-
-  const removePhoto = index => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const buildDraft = () => {
@@ -150,24 +113,28 @@ export default function CreateJobSheetStep3({ onNavigate }) {
         component: componentMap[key],
         condition_value: selections[key],
       }));
-    // Only keep successfully uploaded photos (those with a file_id). Keep the
-    // local uri too so the thumbnail shows when revisiting this step.
-    const conditionPhotos = photos
-      .filter(p => p && p.file_id)
-      .map(p => ({ photo_type: 'other', file_id: p.file_id, uri: p.uri || null }));
-    return { conditions, conditionPhotos };
+    // Keep the local uri too so the previews show when revisiting this step.
+    const photoList = Object.keys(photos)
+      .filter(key => photos[key] && photos[key].base64)
+      .map(key => ({
+        photo_type: key,
+        base64: photos[key].base64,
+        uri: photos[key].uri || null,
+      }));
+    return { conditions, photos: photoList, conditionPhotos: [] };
   };
 
   const handleBackPress = () => {
     // Persist current edits so they're kept when navigating back.
     dispatch(updateJobDraft(buildDraft()));
     if (onNavigate) {
-      onNavigate('createJobSheetStep2');
+      onNavigate('goBack');
     }
   };
 
   const handleContinue = () => {
     // Every condition field must be answered before moving on.
+    setTried(true);
     const unanswered = Object.keys(selections).filter(k => !selections[k]);
     if (unanswered.length > 0) {
       Alert.alert(
@@ -176,9 +143,8 @@ export default function CreateJobSheetStep3({ onNavigate }) {
       );
       return;
     }
-    const { conditions, conditionPhotos } = buildDraft();
-    dispatch(updateJobDraft({ conditions, conditionPhotos }));
-    console.log('[JobSheet][Step3] conditions captured →', conditions, conditionPhotos);
+    const draft = buildDraft();
+    dispatch(updateJobDraft(draft));
     if (onNavigate) {
       onNavigate('createJobSheetStep4');
     }
@@ -195,7 +161,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
     {
       id: 'screen',
       label: 'Screen',
-      options: ['Good', 'Damaged', 'Cracked'],
+      options: ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'],
     },
     {
       id: 'body',
@@ -232,8 +198,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -241,15 +206,17 @@ export default function CreateJobSheetStep3({ onNavigate }) {
             <Text style={styles.headerTitle}>Device Condition</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 3 OF 8 · CONDITION</Text>
+            <Text style={styles.stepText}>STEP 3 OF 7 · CONDITION</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '37.5%' }]} />
+            <View style={[styles.progressBar, { width: '42.86%' }]} />
           </View>
 
           {/* Content Section */}
@@ -264,7 +231,11 @@ export default function CreateJobSheetStep3({ onNavigate }) {
             <View style={styles.categoriesContainer}>
               {conditionCategories.map((category) => (
                 <View key={category.id} style={styles.categorySection}>
-                  <Text style={styles.categoryLabel}>{category.label}</Text>
+                  <Text style={[styles.categoryLabel, tried && !selections[category.id] && styles.categoryLabelError]}>
+                    {category.label}
+                    <Text style={styles.required}> *</Text>
+                    {tried && !selections[category.id] ? '  — choose one' : ''}
+                  </Text>
                   <View style={styles.optionsContainer}>
                     {category.options.map((option) => (
                       <TouchableOpacity
@@ -292,53 +263,35 @@ export default function CreateJobSheetStep3({ onNavigate }) {
               ))}
             </View>
 
-            {/* Camera Section */}
+            {/* Device photos */}
             <View style={styles.photoSection}>
-              <Text style={styles.categoryLabel}>
-                Select photos Upto ({photos.length}/{MAX_PHOTOS})
-              </Text>
-
-              {/* Thumbnails of selected / uploaded photos */}
-              {photos.length > 0 && (
-                <View style={styles.thumbRow}>
-                  {photos.map((photo, index) => (
-                    <View key={photo.uri || photo.file_id || index} style={styles.thumbWrapper}>
-                      {photo.uri ? (
-                        <Image source={{ uri: photo.uri }} style={styles.thumb} />
+              <Text style={styles.categoryLabel}>Device photos</Text>
+              <View style={styles.photoGrid}>
+                {PHOTO_CATEGORIES.map(category => {
+                  const photo = photos[category.id];
+                  return (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={styles.photoCard}
+                      onPress={() => pickPhoto(category.id)}
+                      activeOpacity={0.8}
+                    >
+                      {photo && photo.uri ? (
+                        <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
                       ) : (
-                        <View style={[styles.thumb, styles.thumbPlaceholder]}>
-                          <Text style={styles.thumbPlaceholderText}>✓</Text>
-                        </View>
+                        <Image
+                          source={require('../../../Assets/icons/camera.png')}
+                          style={styles.cameraIcon}
+                        />
                       )}
-                      {photo.uploading && (
-                        <View style={styles.thumbOverlay}>
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        </View>
-                      )}
-                      <TouchableOpacity
-                        style={styles.thumbRemove}
-                        onPress={() => removePhoto(index)}
-                      >
-                        <Text style={styles.thumbRemoveText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Add-photo button, hidden once the limit is reached */}
-              {photos.length < MAX_PHOTOS && (
-                <TouchableOpacity style={styles.photoButton} onPress={handlePickPhotos}>
-                  <Image
-                    source={require('../../../Assets/icons/camera.png')}
-                    style={styles.cameraIcon}
-                  />
-                  <Text style={styles.photoText}>Front, back & damage photos</Text>
-                  <Text style={styles.photoSubtext}>
-                    JPG or PNG - up to {MAX_PHOTOS} photos
-                  </Text>
-                </TouchableOpacity>
-              )}
+                      <Text style={styles.photoTitle}>{category.title}</Text>
+                      <Text style={[styles.photoSubtext, photo && styles.photoUploaded]}>
+                        {photo ? '✓ Tap to replace' : 'JPG or PNG'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             <View style={styles.bottomSpacer} />
@@ -347,9 +300,11 @@ export default function CreateJobSheetStep3({ onNavigate }) {
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
       </SafeAreaView>
     </>
@@ -357,6 +312,13 @@ export default function CreateJobSheetStep3({ onNavigate }) {
 }
 
 const styles = StyleSheet.create({
+  categoryLabelError: { color: '#DC2626' },
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
@@ -364,8 +326,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -389,6 +351,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -486,58 +451,38 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 12,
   },
-  thumbRow: {
+  photoGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
+    marginTop: 8,
   },
-  thumbWrapper: {
-    width: wp('22%'),
-    height: wp('22%'),
+  photoCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    position: 'relative',
-  },
-  thumb: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    resizeMode: 'cover',
+    paddingVertical: 16,
+    paddingHorizontal: 6,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  thumbPlaceholder: {
-    backgroundColor: '#EAF1FF',
-    justifyContent: 'center',
-    alignItems: 'center',
+  photoPreview: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    marginBottom: 8,
+    resizeMode: 'cover',
   },
-  thumbPlaceholderText: {
-    fontSize: 24,
+  photoTitle: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#2F5DDC',
-    fontWeight: '700',
+    marginBottom: 2,
+    textAlign: 'center',
   },
-  thumbOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thumbRemove: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thumbRemoveText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 17,
+  photoUploaded: {
+    color: '#10B981',
+    fontWeight: '600',
   },
   photoButton: {
     backgroundColor: '#FFFFFF',

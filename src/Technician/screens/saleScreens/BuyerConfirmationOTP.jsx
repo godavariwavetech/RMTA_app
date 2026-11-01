@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,14 +7,13 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { Alert, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 
@@ -22,6 +21,7 @@ import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { resetSaleDraft } from '../../../redux/slices/saleSlice';
+import OtpInput from '../../../Components/OtpInput';
 
 export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData, saleData, invoiceId }) {
   const dispatch = useDispatch();
@@ -29,7 +29,6 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes
   const [submitting, setSubmitting] = useState(false);
-  const inputRefs = useRef([]);
 
   // Request a confirmation OTP for the buyer's mobile on arrival (dev: alert).
   const sendOtp = async () => {
@@ -73,74 +72,55 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
 
   const handleBackPress = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep4');
+      onNavigate('goBack');
     }
   };
 
-  const handleOtpChange = (value, index) => {
-    // Only allow single digits
-    if (value.length > 1) {
-      return;
-    }
 
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Move to next input if digit is entered
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyPress = (event, index) => {
-    if (event.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
 
   const handleVerify = async () => {
     const fullOtp = otp.join('');
     if (fullOtp.length !== 6 || submitting) return;
 
     // Buyer confirmed → create the sale in the DB, then show completion.
+    // deviceData.id is the purchase/inventory record's id (from
+    // inventory_list / search_purchase), used here as purchase_id.
     const payload = {
       member_id: user.member_id,
-      created_by: user.user_id,
-      buyer: {
-        full_name: buyerData?.buyerName || '',
-        mobile: buyerData?.buyerMobile || '',
-        aadhaar_last4: String(buyerData?.aadhaarNumber || '').replace(/\D/g, '').slice(-4) || null,
-        address: buyerData?.address || null,
-        photo_file_id: (buyerData?.buyerPhoto && buyerData.buyerPhoto.file_id) || null,
-      },
-      inventory_device_id: deviceData?.id,
-      sale: {
-        sale_price: saleData?.salePrice || '0',
-        payment_mode: saleData?.paymentMode || 'cash',
-        transaction_ref: saleData?.transactionId || null,
-        warranty_notes: saleData?.warranty || null,
-      },
+      purchase_id: deviceData?.id,
+      buyer_id: buyerData?.customer_id,
+      sale_price: saleData?.salePrice || '0',
+      payment_mode: saleData?.paymentMode || 'cash',
+      warranty_notes: saleData?.warranty || null,
     };
-    console.log('[Sale][Confirm] submitting full payload →', JSON.stringify(payload, null, 2));
+    console.log(
+      `[Sale][Confirm] create_sale_sheets POST ${ENDPOINTS.CREATE_SALE} payload →`,
+      payload,
+    );
     setSubmitting(true);
     try {
       const { response, data } = await postJson(ENDPOINTS.CREATE_SALE, payload);
+      console.log(
+        `[Sale][Confirm] create_sale_sheets response → HTTP ${response.status}`,
+        data,
+      );
       setSubmitting(false);
       if (!response.ok || (data && data.success === false)) {
         Alert.alert('Could not complete sale', (data && data.message) || 'Please try again.');
         return;
       }
-      console.log('[Sale][Confirm] created ✓ →', data.data);
       dispatch(resetSaleDraft());
       if (onNavigate) {
-        onNavigate('saleCompleted', {
-          buyerData: buyerData,
-          deviceData: deviceData,
-          saleData: saleData,
-          invoiceId: invoiceId,
-          sale: data.data,
-          otpVerified: true,
+        onNavigate('replaceStack', {
+          target: 'saleCompleted',
+          screenParams: {
+            buyerData: buyerData,
+            deviceData: deviceData,
+            saleData: saleData,
+            invoiceId: invoiceId,
+            sale: data.data,
+            otpVerified: true,
+          },
         });
       }
     } catch (err) {
@@ -151,7 +131,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
 
   const handleUseAnotherNumber = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep1');
+      onNavigate('goBackTo', { target: 'saleEntryStep1' });
     }
   };
 
@@ -172,8 +152,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -181,6 +160,8 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
             <Text style={styles.headerTitle}>Confirm Sale</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
@@ -201,25 +182,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
             </Text>
 
             {/* OTP Input Fields */}
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={[
-                    styles.otpInput,
-                    digit && styles.otpInputFilled,
-                  ]}
-                  maxLength={1}
-                  keyboardType="numeric"
-                  value={digit}
-                  onChangeText={(value) => handleOtpChange(value, index)}
-                  onKeyPress={(event) => handleOtpKeyPress(event, index)}
-                  secureTextEntry={false}
-                  textAlign="center"
-                />
-              ))}
-            </View>
+            <OtpInput value={otp} onChange={setOtp} />
 
             {/* Resend Timer */}
             <View style={styles.timerContainer}>
@@ -240,7 +203,7 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
             </View>
 
             {/* Use Another Number Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.alternateButton}
               onPress={handleUseAnotherNumber}
             >
@@ -280,8 +243,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -302,6 +265,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -351,29 +317,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 24,
-  },
-  otpInput: {
-    flex: 1,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.primary,
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-  },
-  otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F7F9FC',
-  },
+  },
   timerContainer: {
     alignItems: 'center',
     marginBottom: 24,

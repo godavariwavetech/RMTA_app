@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,32 +7,59 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import PdfSizeModal from '../../../Components/PdfSizeModal';
+import { shareJobSheetPdf } from '../../../utils/jobSheetPdf';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
+import StepNav from '../../../Components/StepNav';
 
-export default function CreateJobSheetStep8({ onNavigate, job }) {
-  const j = job || {};
-  const jobCode = j.job_code || '—';
+export default function CreateJobSheetStep8({ onNavigate, job, summary }) {
+  // `summary` carries everything entered in the steps; `job` is the server's
+  // record (job code, id, ...) and wins where both have a field.
+  const j = { ...(summary || {}), ...(job || {}) };
+  const [sharing, setSharing] = useState(false);
+  const [sizeModalVisible, setSizeModalVisible] = useState(false);
+  const jobId = j.job_id || j.job_sheet_id || j.id || j.insertId || '';
+  const jobCode = j.job_code || j.job_number || (jobId ? `Job #${jobId}` : 'Job Sheet');
   const deviceName =
     [j.device_brand, j.device_model].filter(Boolean).join(' ') || 'Device';
   const customerName = j.customer_name || '';
   const jobInfo = [j.customer_name, j.problem_description].filter(Boolean).join(' · ');
   const price =
-    j.estimated_cost != null
+    j.estimated_cost != null && j.estimated_cost !== ''
       ? `₹${Number(j.estimated_cost).toLocaleString('en-IN')}`
       : '';
+
+
+
+  // Generates the job sheet PDF and opens the system share sheet, which lists
+  // WhatsApp, Gmail, Drive and any other installed app.
+  const handleSharePdf = async sizeKey => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const result = await shareJobSheetPdf(j, sizeKey);
+      if (result.saved) Alert.alert('PDF saved', `Saved to:\n${result.filePath}`);
+    } catch (err) {
+      Alert.alert('Could not create PDF', err.message || 'Please try again.');
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const handleBackPress = () => {
     // Job is already created — go back to the jobs list, not the review step.
     if (onNavigate) {
-      onNavigate('jobs');
+      onNavigate('resetTo', { target: 'jobs' });
     }
   };
 
@@ -51,8 +78,7 @@ export default function CreateJobSheetStep8({ onNavigate, job }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -60,9 +86,12 @@ export default function CreateJobSheetStep8({ onNavigate, job }) {
             <Text style={styles.headerTitle}>Job Created</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Content Section */}
           <View style={styles.content}>
+            <>
             {/* Success Card */}
             <View style={styles.successCard}>
               <View style={styles.checkmarkContainer}>
@@ -104,15 +133,37 @@ export default function CreateJobSheetStep8({ onNavigate, job }) {
             </View>
 
             <View style={styles.bottomSpacer} />
+            </>
           </View>
         </ScrollView>
 
         {/* View Job Details Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={() => setSizeModalVisible(true)}
+            disabled={sharing}
+          >
+            {sharing ? (
+              <ActivityIndicator color="#2F5DDC" />
+            ) : (
+              <Text style={styles.shareButtonText}>Share PDF (WhatsApp, email…)</Text>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity style={styles.viewDetailsButton} onPress={handleViewJobDetails}>
             <Text style={styles.viewDetailsButtonText}>View job details</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
+        <PdfSizeModal
+          visible={sizeModalVisible}
+          onSelect={sizeKey => {
+            setSizeModalVisible(false);
+            handleSharePdf(sizeKey);
+          }}
+          onClose={() => setSizeModalVisible(false)}
+        />
       </SafeAreaView>
     </>
   );
@@ -126,8 +177,8 @@ const styles = StyleSheet.create({
   },
   header: {
     // backgroundColor: '#FFFFFF',
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -151,6 +202,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -167,6 +221,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
   },
+  pdfReadyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5EAF2',
+    padding: 22,
+    marginTop: 8,
+  },
+  pdfReadyTitle: { color: '#17243A', fontSize: 20, fontWeight: '800', marginBottom: 10 },
+  pdfReadyText: { color: '#64748B', fontSize: 14, lineHeight: 21, marginTop: 3 },
   successCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -303,6 +367,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+  },
+  shareButton: {
+    borderWidth: 1.5,
+    borderColor: '#2F5DDC',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  shareButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2F5DDC',
   },
   viewDetailsButton: {
     backgroundColor: '#2F5DDC',

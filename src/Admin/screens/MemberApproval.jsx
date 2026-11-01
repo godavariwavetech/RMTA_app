@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../utils/responsive';
 import { Colors } from '../../Constants/Colors';
 
 export default function MemberApproval({ onNavigate }) {
@@ -50,8 +50,7 @@ export default function MemberApproval({ onNavigate }) {
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               onPress={handleBackPress}
@@ -62,6 +61,8 @@ export default function MemberApproval({ onNavigate }) {
             <Text style={styles.headerTitle}>Member Approval</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Title Section */}
           <View style={styles.titleSection}>
@@ -189,6 +190,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     // color: Colors.secondary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: wp('5%'),

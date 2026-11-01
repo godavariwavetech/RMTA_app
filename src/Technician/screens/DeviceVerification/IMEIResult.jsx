@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 
 import { Colors } from '../../../Constants/Colors';
 
@@ -28,7 +28,7 @@ export default function IMEIResult({ onNavigate, imeiNumber }) {
 
   const handleCheckCEIRStatus = () => {
     setIsCheckingCEIR(true);
-    
+
     // Simulate API call
     setTimeout(() => {
       setIsCheckingCEIR(false);
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   /* Header */
   header: {
     paddingHorizontal: wp('4%'),
-    paddingVertical: hp('2%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -197,6 +197,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: wp('8%'),
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     color: Colors.primary,

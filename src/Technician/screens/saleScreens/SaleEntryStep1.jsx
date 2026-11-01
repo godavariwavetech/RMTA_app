@@ -12,20 +12,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { chooseImageSource } from '../../../utils/imagePicker';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { ENDPOINTS } from '../../../Constants/config';
-import { postJson } from '../../../redux/slices/authSlice';
-import { updateSaleDraft } from '../../../redux/slices/saleSlice';
+import { updateSaleDraft, createSaleCustomer } from '../../../redux/slices/saleSlice';
+import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
 export default function SaleEntryStep1({ onNavigate }) {
+  const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user) || {};
   // Pre-fill from the saved draft so revisiting this step keeps what was entered.
@@ -37,6 +39,7 @@ export default function SaleEntryStep1({ onNavigate }) {
     address: draftBuyer.address || '',
     buyerPhoto: draftBuyer.buyerPhoto || null,
   });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -45,18 +48,95 @@ export default function SaleEntryStep1({ onNavigate }) {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('[Sale][Step1] buyer captured →', formData);
-    dispatch(updateSaleDraft({ buyer: formData }));
+  const handleContinue = async () => {
+    setTried(true);
+    if (!formData.buyerName.trim() || !formData.buyerMobile.trim() || !formData.address.trim()) {
+      Alert.alert('Missing details', 'Please enter the buyer name, mobile number and address.');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(formData.buyerName.trim())) {
+      Alert.alert('Invalid name', 'Buyer name should only contain letters.');
+      return;
+    }
+
+    const mobileDigits = normalizeMobileNumber(formData.buyerMobile);
+    if (!isValidIndianMobileNumber(mobileDigits)) {
+      Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+
+    const aadharDigits = formData.aadhaarNumber.replace(/\D/g, '');
+    if (aadharDigits && aadharDigits.length !== 12) {
+      Alert.alert('Invalid Aadhaar number', 'Please enter a valid 12-digit Aadhaar number.');
+      return;
+    }
+
+    // Returning to this step with nothing changed: reuse the saved buyer
+    // instead of creating a duplicate customer record.
+    const unchanged =
+      draftBuyer.customer_id &&
+      (draftBuyer.buyerName || '').trim() === formData.buyerName.trim() &&
+      draftBuyer.buyerMobile === mobileDigits &&
+      (draftBuyer.address || '').trim() === formData.address.trim() &&
+      (draftBuyer.aadhaarNumber || '').replace(/\D/g, '') === aadharDigits &&
+      ((draftBuyer.buyerPhoto && draftBuyer.buyerPhoto.uri) || null) ===
+        ((formData.buyerPhoto && formData.buyerPhoto.uri) || null) &&
+      !(formData.buyerPhoto && formData.buyerPhoto.base64);
+    if (unchanged) {
+      if (onNavigate) onNavigate('verifyBuyerMobileNumber', { buyerData: draftBuyer });
+      return;
+    }
+
+    // Create the customer record up front (POST /public_app/create_sale_customer)
+    // so later steps and the final create_sale call can reference its id.
+    setSubmitting(true);
+    const result = await dispatch(
+      createSaleCustomer({
+        customer_name: formData.buyerName.trim(),
+        customer_number: mobileDigits,
+        member_id: user.member_id,
+        aadharnumber: aadharDigits,
+        address: formData.address.trim(),
+        customer_image: formData.buyerPhoto && formData.buyerPhoto.base64 ? formData.buyerPhoto.base64 : null,
+        photo_file_id: formData.buyerPhoto && formData.buyerPhoto.file_id ? formData.buyerPhoto.file_id : null,
+      }),
+    );
+    setSubmitting(false);
+
+    if (!createSaleCustomer.fulfilled.match(result)) {
+      const message =
+        (result.payload && result.payload.message) ||
+        'Could not save buyer details. Please try again.';
+      Alert.alert('Could not continue', message);
+      return;
+    }
+
+    const customerId =
+      result.payload &&
+      (result.payload.insertId ||
+        result.payload.buyer_id ||
+        result.payload.customer_id ||
+        result.payload.id);
+    const savedBuyerPhoto = formData.buyerPhoto
+      ? { uri: formData.buyerPhoto.uri || null, file_id: formData.buyerPhoto.file_id || null }
+      : null;
+    const buyer = {
+      ...formData,
+      buyerPhoto: savedBuyerPhoto,
+      buyerMobile: mobileDigits,
+      customer_id: customerId,
+    };
+    dispatch(updateSaleDraft({ buyer }));
     if (onNavigate) {
       onNavigate('verifyBuyerMobileNumber', {
-        buyerData: formData,
+        buyerData: buyer,
       });
     }
   };
 
   const handleCapturePhoto = () => {
-    launchImageLibrary(
+    chooseImageSource(
       { mediaType: 'photo', includeBase64: true, quality: 0.7 },
       async response => {
         if (response.didCancel) return;
@@ -67,27 +147,10 @@ export default function SaleEntryStep1({ onNavigate }) {
         const asset = response.assets && response.assets[0];
         if (!asset || !asset.base64) return;
 
-        setFormData(prev => ({ ...prev, buyerPhoto: { uri: asset.uri, uploading: true } }));
-        try {
-          const { response: res, data } = await postJson(ENDPOINTS.UPLOAD_FILE, {
-            base64: asset.base64,
-            mime_type: asset.type || 'image/jpeg',
-            original_name: asset.fileName || 'buyer.jpg',
-            uploaded_by: user.user_id,
-          });
-          if (res.ok && data && data.success !== false) {
-            setFormData(prev => ({
-              ...prev,
-              buyerPhoto: { uri: asset.uri, file_id: data.data.file_id, uploading: false },
-            }));
-          } else {
-            setFormData(prev => ({ ...prev, buyerPhoto: { uri: asset.uri, uploading: false } }));
-            Alert.alert('Upload failed', (data && data.message) || 'Please try again.');
-          }
-        } catch (err) {
-          setFormData(prev => ({ ...prev, buyerPhoto: { uri: asset.uri, uploading: false } }));
-          Alert.alert('Upload failed', err.message);
-        }
+        setFormData(prev => ({
+          ...prev,
+          buyerPhoto: { uri: asset.uri, base64: asset.base64, uploading: false },
+        }));
       },
     );
   };
@@ -95,7 +158,7 @@ export default function SaleEntryStep1({ onNavigate }) {
   const handleBack = () => {
     dispatch(updateSaleDraft({ buyer: formData }));
     if (onNavigate) {
-      onNavigate('home');
+      onNavigate('goBack');
     }
   };
 
@@ -115,7 +178,12 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.backButtonText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Sale Entry</Text>
-          <View style={styles.placeholderButton} />
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => onNavigate && onNavigate('viewSaleHistory')}
+          >
+            <Text style={styles.historyButtonText}>History</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Step Indicator */}
@@ -142,12 +210,13 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Buyer Name <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
-              style={styles.input}
+            <TextInput {...nav.props(0)}
+              style={[styles.input, tried && !String(formData.buyerName).trim() && styles.inputError]}
               placeholder="Enter buyer name"
               placeholderTextColor="#9CA3AF"
               value={formData.buyerName}
-              onChangeText={(value) => handleInputChange('buyerName', value)}
+              onChangeText={(value) => handleInputChange('buyerName', value.replace(/[^a-zA-Z\s]/g, ''))}
+              autoCapitalize="words"
             />
           </View>
 
@@ -156,13 +225,14 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Buyer Mobile <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="+91 98765 43210"
+            <TextInput {...nav.props(1)}
+              style={[styles.input, tried && !String(formData.buyerMobile).trim() && styles.inputError]}
+              placeholder="98765 43210"
               placeholderTextColor="#9CA3AF"
               value={formData.buyerMobile}
-              onChangeText={(value) => handleInputChange('buyerMobile', value)}
+              onChangeText={(value) => handleInputChange('buyerMobile', normalizeMobileNumber(value))}
               keyboardType="phone-pad"
+              maxLength={10}
             />
           </View>
 
@@ -191,8 +261,8 @@ export default function SaleEntryStep1({ onNavigate }) {
                   <ActivityIndicator size="small" color="#0066FF" />
                   <Text style={styles.photoUploadSubtitle}>Uploading…</Text>
                 </View>
-              ) : formData.buyerPhoto && formData.buyerPhoto.file_id ? (
-                <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>✓ Uploaded</Text>
+              ) : formData.buyerPhoto && (formData.buyerPhoto.file_id || formData.buyerPhoto.base64) ? (
+                <Text style={[styles.photoUploadSubtitle, styles.photoUploaded]}>Photo ready</Text>
               ) : (
                 <Text style={styles.photoUploadSubtitle}>JPG or PNG • Up to 5 MB</Text>
               )}
@@ -202,7 +272,7 @@ export default function SaleEntryStep1({ onNavigate }) {
           {/* Aadhaar Number Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Aadhaar Number</Text>
-            <TextInput
+            <TextInput {...nav.props(2)}
               style={styles.input}
               placeholder="Enter Aadhaar number"
               placeholderTextColor="#9CA3AF"
@@ -210,6 +280,7 @@ export default function SaleEntryStep1({ onNavigate }) {
               onChangeText={(value) => handleInputChange('aadhaarNumber', value)}
               secureTextEntry={true}
               keyboardType="numeric"
+              maxLength={12}
             />
           </View>
 
@@ -218,11 +289,11 @@ export default function SaleEntryStep1({ onNavigate }) {
             <Text style={styles.label}>
               Address <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
+            <TextInput {...nav.props(3)}
               style={[
                 styles.input,
                 styles.textArea,
-              ]}
+              tried && !String(formData.address).trim() && styles.inputError]}
               placeholder="Enter buyer address"
               placeholderTextColor="#9CA3AF"
               value={formData.address}
@@ -241,24 +312,33 @@ export default function SaleEntryStep1({ onNavigate }) {
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
+            disabled={submitting}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
           </TouchableOpacity>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -280,6 +360,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -288,6 +371,13 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  historyButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#EEF3FF',
+  },
+  historyButtonText: { fontSize: 13, fontWeight: '700', color: '#2F5DDC' },
   placeholderButton: {
     width: 44,
   },

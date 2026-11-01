@@ -9,23 +9,45 @@ import {
   StatusBar,
   TextInput,
   FlatList,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector } from 'react-redux';
 
+import { SkeletonCardList } from '../../../Components/Skeleton';
 import { Colors } from '../../../Constants/Colors';
 import { ENDPOINTS, buildUrl } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
+import { setPhotos } from '../../../utils/photoCache';
+import DatePickerModal, { formatDisplayDate } from '../../../Components/DatePickerModal';
+import useRefresh from '../../../utils/useRefresh';
+import ImeiScanButton from '../../../Components/ImeiScanButton';
 
 const sampleImage = require('../../../Assets/images/sampleMobileImg.png');
 
-export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purchases' }) {
+// "YYYY-MM-DD" (local) for a raw API date, so it compares with the picker's value.
+const parseLocalDate = v => {
+  const [y, m, d] = v.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const toDateKey = raw => {
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Longer string values are treated as embedded blobs (base64) and dropped.
+const MAX_FIELD_LENGTH = 300;
+
+export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purchases', singleTab = false }) {
+  const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +57,14 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   const [salesHistory, setSalesHistory] = useState([]);
   const [loadingPurchases, setLoadingPurchases] = useState(true);
   const [loadingSales, setLoadingSales] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  // Date range filter, "YYYY-MM-DD" strings ('' = not set).
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [pickerFor, setPickerFor] = useState(null); // 'from' | 'to' | null
+  // Purchases only: 'all' | 'available' | 'soldout'
+  const [availabilityFilter, setAvailabilityFilter] = useState('all');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const fmtDate = v =>
     v
@@ -43,82 +73,164 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   const fmtAmount = v => (v != null ? `₹${Number(v).toLocaleString('en-IN')}` : '');
   const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
+  // Log rows compactly: long values (e.g. base64 images) are truncated so
+  // logging a large response doesn't block the JS thread.
+  const logRows = (label, rows) => {
+    const short = rows.slice(0, 3).map(r =>
+      Object.fromEntries(
+        Object.entries(r).map(([k, v]) => [
+          k,
+          typeof v === 'string' && v.length > 80 ? `${v.slice(0, 80)}...(${v.length})` : v,
+        ]),
+      ),
+    );
+    console.log(`[${label}] ${rows.length} rows, first:`, JSON.stringify(short));
+  };
+
   useEffect(() => {
     let active = true;
-    (async () => {
-      if (!user.member_id) {
+
+    // Fetch one list; the two lists load in parallel and only the tab(s) the
+    // screen actually shows are requested.
+    const load = async (endpoint, label, mapRow, setRows, setLoading) => {
+      try {
+        const { response, data } = await postJson(endpoint, {
+          member_id: user.member_id,
+        });
+        if (active && response.ok && data && data.success !== false) {
+          const rows = Array.isArray(data.data) ? data.data : [];
+          logRows(label, rows);
+          setRows(rows.map(mapRow));
+        } else if (active) {
+          console.log(`[${label}] request failed:`, response.status, data && data.message);
+          setLoadError((data && data.message) || `Could not load ${label} (${response.status}).`);
+        }
+      } catch (e) {
+        console.log(`[${label}] request error:`, e.message);
         if (active) {
-          setLoadingPurchases(false);
-          setLoadingSales(false);
+          setLoadError('Could not reach the server. Check your connection and try again.');
         }
-        return;
-      }
-      // Purchases
-      try {
-        const { response, data } = await postJson(ENDPOINTS.PURCHASES_LIST, {
-          member_id: user.member_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          const rows = Array.isArray(data.data) ? data.data : [];
-          setPurchaseHistory(
-            rows.map(r => ({
-              id: String(r.id),
-              deviceName: [r.device_brand, r.device_model].filter(Boolean).join(' ') || 'Device',
-              storage: r.storage || '',
-              color: r.color || '',
-              imei: r.imei1 || '',
-              date: fmtDate(r.created_at),
-              seller: r.seller_name || '',
-              amount: fmtAmount(r.purchase_price),
-              status: cap(r.status),
-              image: r.device_photo_path ? { uri: buildUrl(r.device_photo_path) } : sampleImage,
-            })),
-          );
-        }
-      } catch (e) {
-        // leave list empty on failure
       } finally {
-        if (active) setLoadingPurchases(false);
+        if (active) setLoading(false);
       }
-      // Sales
-      try {
-        const { response, data } = await postJson(ENDPOINTS.SALES_LIST, {
-          member_id: user.member_id,
-        });
-        if (active && response.ok && data && data.success !== false) {
-          const rows = Array.isArray(data.data) ? data.data : [];
-          setSalesHistory(
-            rows.map(r => ({
-              id: String(r.id),
-              deviceName: [r.device_brand, r.device_model].filter(Boolean).join(' ') || 'Device',
-              storage: r.storage || '',
-              color: r.color || '',
-              imei: r.imei1 || '',
-              date: fmtDate(r.sold_at || r.created_at),
-              buyer: r.buyer_name || '',
-              amount: fmtAmount(r.sale_price),
-              status: cap(r.status),
-              image: r.device_photo_path ? { uri: buildUrl(r.device_photo_path) } : sampleImage,
-            })),
-          );
-        }
-      } catch (e) {
-        // leave list empty on failure
-      } finally {
-        if (active) setLoadingSales(false);
-      }
-    })();
+    };
+
+    // Rows can carry base64 image blobs. Drop long values so they never reach
+    // React state, navigation params or <Text>, which freezes the app.
+    const isLong = v => typeof v === 'string' && v.length > MAX_FIELD_LENGTH;
+    const slim = r =>
+      Object.fromEntries(Object.entries(r).filter(([, v]) => !isLong(v)));
+
+    // Photos arrive as base64 JPEGs (no data: prefix) or short server paths.
+    const PHOTO_FIELDS = [
+      ['frontimage', 'Front photo'],
+      ['baackimage', 'Back photo'],
+      ['device_image', 'Device photo'],
+    ];
+    const extractPhotos = r =>
+      PHOTO_FIELDS.filter(([k]) => typeof r[k] === 'string' && r[k]).map(([k, label]) => ({
+        label,
+        uri: isLong(r[k])
+          ? r[k].startsWith('data:') ? r[k] : `data:image/jpeg;base64,${r[k]}`
+          : buildUrl(r[k]),
+      }));
+
+    // Rows can repeat the same id (joined tables), so the list key includes
+    // the position as well.
+    const mapCommon = (r, index, type) => {
+      const photos = extractPhotos(r);
+      const id = `${r.id}-${index}`;
+      setPhotos(`${type}-${id}`, photos);
+      return {
+        id,
+        raw: slim(r),
+        dateKey: toDateKey(
+          type === 'sales'
+            ? r.sold_at || r.sale_date || r.created_at
+            : r.purchase_date || r.created_date || r.created_at,
+        ),
+        deviceName: [r.device_brand, r.device_model].filter(Boolean).join(' ').trim() || 'Device',
+        storage: r.storage || '',
+        color: r.color || '',
+        imei: r.imei1 || '',
+        // Purchases: `available` 0 (or missing) → Available, 1 → Sold out.
+        soldOut: type === 'purchases' && Number(r.available) === 1,
+        status:
+          type === 'purchases'
+            ? Number(r.available) === 1
+              ? 'Sold out'
+              : 'Available'
+            : cap(r.status || r.devicestatus) || 'Sold',
+        image: photos.length ? { uri: photos[0].uri } : sampleImage,
+      };
+    };
+
+    setLoadError('');
+    setLoadingPurchases(true);
+    setLoadingSales(true);
+
+    if (!user.member_id) {
+      setLoadingPurchases(false);
+      setLoadingSales(false);
+      return undefined;
+    }
+
+    if (!singleTab || initialTab === 'purchases') {
+      load(
+        ENDPOINTS.GET_PURCHASE_SHEETS,
+        'purchases',
+        (r, i) => ({
+          ...mapCommon(r, i, 'purchases'),
+          date: fmtDate(r.purchase_date || r.created_date || r.created_at),
+          seller: r.seller_name || r.customer_name || '',
+          amount: fmtAmount(r.purchase_price ?? r.purchaseprice),
+        }),
+        setPurchaseHistory,
+        setLoadingPurchases,
+      );
+    } else {
+      setLoadingPurchases(false);
+    }
+    if (!singleTab || initialTab === 'sales') {
+      load(
+        ENDPOINTS.GET_SALES_SHEETS,
+        'sales',
+        (r, i) => ({
+          ...mapCommon(r, i, 'sales'),
+          date: fmtDate(r.sold_at || r.sale_date || r.created_at),
+          buyer: r.buyer_name || r.customer_name || '',
+          amount: fmtAmount(r.sale_price),
+        }),
+        setSalesHistory,
+        setLoadingSales,
+      );
+    } else {
+      setLoadingSales(false);
+    }
+
     return () => {
       active = false;
     };
-  }, [user.member_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.member_id, reloadKey, tick]);
 
   // Filter data based on search query
   const filterData = (data) => {
+    // Date range (inclusive). Rows without a usable date are hidden once a
+    // range is set.
+    const inRange = data.filter(item => {
+      if (fromDate && (!item.dateKey || item.dateKey < fromDate)) return false;
+      if (toDate && (!item.dateKey || item.dateKey > toDate)) return false;
+      if (activeTab === 'purchases') {
+        if (availabilityFilter === 'available' && item.soldOut) return false;
+        if (availabilityFilter === 'soldout' && !item.soldOut) return false;
+      }
+      return true;
+    });
     if (!searchQuery.trim()) {
-      return data;
+      return inRange;
     }
-    return data.filter(
+    return inRange.filter(
       (item) =>
         item.deviceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.imei.includes(searchQuery) ||
@@ -145,8 +257,21 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
     }
   };
 
+  const handleOpenDetails = item => {
+    if (onNavigate) {
+      // The photo stays out of navigation params; the details screen reads it
+      // from the photo cache by type + id.
+      const { image, ...rest } = item;
+      onNavigate('transactionDetails', { type: activeTab, item: rest });
+    }
+  };
+
   const renderTransactionCard = ({ item }) => (
-    <View style={styles.transactionCard}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      style={styles.transactionCard}
+      onPress={() => handleOpenDetails(item)}
+    >
       <View style={styles.deviceCardHeader}>
         <Image
           source={item.image}
@@ -179,15 +304,20 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
 
       <View style={[styles.detailsRow, styles.lastDetailsRow]}>
         <Text style={styles.detailLabel}>Status</Text>
-        <Text style={[styles.detailValue, styles.statusCompleted]}>
+        <Text
+          style={[
+            styles.detailValue,
+            styles.statusCompleted,
+            item.soldOut && styles.statusSoldOut,
+          ]}
+        >
           {item.status}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const headerTitle = activeTab === 'purchases' ? 'Purchase History' : 'Sale History';
-  const sectionTitle = activeTab === 'purchases' ? 'Purchased devices' : 'Completed sales';
   const buttonText = activeTab === 'purchases' ? 'New purchase' : 'New sale';
 
   return (
@@ -207,16 +337,11 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
           <View style={styles.placeholderButton} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView refreshControl={refreshControl} showsVerticalScrollIndicator={false}>
           {/* Content */}
           <View style={styles.content}>
-            {/* Title Section */}
-            <Text style={styles.sectionTitle}>{sectionTitle}</Text>
-            <Text style={styles.sectionDescription}>
-              All your transactions, in one place.
-            </Text>
-
             {/* Tabs */}
+            {!singleTab && (
             <View style={styles.tabsContainer}>
               <TouchableOpacity
                 style={[
@@ -251,6 +376,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
                 </Text>
               </TouchableOpacity>
             </View>
+            )}
 
             {/* Search Bar */}
             <View style={styles.searchContainer}>
@@ -265,13 +391,84 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+            <ImeiScanButton compact onScanned={setSearchQuery} />
             </View>
+
+            {/* Availability filter (purchases only) */}
+            {activeTab === 'purchases' && (
+              <View style={styles.availabilityRow}>
+                {[
+                  ['all', 'All'],
+                  ['available', 'Available'],
+                  ['soldout', 'Sold out'],
+                ].map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.availabilityChip,
+                      availabilityFilter === key && styles.availabilityChipActive,
+                    ]}
+                    onPress={() => setAvailabilityFilter(key)}
+                  >
+                    <Text
+                      style={[
+                        styles.availabilityChipText,
+                        availabilityFilter === key && styles.availabilityChipTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Date range filter */}
+            <View style={styles.dateFilterRow}>
+              {[
+                ['from', 'From date', fromDate],
+                ['to', 'To date', toDate],
+              ].map(([key, placeholder, value]) => (
+                <TouchableOpacity
+                  key={key}
+                  style={styles.dateFilterField}
+                  activeOpacity={0.7}
+                  onPress={() => setPickerFor(key)}
+                >
+                  <Text style={styles.dateFilterLabel}>{placeholder}</Text>
+                  <Text style={[styles.dateFilterValue, !value && styles.dateFilterPlaceholder]}>
+                    {formatDisplayDate(value) || 'Select'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              {(!!fromDate || !!toDate) && (
+                <TouchableOpacity
+                  style={styles.dateFilterClear}
+                  onPress={() => {
+                    setFromDate('');
+                    setToDate('');
+                  }}
+                >
+                  <Text style={styles.dateFilterClearText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <DatePickerModal
+              visible={pickerFor !== null}
+              value={pickerFor === 'from' ? fromDate : toDate}
+              minDate={pickerFor === 'to' && fromDate ? parseLocalDate(fromDate) : null}
+              maxDate={pickerFor === 'from' && toDate ? parseLocalDate(toDate) : null}
+              onConfirm={date => {
+                if (pickerFor === 'from') setFromDate(date);
+                else setToDate(date);
+                setPickerFor(null);
+              }}
+              onClose={() => setPickerFor(null)}
+            />
 
             {/* Transactions List */}
             {(activeTab === 'purchases' ? loadingPurchases : loadingSales) ? (
-              <View style={styles.emptyStateContainer}>
-                <ActivityIndicator color={Colors.primary} />
-              </View>
+              <SkeletonCardList count={3} />
             ) : displayData.length > 0 ? (
               <FlatList
                 data={displayData}
@@ -282,8 +479,16 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
             ) : (
               <View style={styles.emptyStateContainer}>
                 <Text style={styles.emptyStateText}>
-                  No {activeTab} found
+                  {loadError || `No ${activeTab} found`}
                 </Text>
+                {loadError ? (
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => setReloadKey(k => k + 1)}
+                  >
+                    <Text style={styles.retryButtonText}>Retry</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             )}
 
@@ -312,8 +517,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.2%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -335,10 +540,13 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#1F2937',
     flex: 1,
     textAlign: 'center',
@@ -350,16 +558,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
   },
+  retryButton: {
+    marginTop: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+  },
+  retryButtonText: { color: '#FFFFFF', fontWeight: '600' },
   sectionTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   sectionDescription: {
     fontSize: 14,
-    color: '#9CA3AF',
-    marginBottom: 24,
+    color: '#6B7280',
+    marginBottom: 16,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -389,6 +605,26 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#2F5DDC',
   },
+  dateFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+    marginBottom: hp('2%'),
+  },
+  dateFilterField: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: wp('2.5%'),
+    paddingHorizontal: wp('3.5%'),
+    paddingVertical: 8,
+  },
+  dateFilterLabel: { fontSize: 11, color: '#9CA3AF' },
+  dateFilterValue: { fontSize: 13, fontWeight: '600', color: '#1F2937', marginTop: 2 },
+  dateFilterPlaceholder: { color: '#9CA3AF', fontWeight: '400' },
+  dateFilterClear: { justifyContent: 'center', paddingHorizontal: 4 },
+  dateFilterClearText: { color: Colors.primary, fontWeight: '600', fontSize: 13 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -481,6 +717,28 @@ const styles = StyleSheet.create({
   statusCompleted: {
     color: '#21884cff',
   },
+  statusSoldOut: {
+    color: '#B91C1C',
+  },
+  availabilityRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: hp('1.5%'),
+  },
+  availabilityChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  availabilityChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  availabilityChipText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+  availabilityChipTextActive: { color: '#FFFFFF' },
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',

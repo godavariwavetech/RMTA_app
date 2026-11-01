@@ -7,19 +7,24 @@ import {
   TouchableOpacity,
   StatusBar,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
-} from 'react-native-responsive-screen';
+} from '../../../utils/responsive';
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
 import { updatePurchaseDraft } from '../../../redux/slices/purchaseSlice';
+import { sanitizeAmount, useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
+import StepNav from '../../../Components/StepNav';
 
 export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData }) {
+  const nav = useFieldNav();
+  const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
   const draftPrice = useSelector(state => state.purchase.draft.price) || {};
   const [purchasePrice, setPurchasePrice] = useState(draftPrice.purchasePrice || '');
@@ -33,6 +38,15 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
   });
 
   const handleContinue = () => {
+    setTried(true);
+    if (!(Number(purchasePrice) > 0)) {
+      Alert.alert('Missing details', 'Please enter the purchase price.');
+      return;
+    }
+    if (paymentMode !== 'Cash' && !transactionId.trim()) {
+      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
+      return;
+    }
     const priceData = buildPrice();
     console.log('[Purchase][Step6] price captured →', priceData);
     dispatch(updatePurchaseDraft({ price: priceData }));
@@ -51,11 +65,11 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
   const handleBackPress = () => {
     dispatch(updatePurchaseDraft({ price: buildPrice() }));
     if (onNavigate) {
-      onNavigate('purchaseEntryStep5');
+      onNavigate('goBack');
     }
   };
 
-  const completedSteps = 6;
+  const completedSteps = 5;
 
   return (
     <>
@@ -65,8 +79,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
         translucent={true}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
@@ -74,15 +87,17 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
             <Text style={styles.headerTitle}>Purchase Amount</Text>
             <View style={styles.placeholderButton} />
           </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP {completedSteps} OF 8 · PRICE</Text>
+            <Text style={styles.stepText}>STEP {completedSteps} OF 7 · PRICE</Text>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: '75%' }]} />
+            <View style={[styles.progressBar, { width: '71.4%' }]} />
           </View>
 
           {/* Form Content */}
@@ -92,16 +107,16 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
             {/* Purchase Price Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Purchase Price</Text>
-              <View style={styles.priceInputContainer}>
+              <Text style={styles.label}>Purchase Price <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.priceInputContainer, tried && !(Number(purchasePrice) > 0) && styles.inputError]}>
                 <Text style={styles.currencySymbol}>₹</Text>
-                <TextInput
+                <TextInput {...nav.props(0)}
                   style={styles.priceInput}
                   placeholder="Enter price"
                   placeholderTextColor="#9CA3AF"
                   value={purchasePrice}
-                  onChangeText={setPurchasePrice}
-                  keyboardType="numeric"
+                  onChangeText={t => setPurchasePrice(sanitizeAmount(t))}
+                  keyboardType="decimal-pad"
                 />
               </View>
             </View>
@@ -134,9 +149,11 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
             {/* Transaction ID Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Transaction ID</Text>
-              <TextInput
-                style={styles.input}
+              <Text style={styles.label}>
+                Transaction ID{paymentMode !== 'Cash' && <Text style={styles.required}> *</Text>}
+              </Text>
+              <TextInput {...nav.props(1)}
+                style={[styles.input, tried && paymentMode !== 'Cash' && !transactionId.trim() && styles.inputError]}
                 placeholder="Enter Transaction ID"
                 placeholderTextColor="#9CA3AF"
                 value={transactionId}
@@ -154,27 +171,36 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
         {/* Continue Button */}
         <View style={styles.buttonContainer}>
+          <StepNav onPrev={handleBackPress}>
           <TouchableOpacity
             style={styles.continueButton}
             onPress={handleContinue}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
+          </StepNav>
         </View>
+      <FieldNavBar nav={nav} />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  required: {
+    color: '#EF4444',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F7F9FC',
     flexDirection: 'column',
   },
   header: {
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.5%'),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -196,6 +222,9 @@ const styles = StyleSheet.create({
     fontSize: wp('10%'),
     color: Colors.primary,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   headerTitle: {
     fontSize: 18,
