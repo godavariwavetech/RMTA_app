@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const AUTO_SCROLL_MS = 4500;
+// The banner area is a FIXED size: full width, 180 px tall, whatever picture is in it. The
+// picture is set to exactly that width and height (it does not change the area's size). For a
+// perfect fit use a 2:1 picture (e.g. 1600 x 800 px): on a typical phone the area is about 2:1.
+const BANNER_HEIGHT = 180;
 
 // Last measured width, kept across mounts: the carousel is rebuilt every time the
 // Home screen is opened, and starting from width 0 meant an empty frame (the banners
@@ -74,7 +78,10 @@ export default function BannerCarousel({ slides }) {
               style={[styles.slide, { width }]}
             >
               {slide.image ? (
-                <Image source={slide.image} style={styles.image} />
+                <View style={styles.imageFrame}>
+                  {/* The picture only: sharp, shown whole (never cropped) and centred. */}
+                  <Image source={slide.image} style={styles.image} />
+                </View>
               ) : (
                 <View style={[styles.textSlide, { backgroundColor: slide.color || '#2F5DDC' }]}>
                   <View style={styles.copy}>
@@ -112,10 +119,12 @@ export default function BannerCarousel({ slides }) {
 
 const styles = StyleSheet.create({
   container: { marginHorizontal: 16, marginTop: 14, marginBottom: 8 },
-  slide: { borderRadius: 16, overflow: 'hidden' },
-  image: { width: '100%', height: 180, resizeMode: 'cover' },
+  slide: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF' },
+  imageFrame: { width: '100%', height: BANNER_HEIGHT, backgroundColor: '#FFFFFF' },
+  // stretch: the picture is set to exactly the area's width and height, so it always fills it.
+  image: { width: '100%', height: BANNER_HEIGHT, resizeMode: 'stretch' },
   textSlide: {
-    height: 178,
+    height: BANNER_HEIGHT,
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 18,

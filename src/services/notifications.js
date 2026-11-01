@@ -12,6 +12,64 @@ import {
 import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 
 export const FCM_TOKEN_KEY = 'rmta_fcm_token';
+export const NOTIF_HISTORY_KEY = 'rmta_notification_history';
+const NOTIF_HISTORY_MAX = 60;
+
+// ---- Notification history, shown on the Notifications screen -----------------------------
+// Every push the app handles is also saved here (newest first, last 60), so the screen
+// lists what was received even after the system notification is dismissed.
+export async function getNotificationHistory() {
+  try {
+    const raw = await AsyncStorage.getItem(NOTIF_HISTORY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function saveNotificationHistory(list) {
+  try {
+    await AsyncStorage.setItem(NOTIF_HISTORY_KEY, JSON.stringify(list.slice(0, NOTIF_HISTORY_MAX)));
+  } catch (e) {
+    // best effort
+  }
+}
+
+export async function recordNotification(message) {
+  const data = message?.data || {};
+  const title = message?.notification?.title || data.title || '';
+  const body = message?.notification?.body || data.body || '';
+  if (!title && !body) return;
+  const id = String(message?.messageId || `${Date.now()}`);
+  const list = await getNotificationHistory();
+  if (list.some(n => n.id === id)) return;
+  await saveNotificationHistory([
+    {
+      id,
+      title: title || 'RMTA',
+      body,
+      type: data.type || 'general',
+      at: message?.sentTime || Date.now(),
+      read: false,
+    },
+    ...list,
+  ]);
+}
+
+export async function markAllNotificationsRead() {
+  const list = await getNotificationHistory();
+  await saveNotificationHistory(list.map(n => ({ ...n, read: true })));
+}
+
+export async function markNotificationRead(id) {
+  const list = await getNotificationHistory();
+  await saveNotificationHistory(list.map(n => (n.id === id ? { ...n, read: true } : n)));
+}
+
+export async function clearNotificationHistory() {
+  await saveNotificationHistory([]);
+}
 const CHANNELS = {
   general: { id: 'general', name: 'General', importance: AndroidImportance.HIGH },
   chat: { id: 'chat', name: 'Chat messages', importance: AndroidImportance.HIGH },
@@ -35,6 +93,7 @@ export async function requestNotificationPermission() {
 
 // Shows an FCM message through notifee. Chat messages use their own channel.
 export async function displayRemoteMessage(message) {
+  recordNotification(message).catch(() => {});
   const data = message?.data || {};
   const title = message?.notification?.title || data.title || 'RMTA';
   const body = message?.notification?.body || data.body || '';
@@ -98,12 +157,16 @@ export async function initNotifications({ onOpen, onToken } = {}) {
     console.log('[FCM] foreground message', JSON.stringify(message));
     await displayRemoteMessage(message);
   });
-  const offOpened = onNotificationOpenedApp(getMessaging(), m => onOpen && onOpen(m?.data || {}));
+  const offOpened = onNotificationOpenedApp(getMessaging(), m => {
+    recordNotification(m).catch(() => {}); // pushes shown by the system never pass displayRemoteMessage
+    if (onOpen) onOpen(m?.data || {});
+  });
   const offNotifee = notifee.onForegroundEvent(({ type, detail }) => {
     if (type === EventType.PRESS && onOpen) onOpen(detail.notification?.data || {});
   });
 
   const initial = await getInitialNotification(getMessaging());
+  if (initial) recordNotification(initial).catch(() => {});
   if (initial && onOpen) onOpen(initial.data || {});
 
   return () => {

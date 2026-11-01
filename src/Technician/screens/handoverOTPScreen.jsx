@@ -48,11 +48,42 @@ export default function HandoverOTPScreen({ onNavigate }) {
 
   const isOTPComplete = otp.every((digit) => digit !== '');
 
-  const handleVerifyAndContinue = () => {
-    if (isOTPComplete) {
-      if (onNavigate) {
-        onNavigate('replaceStack', { target: 'handoverCompleted', base: ['home', 'jobs'] });
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+
+  // The server checks the OTP: POST verify_handoverotp { mobile, otp, customer_id }. An empty
+  // answer means the OTP is wrong.
+  const handleVerifyAndContinue = async () => {
+    if (!isOTPComplete || verifying) return;
+    const mobile = String((activeJob && activeJob.customer_mobile) || '').replace(/\D/g, '').slice(-10);
+    setVerifying(true);
+    setVerifyError('');
+    try {
+      const { response, data } = await postJson(ENDPOINTS.VERIFY_HANDOVER_OTP, {
+        mobile,
+        otp: otp.join(''),
+        customer_id: activeJob && activeJob.customer_id,
+      });
+      const accepted =
+        response.ok &&
+        data &&
+        data.success !== false &&
+        (Array.isArray(data.data) ? data.data.length > 0 : !!data.data);
+      if (!accepted) {
+        setVerifyError(
+          (data && data.success === false && (data.message || data.msg)) ||
+            'Incorrect OTP. Please check the code and try again.',
+        );
+        return;
       }
+    } catch (err) {
+      setVerifyError(err.message || 'Could not verify the OTP. Please try again.');
+      return;
+    } finally {
+      setVerifying(false);
+    }
+    if (onNavigate) {
+      onNavigate('replaceStack', { target: 'handoverCompleted', base: ['home', 'jobs'] });
     }
   };
 
@@ -137,10 +168,13 @@ export default function HandoverOTPScreen({ onNavigate }) {
 
         {/* Verify Button */}
         <View style={styles.buttonContainer}>
+          {!!verifyError && (
+            <Text style={{ color: '#DC2626', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>{verifyError}</Text>
+          )}
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              !isOTPComplete && styles.verifyButtonDisabled,
+              (!isOTPComplete || verifying) && styles.verifyButtonDisabled,
             ]}
             onPress={() =>
               confirmAction({
@@ -150,9 +184,9 @@ export default function HandoverOTPScreen({ onNavigate }) {
                 onConfirm: handleVerifyAndContinue,
               })
             }
-            disabled={!isOTPComplete}
+            disabled={!isOTPComplete || verifying}
           >
-            <Text style={styles.verifyButtonText}>Verify & continue</Text>
+            <Text style={styles.verifyButtonText}>{verifying ? 'Verifying…' : 'Verify & continue'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

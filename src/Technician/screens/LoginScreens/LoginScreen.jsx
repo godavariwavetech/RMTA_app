@@ -26,6 +26,9 @@ import { useDispatch } from 'react-redux';
 import { loginUser } from '../../../redux/slices/authSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
+// The "Forgot password?" link is switched off for now.
+const SHOW_FORGOT_PASSWORD = false;
+
 export default function LoginScreen({ onNavigate, initialMode }) {
   const { t } = useI18n();
   const [mobileNumber, setMobileNumber] = useState('');
@@ -141,13 +144,13 @@ export default function LoginScreen({ onNavigate, initialMode }) {
         setLoginError(
           status
             ? `Your account is "${status}". Please contact the administrator.`
-            : 'We could not verify your account status. Please try again or contact the administrator.',
+            : 'We could not verify your account status. Please try again or contact the RMTA administrator.',
         );
         showMessageModal(
           'Unable to sign in',
           status
             ? `Your account is "${status}". Please contact the administrator.`
-            : 'We could not verify your account status. Please try again or contact the administrator.',
+            : 'We could not verify your account status. Please try again or contact the RMTA administrator.',
         );
       }
     } else {
@@ -351,14 +354,16 @@ export default function LoginScreen({ onNavigate, initialMode }) {
             </View>
             {!!loginError && <Text style={styles.loginError}>{loginError}</Text>}
 
-            {/* Forgot Password — plain text link (not a button) */}
-            <TouchableOpacity
-              style={styles.forgotPasswordContainer}
-              onPress={handleForgotPassword}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
-            </TouchableOpacity>
+            {/* Forgot Password — plain text link (hidden for now; set SHOW_FORGOT_PASSWORD to true to bring it back) */}
+            {SHOW_FORGOT_PASSWORD && (
+              <TouchableOpacity
+                style={styles.forgotPasswordContainer}
+                onPress={handleForgotPassword}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Register link — Admin tab only. Technicians don't self-register;
                an admin creates their account, then they log in from the

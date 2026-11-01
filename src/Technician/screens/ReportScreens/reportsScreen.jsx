@@ -24,6 +24,19 @@ import Share from 'react-native-share';
 import { showAppModal } from '../../../utils/appModal';
 import useRefresh from '../../../utils/useRefresh';
 
+// Static sample figures for the "Monthly overview" graph (revenue in ₹ thousands). Not from the
+// server: it is a fixed placeholder chart.
+const MONTHLY_SAMPLE = [
+  { month: 'May', value: 42 },
+  { month: 'Jun', value: 58 },
+  { month: 'Jul', value: 36 },
+  { month: 'Aug', value: 71 },
+  { month: 'Sep', value: 64 },
+  { month: 'Oct', value: 88 },
+];
+const MONTHLY_MAX = 100; // top of the graph's scale
+const MONTHLY_TICKS = [100, 75, 50, 25, 0];
+
 export default function ReportsScreen({ onNavigate }) {
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
@@ -254,6 +267,78 @@ export default function ReportsScreen({ onNavigate }) {
                 <Text style={styles.repairsText}>{reportData.repairsCompleted} repairs completed</Text>
                 <Text style={styles.growthText}> · {reportData.weekGrowth >= 0 ? '+' : ''}{reportData.weekGrowth}% this week</Text>
               </Text>
+            </View>
+          </View>
+
+          {/* Monthly overview: a static bar graph (sample data) */}
+          <View style={styles.section}>
+            <View style={styles.mvHeader}>
+              <Text style={styles.sectionTitle}>Monthly overview</Text>
+              <View style={styles.mvBadge}>
+                <Text style={styles.mvBadgeText}>Sample data</Text>
+              </View>
+            </View>
+            <Text style={styles.mvSub}>Revenue by month, in ₹ thousands</Text>
+
+            <View style={styles.mvCard}>
+              <View style={styles.mvPlot}>
+                {/* Y axis labels and grid lines */}
+                <View style={styles.mvAxis}>
+                  {MONTHLY_TICKS.map(tick => (
+                    <Text key={tick} style={styles.mvTick}>
+                      {tick}
+                    </Text>
+                  ))}
+                </View>
+                <View style={styles.mvBarsArea}>
+                  <View style={styles.mvGrid} pointerEvents="none">
+                    {MONTHLY_TICKS.map(tick => (
+                      <View key={tick} style={styles.mvGridLine} />
+                    ))}
+                  </View>
+                  <View style={styles.mvBars}>
+                    {MONTHLY_SAMPLE.map(item => {
+                      const best = item.value === Math.max(...MONTHLY_SAMPLE.map(m => m.value));
+                      return (
+                        <View key={item.month} style={styles.mvBarCol}>
+                          <Text style={[styles.mvValue, best && styles.mvValueBest]}>{item.value}</Text>
+                          <View style={styles.mvBarTrack}>
+                            <View
+                              style={[
+                                styles.mvBar,
+                                { height: `${(item.value / MONTHLY_MAX) * 100}%` },
+                                best && styles.mvBarBest,
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+              {/* X axis labels */}
+              <View style={styles.mvXRow}>
+                <View style={styles.mvAxisSpacer} />
+                <View style={styles.mvXLabels}>
+                  {MONTHLY_SAMPLE.map(item => (
+                    <Text key={item.month} style={styles.mvXLabel}>
+                      {item.month}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.mvLegend}>
+                <View style={styles.mvLegendItem}>
+                  <View style={[styles.mvLegendDot, { backgroundColor: '#2F5DDC' }]} />
+                  <Text style={styles.mvLegendText}>Revenue</Text>
+                </View>
+                <View style={styles.mvLegendItem}>
+                  <View style={[styles.mvLegendDot, { backgroundColor: '#FCD34D' }]} />
+                  <Text style={styles.mvLegendText}>Best month (Oct)</Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -545,4 +630,37 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: hp('2%'),
   },
+  // ---- Monthly overview (static graph)
+  mvHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mvBadge: { backgroundColor: '#EEF2FF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  mvBadgeText: { fontSize: 11, fontWeight: '700', color: '#4F46E5' },
+  mvSub: { fontSize: 12, color: '#94A3B8', marginTop: 2, marginBottom: 12 },
+  mvCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E8ECF3',
+    padding: 14,
+  },
+  mvPlot: { flexDirection: 'row', height: 190 },
+  mvAxis: { width: 30, justifyContent: 'space-between', paddingBottom: 0 },
+  mvTick: { fontSize: 10, color: '#94A3B8', textAlign: 'right', paddingRight: 6, lineHeight: 12 },
+  mvBarsArea: { flex: 1 },
+  mvGrid: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', paddingVertical: 6 },
+  mvGridLine: { height: StyleSheet.hairlineWidth, backgroundColor: '#E2E8F0' },
+  mvBars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around' },
+  mvBarCol: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end' },
+  mvValue: { fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 3 },
+  mvValueBest: { color: '#B45309' },
+  mvBarTrack: { width: '58%', height: '88%', justifyContent: 'flex-end' },
+  mvBar: { width: '100%', backgroundColor: '#2F5DDC', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  mvBarBest: { backgroundColor: '#FCD34D' },
+  mvXRow: { flexDirection: 'row', marginTop: 8 },
+  mvAxisSpacer: { width: 30 },
+  mvXLabels: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
+  mvXLabel: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600', color: '#64748B' },
+  mvLegend: { flexDirection: 'row', justifyContent: 'center', marginTop: 12 },
+  mvLegendItem: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 10 },
+  mvLegendDot: { width: 9, height: 9, borderRadius: 5, marginRight: 6 },
+  mvLegendText: { fontSize: 11, color: '#64748B', fontWeight: '600' },
 });

@@ -61,13 +61,13 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [starting, setStarting] = useState(false);
-  // Handover OTP: `expectedOtp` is what handover_repair returned; the
-  // technician types the one the customer received and we compare them.
+  // Handover OTP: the technician types the code the customer received and the server
+  // checks it (verify_handoverotp).
   // Handover step 1: the final amount the customer pays, asked before the OTP is generated.
   const [amountVisible, setAmountVisible] = useState(false);
   const [finalAmount, setFinalAmount] = useState('');
   const [otpVisible, setOtpVisible] = useState(false);
-  const [expectedOtp, setExpectedOtp] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpError, setOtpError] = useState('');
 
@@ -125,6 +125,28 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                 address: c.address,
                 ...record,
               };
+            }
+            // The job record carries only customer_id (its customer_name / mobile come back
+            // empty). Customers are listed by getjobsdata ({ id, customer_name, customer_number,
+            // customer_alternatenumber, aadharnumber, customer_image }), so match on that id.
+            if (record.customer_id && !record.customer_name) {
+              try {
+                const res = await postJson(ENDPOINTS.GET_JOBS_DATA, { member_id: user.member_id });
+                const rows = res.response.ok && res.data && Array.isArray(res.data.data) ? res.data.data : [];
+                const c = rows.find(r => String(r.id) === String(record.customer_id));
+                if (c) {
+                  record = {
+                    ...record,
+                    customer_name: c.customer_name,
+                    customer_mobile: c.customer_number,
+                    alternate_mobile: c.customer_alternatenumber || record.alternate_mobile,
+                    aadharnumber: c.aadharnumber || record.aadharnumber,
+                    customer_photo: c.customer_image || record.customer_photo,
+                  };
+                }
+              } catch (e) {
+                // fall through to the list row below
+              }
             }
             // ... or be missing altogether: then take them from the job list row the screen
             // was opened with (or look the job up in the list). The details record wins
@@ -217,8 +239,9 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
         setActiveJob({
           id: targetJobId,
           job_code: j.job_code,
-          customer_mobile: j.customer_mobile,
+          customer_mobile: j.customer_mobile || j.mobile_number,
           customer_name: j.customer_name,
+          customer_id: j.customer_id,
           status: j.status,
         }),
       );
@@ -239,11 +262,9 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     setStarting(true);
     try {
       const { response, data } = await postJson(ENDPOINTS.HANDOVER_REPAIR, payload);
-      const otp = data && data.otp != null ? String(data.otp) : '';
       console.log('[handoverOtp] request →', payload);
       console.log('[handoverOtp] response →', response.status, JSON.stringify(data));
-      console.log('[handoverOtp] OTP received from API →', otp || '(none)');
-      if (!response.ok || (data && data.success === false) || !otp) {
+      if (!response.ok || (data && data.success === false)) {
         alert(
           (data && (data.message || data.msg)) ||
             'Could not generate the handover OTP. Please try again.',
@@ -251,7 +272,6 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
         return;
       }
       console.log('[handoverOtp] OTP popup opened, waiting for input');
-      setExpectedOtp(otp);
       setEnteredOtp('');
       setOtpError('');
       setOtpVisible(true);
@@ -263,18 +283,36 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     }
   };
 
-  // Handover step 2: compare the typed OTP with the one the server returned;
-  // if they match, submit the final status (3).
+  // Handover step 2: the server checks the typed OTP (POST verify_handoverotp with the
+  // customer's mobile, the OTP and the customer id). An empty answer means the OTP is wrong;
+  // when it is accepted, submit the final status (3).
   const handleVerifyOtp = async () => {
-    const matches = enteredOtp.trim() === expectedOtp;
-    console.log('[handoverOtp] compare →', {
-      entered: enteredOtp.trim(),
-      expected: expectedOtp,
-      match: matches,
-    });
-    if (!matches) {
-      setOtpError('Incorrect OTP. Please check the code and try again.');
+    if (verifyingOtp) return;
+    const mobile = String(j.customer_mobile || j.mobile_number || '').replace(/\D/g, '').slice(-10);
+    const customerId = (jobSummary && jobSummary.customer_id) || j.customer_id;
+    const payload = { mobile, otp: enteredOtp.trim(), customer_id: customerId };
+    setVerifyingOtp(true);
+    setOtpError('');
+    try {
+      const { response, data } = await postJson(ENDPOINTS.VERIFY_HANDOVER_OTP, payload);
+      console.log('[handoverOtp] verify →', response.status, JSON.stringify(data));
+      const accepted =
+        response.ok &&
+        data &&
+        data.success !== false &&
+        (Array.isArray(data.data) ? data.data.length > 0 : !!data.data);
+      if (!accepted) {
+        setOtpError(
+          (data && data.success === false && (data.message || data.msg)) ||
+            'Incorrect OTP. Please check the code and try again.',
+        );
+        return;
+      }
+    } catch (err) {
+      setOtpError(err.message || 'Could not verify the OTP. Please try again.');
       return;
+    } finally {
+      setVerifyingOtp(false);
     }
     setOtpError('');
     setOtpVisible(false);
@@ -342,11 +380,21 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const deviceSpec = [j.storage, j.color].filter(Boolean).join(' · ');
   const estimate =
     j.estimated_cost != null ? `₹${Number(j.estimated_cost).toLocaleString('en-IN')}` : '—';
+  const unlockValue = j.unlock_value || (parsed.access && parsed.access.unlock_value) || '';
+  // The job record keeps the saved lock in `devicelock` (access_mode can still say
+  // customer_unlocks), so a value there means there is a lock: a pattern looks like
+  // "1 → 2 → 5", anything else is a password / PIN.
+  const savedLock = String(unlockValue || j.devicelock || '').trim();
   const lockType =
     (parsed.access && parsed.access.lock_type) ||
-    (j.access_mode === 'temporary_pin' ? 'password' : 'none');
+    (savedLock
+      ? /→|^\d(\s*[-,>]\s*\d)+$/.test(savedLock)
+        ? 'pattern'
+        : 'password'
+      : j.access_mode === 'temporary_pin'
+      ? 'password'
+      : 'none');
   const lockLabel = LOCK_LABEL[lockType] || lockType;
-  const unlockValue = j.unlock_value || (parsed.access && parsed.access.unlock_value) || '';
   // The job can come from job_sheet_details (conditions[] / photos[] arrays,
   // customer_mobile) or from the list API (flat screen/body/... fields,
   // frontimage/backimage/damageimage URLs, mobile_number, aadharnumber).
@@ -558,7 +606,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                     icon: '🔒',
                     title: 'Access & security',
                     rows: [
-                      ['Device lock', unlockValue || j.devicelock ? `${lockLabel} · ${unlockValue || j.devicelock}` : lockLabel],
+                      ['Device lock', savedLock ? `${lockLabel} · ${savedLock}` : lockLabel],
                       ['Consent OTP', parsed.consent_otp],
                     ],
                   },
@@ -782,11 +830,11 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                   <Text style={styles.otpCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.otpButton, styles.otpConfirm, enteredOtp.length < 6 && styles.otpDisabled]}
-                  disabled={enteredOtp.length < 6}
+                  style={[styles.otpButton, styles.otpConfirm, (enteredOtp.length < 6 || verifyingOtp) && styles.otpDisabled]}
+                  disabled={enteredOtp.length < 6 || verifyingOtp}
                   onPress={handleVerifyOtp}
                 >
-                  <Text style={styles.otpConfirmText}>Verify & complete</Text>
+                  <Text style={styles.otpConfirmText}>{verifyingOtp ? 'Verifying…' : 'Verify & complete'}</Text>
                 </TouchableOpacity>
               </View>
               <TouchableOpacity
@@ -1203,7 +1251,7 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 14,
-    paddingBottom: 18,
+    paddingBottom: 38,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },

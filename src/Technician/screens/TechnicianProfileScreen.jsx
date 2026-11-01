@@ -18,7 +18,8 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { Colors } from '../../Constants/Colors';
 import { useI18n, LANGUAGES } from '../../i18n';
-import useAccountProfile from '../../utils/useAccountProfile';
+import useAccountProfile, { useMemberProfile } from '../../utils/useAccountProfile';
+import { Linking } from 'react-native';
 import BottomNav from '../../Components/BottomNav';
 import { getJson, logoutUser } from '../../redux/slices/authSlice';
 import { BASE_URL, ENDPOINTS } from '../../Constants/config';
@@ -32,24 +33,26 @@ export default function TechnicianProfileScreen({ onNavigate }) {
 
   // Full profile (admin_details for admins, technician_details for technicians).
   const profile = useAccountProfile();
+  // A technician (staff) login belongs to a member, its admin: that member's details, found by
+  // the member id, are shown in an extra card.
+  const isStaff = !!user.tech_id;
+  const adminProfile = useMemberProfile();
 
   // View model: fetched profile → cached login user → placeholders.
   const d = profile;
   const techName = d.full_name || 'Technician';
-  const techMobile = d.mobile || '—';
-  const techShop = d.shop_name || '—';
-  const techLocation = [d.city, d.state].filter(Boolean).join(', ') || '—';
+  // Anything the account has no data for stays empty and is left out of the screen.
+  const techMobile = d.mobile || '';
+  const techShop = d.shop_name || '';
+  const techLocation = [d.city, d.state].filter(Boolean).join(', ');
   // The member code is empty for some accounts, so fall back to the member id.
   const techRmtaId = d.member_code
     ? String(d.member_code)
     : d.member_id
     ? `Member ID: ${d.member_id}`
-    : '—';
+    : '';
   const techValidUntil = d.valid_until;
   const isAdmin = user.role === 'admin';
-  const isActive = isAdmin
-    ? String(d.account_status || '').toLowerCase() === 'active'
-    : user.technician_status === 'active';
 
   // Profile photo: from the profile data when it has one, otherwise looked up in
   // getallmembers by member id. Staff logins don't have their own photo.
@@ -172,11 +175,6 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                 <View style={{display: 'flex', flexDirection: 'column', gap: wp('2%')}}>
                     <View style={{display: 'flex', flexDirection: 'row', gap: wp('4%')}}>
                         <Text style={styles.rmtaLabel}>RMTA</Text>
-                        <View style={[styles.activeBadge, !isActive && styles.inactiveBadge]}>
-                            <Text style={[styles.activeBadgeText, !isActive && styles.inactiveBadgeText]}>
-                                {isActive ? `✓ ${t('active')}` : t('inactive')}
-                            </Text>
-                        </View>
                     </View>
                     <Text style={[styles.memberTypeLabel, {color: '#F2B233'}]}>{isAdmin ? t('adminMember') : t('technicianMember')}</Text>
                 </View>
@@ -201,38 +199,92 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                 </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{techName}</Text>
-                  <Text style={styles.memberId}>{techRmtaId}</Text>
-                  <Text style={styles.shopName}>{techShop}</Text>
-                  <Text style={styles.locationValidity}>
-                    {techLocation}
-                    {techValidUntil ? ` · ${t('validTill')} ${techValidUntil}` : ''}
-                  </Text>
+                  {!!techRmtaId && <Text style={styles.memberId}>{techRmtaId}</Text>}
+                  {!!techShop && <Text style={styles.shopName}>{techShop}</Text>}
+                  {(!!techLocation || !!techValidUntil) && (
+                    <Text style={styles.locationValidity}>
+                      {techLocation}
+                      {techValidUntil ? `${techLocation ? ' · ' : ''}${t('validTill')} ${techValidUntil}` : ''}
+                    </Text>
+                  )}
                 </View>
               </View>
 
             </View>
           </View>
 
-          {/* Your Details Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('yourDetails')}</Text>
-            <View style={styles.detailsCard}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>{t('mobile')}</Text>
-                <Text style={styles.detailValue}>{techMobile}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>{t('shop')}</Text>
-                <Text style={styles.detailValue}>{techShop}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>{t('location')}</Text>
-                <Text style={styles.detailValue}>{techLocation}</Text>
+          {/* Your Details Section: only what the account actually has */}
+          {[
+            [t('mobile'), techMobile],
+            [t('shop'), techShop],
+            [t('location'), techLocation],
+          ].filter(([, value]) => !!value).length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('yourDetails')}</Text>
+              <View style={styles.detailsCard}>
+                {[
+                  [t('mobile'), techMobile],
+                  [t('shop'), techShop],
+                  [t('location'), techLocation],
+                ]
+                  .filter(([, value]) => !!value)
+                  .map(([label, value], idx, rows) => (
+                    <View key={label}>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>{label}</Text>
+                        <Text style={styles.detailValue}>{value}</Text>
+                      </View>
+                      {idx < rows.length - 1 && <View style={styles.divider} />}
+                    </View>
+                  ))}
               </View>
             </View>
-          </View>
+          )}
+
+          {/* Admin details: only for a staff login, based on its member id */}
+          {isStaff && (
+            <View style={styles.section}>
+              {/* The shop this staff login works for, instead of a generic "Your admin" heading */}
+              <Text style={styles.worksAt}>You work at</Text>
+              <Text style={styles.sectionTitle}>{adminProfile.shop_name || 'Shop details'}</Text>
+              <View style={styles.detailsCard}>
+                {[
+                  ['Owner', adminProfile.full_name],
+                  ['Mobile', adminProfile.mobile],
+                  [
+                    'Location',
+                    [adminProfile.address, adminProfile.city, adminProfile.state].filter(Boolean).join(', '),
+                  ],
+                  ['Member ID', user.member_id ? String(user.member_id) : ''],
+                ]
+                  .filter(([, value]) => !!value)
+                  .map(([label, value], idx, rows) => (
+                    <View key={label}>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>{label}</Text>
+                        <Text style={styles.detailValue}>{value}</Text>
+                      </View>
+                      {idx < rows.length - 1 && <View style={styles.divider} />}
+                    </View>
+                  ))}
+                {!adminProfile.full_name && (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Owner</Text>
+                    <Text style={styles.detailValue}>Loading…</Text>
+                  </View>
+                )}
+              </View>
+              {!!adminProfile.mobile && (
+                <TouchableOpacity
+                  style={styles.callAdminBtn}
+                  onPress={() => Linking.openURL(`tel:${adminProfile.mobile}`)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.callAdminText}>📞  Call shop owner</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Menu Items */}
           <View style={styles.section}>
@@ -386,6 +438,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  worksAt: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
+  callAdminBtn: {
+    marginTop: 10,
+    backgroundColor: '#DCFCE7',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  callAdminText: { fontSize: 14, fontWeight: '800', color: '#15803D' },
   activeBadge: {
     backgroundColor: '#FCD34D',
     paddingHorizontal: 12,

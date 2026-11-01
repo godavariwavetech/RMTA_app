@@ -61,6 +61,7 @@ export const ENDPOINTS = {
   START_JOB_REPAIR: 'public_app/start_job_repair',
   START_REPAIR: 'public_app/start_repair',
   HANDOVER_REPAIR: 'public_app/handover_repair',
+  VERIFY_HANDOVER_OTP: 'public_app/verify_handoverotp',
   MARK_JOB_READY: 'public_app/mark_job_ready',
   CREATE_PURCHASE_CUSTOMER: 'public_app/create_purchase_customer',
   CREATE_PURCHASE: 'public_app/create_purchase',
