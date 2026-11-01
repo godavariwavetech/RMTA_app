@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image, Linking, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Image, Linking, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
@@ -35,6 +35,7 @@ const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 // login-style fields (full_name, mobile, …) or the shorter ones (name,
 // phone_number, …). A row with no value is hidden.
 export default function MemberIdentityCard({ member = {} }) {
+  const [photoVisible, setPhotoVisible] = useState(false);
   const m = member || {};
   const name = first(m.full_name, m.name);
   const shop = first(m.shop_name, m.shop);
@@ -78,11 +79,27 @@ export default function MemberIdentityCard({ member = {} }) {
         </View>
         <View style={styles.avatarWrap}>
           {personPhoto ? (
-            <Image source={{ uri: personPhoto }} style={styles.avatar} />
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setPhotoVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="View full profile photo"
+              style={styles.avatarTouchable}
+            >
+              <Image source={{ uri: personPhoto }} style={styles.avatar} />
+            </TouchableOpacity>
           ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() =>
+                Alert.alert('No profile photo', 'There is no profile photo saved for this account yet.')
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Profile photo unavailable"
+              style={[styles.avatar, styles.avatarFallback]}
+            >
               <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -117,6 +134,26 @@ export default function MemberIdentityCard({ member = {} }) {
         </View>
       </View>
       <Text style={styles.hint}>Tap the phone number to make a call.</Text>
+
+      <Modal
+        visible={photoVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setPhotoVisible(false)}
+      >
+        <View style={styles.photoModal}>
+          <Image source={{ uri: personPhoto }} style={styles.fullProfilePhoto} />
+          <TouchableOpacity
+            style={styles.photoCloseButton}
+            onPress={() => setPhotoVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close full profile photo"
+          >
+            <Text style={styles.photoCloseText}>×</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -137,6 +174,7 @@ const styles = StyleSheet.create({
   },
   banner: { width: '100%', height: 96, backgroundColor: Colors.primary },
   bannerImage: { width: '100%', height: '100%', resizeMode: 'cover', opacity: 0.9 },
+  avatarTouchable: { width: 98, height: 98, borderRadius: 49 },
   avatarWrap: {
     marginTop: -52,
     width: 108,
@@ -148,6 +186,26 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   avatar: { width: 98, height: 98, borderRadius: 49 },
+  photoModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  fullProfilePhoto: { width: '100%', height: '82%', resizeMode: 'contain' },
+  photoCloseButton: {
+    position: 'absolute',
+    top: 44,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoCloseText: { color: '#FFFFFF', fontSize: 32, lineHeight: 36, includeFontPadding: false },
   avatarFallback: { backgroundColor: '#E8F0FE', alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 34, fontWeight: '800', color: Colors.secondary },
   name: { fontSize: 24, fontWeight: '800', color: '#172033', marginTop: 14, textAlign: 'center', paddingHorizontal: 16 },

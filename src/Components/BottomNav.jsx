@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   Text,
   Image,
+  Platform,
 } from 'react-native';
 
 import { useI18n } from '../i18n';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // The bar drifts through deep cool shades (navy, blue, indigo, violet, teal) and the
 // centre button through light warm ones (amber, peach, yellow, rose, pink) at the same
@@ -36,6 +38,7 @@ const loop = (value, duration, easing = Easing.linear, useNativeDriver = true) =
 
 export default function BottomNav({ selectedItem, onNavigate }) {
   const { t } = useI18n();
+  const insets = useSafeAreaInsets();
   const buttonHue = useRef(new Animated.Value(0)).current;
   const centerFloat = useRef(new Animated.Value(0)).current;
 
@@ -79,7 +82,13 @@ export default function BottomNav({ selectedItem, onNavigate }) {
   const barColor = buttonHue.interpolate({ inputRange, outputRange: BAR_COLORS });
 
   return (
-    <View style={styles.bottomNavContainer} pointerEvents="box-none">
+      <View
+        style={[
+          styles.bottomNavContainer,
+          { bottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0) + 8 },
+        ]}
+        pointerEvents="box-none"
+      >
       <Animated.View style={[styles.navBarShell, { backgroundColor: barColor }]}>
         <View style={styles.bottomNav}>
           {navItems.map(item => {

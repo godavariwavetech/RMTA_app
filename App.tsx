@@ -1,5 +1,6 @@
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Alert, AppState, BackHandler, KeyboardAvoidingView, Platform, View, useWindowDimensions } from 'react-native';
+import { Alert, AppState, BackHandler, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import VersionCheck from 'react-native-version-check';
 import { Colors } from './src/Constants/Colors';
 import { APP_MAX_WIDTH } from './src/utils/responsive';
 import AppLockGate from './src/Components/AppLockGate';
@@ -262,6 +263,8 @@ function AppContent() {
   // Block the first render until we've checked for a persisted session, so we
   // don't flash the IntroScreen before restoring a logged-in admin/technician.
   const [booting, setBooting] = useState<boolean>(true);
+  const storeUpdateCheckStarted = useRef(false);
+  const [storeUpdate, setStoreUpdate] = useState<{ version: string; url: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -282,6 +285,38 @@ function AppContent() {
       setBooting(false);
     })();
   }, []);
+
+  // On Android, compare the installed version with the version currently
+  // published on Google Play and offer a direct store update when one exists.
+  useEffect(() => {
+    if (booting || !i18nReady || Platform.OS !== 'android' || storeUpdateCheckStarted.current) {
+      return undefined;
+    }
+    storeUpdateCheckStarted.current = true;
+    let active = true;
+
+    (async () => {
+      try {
+        const update = await VersionCheck.needUpdate({
+          provider: 'playStore',
+          packageName: 'com.rmta',
+          forceUpdate: true,
+          ignoreErrors: false,
+        });
+        if (!active || !update?.isNeeded || !update.storeUrl) return;
+
+        setStoreUpdate({ version: update.latestVersion, url: update.storeUrl });
+      } catch (error: any) {
+        // A missing/unpublished Play Store listing or temporary network failure
+        // should not block app startup.
+        console.warn('[AppUpdate] Version check failed', error?.message);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [booting, i18nReady]);
 
   // Push notifications (FCM shown through notifee) once the session is restored.
   useEffect(() => {
@@ -475,6 +510,44 @@ function AppContent() {
     <Provider store={store}>
     <SafeAreaProvider>
       <AppModalHost />
+      <Modal
+        visible={!!storeUpdate}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setStoreUpdate(null)}
+      >
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.55)' }}>
+          <View style={{ width: '100%', maxWidth: 360, borderRadius: 20, padding: 24, backgroundColor: '#FFFFFF' }}>
+            <Text style={{ color: Colors.primary, fontSize: 20, fontWeight: '700', marginBottom: 10 }}>Update available</Text>
+            <Text style={{ color: '#4B5563', fontSize: 15, lineHeight: 22, marginBottom: 8 }}>
+              Version {storeUpdate?.version} is available on Google Play.
+            </Text>
+            <Text style={{ color: '#6B7280', fontSize: 14, lineHeight: 21, marginBottom: 24 }}>
+              Update now to get the latest improvements.
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <Pressable onPress={() => setStoreUpdate(null)} hitSlop={8} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#4B5563', fontSize: 15, fontWeight: '600' }}>Later</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const updateUrl = storeUpdate?.url;
+                  setStoreUpdate(null);
+                  if (updateUrl) {
+                    Linking.openURL(updateUrl).catch(error =>
+                      console.warn('[AppUpdate] Could not open Google Play', error?.message),
+                    );
+                  }
+                }}
+                style={{ marginLeft: 8, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 18, backgroundColor: Colors.primary }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>Update</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={{ flex: 1, alignItems: 'center', backgroundColor: isTabletScreen ? '#E5E9F0' : undefined }}>
       <View style={{ flex: 1, width: '100%', maxWidth: isTabletScreen ? APP_MAX_WIDTH : undefined, overflow: 'hidden' }}>
       <KeyboardAvoidingView

@@ -10,8 +10,9 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
@@ -45,6 +46,7 @@ const isJobCompleted = job =>
   Number(job.completed_status) === 3 || job.status === 'completed';
 
 export default function JobSheetList({ onNavigate }) {
+  const insets = useSafeAreaInsets();
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const [selectedNavItem, setSelectedNavItem] = useState('jobs');
@@ -281,7 +283,7 @@ export default function JobSheetList({ onNavigate }) {
         barStyle="light-content"
         translucent={true}
       />
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         {/* Navy header with the title, a count and the search field */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
@@ -384,7 +386,13 @@ export default function JobSheetList({ onNavigate }) {
         </ScrollView>
 
         {/* New job sheet: a floating button */}
-        <View style={styles.newJobButtonContainer} pointerEvents="box-none">
+        <View
+          style={[
+            styles.newJobButtonContainer,
+            { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0) + 20 },
+          ]}
+          pointerEvents="box-none"
+        >
           <TouchableOpacity
             style={styles.newJobButton}
             activeOpacity={0.9}
@@ -546,11 +554,10 @@ const styles = StyleSheet.create({
 
   bottomSpacer: { height: 110 },
   newJobButtonContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 22,
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    backgroundColor: '#F4F6FB',
   },
   newJobButton: {
     flexDirection: 'row',
