@@ -57,15 +57,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
 
   const handleContinue = () => {
     setTried(true);
-    // Device brand, model and IMEI 1 are required.
-    if (!deviceBrand.trim() || !deviceModel.trim() || !imei1.trim()) {
-      Alert.alert(
-        'Incomplete',
-        'Please enter the device brand, device model and IMEI 1.',
-      );
-      return;
-    }
-    if (!isValidImei(imei1)) {
+    if (imei1.trim() && !isValidImei(imei1)) {
       Alert.alert('Invalid IMEI', 'IMEI 1 must be a valid 15-digit IMEI number.');
       return;
     }

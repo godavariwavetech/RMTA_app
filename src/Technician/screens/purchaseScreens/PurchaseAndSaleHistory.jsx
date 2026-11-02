@@ -90,6 +90,33 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   useEffect(() => {
     let active = true;
 
+    // The backend's list query can return more than one row for the same
+    // sale/purchase id (e.g. a join against a table with more than one
+    // matching record) — the duplicates usually differ only in which copy
+    // has a field filled in (like warranty_notes). Merge them into a single
+    // row per id, preferring whichever copy has each field filled in, so one
+    // sale/purchase shows as exactly one card instead of several.
+    const dedupeById = rows => {
+      const byId = new Map();
+      rows.forEach(r => {
+        const existing = byId.get(r.id);
+        if (!existing) {
+          byId.set(r.id, r);
+          return;
+        }
+        const merged = { ...existing };
+        Object.keys(r).forEach(k => {
+          const v = r[k];
+          const isEmpty = x => x === null || x === undefined || x === '';
+          if (!isEmpty(v) && isEmpty(merged[k])) {
+            merged[k] = v;
+          }
+        });
+        byId.set(r.id, merged);
+      });
+      return Array.from(byId.values());
+    };
+
     // Fetch one list; the two lists load in parallel and only the tab(s) the
     // screen actually shows are requested.
     const load = async (endpoint, label, mapRow, setRows, setLoading) => {
@@ -98,8 +125,9 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
           member_id: user.member_id,
         });
         if (active && response.ok && data && data.success !== false) {
-          const rows = Array.isArray(data.data) ? data.data : [];
-          logRows(label, rows);
+          const rawRows = Array.isArray(data.data) ? data.data : [];
+          logRows(label, rawRows);
+          const rows = dedupeById(rawRows);
           setRows(rows.map(mapRow));
         } else if (active) {
           console.log(`[${label}] request failed:`, response.status, data && data.message);
@@ -124,8 +152,9 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
     // Photos arrive as base64 JPEGs (no data: prefix) or short server paths.
     const PHOTO_FIELDS = [
       ['frontimage', 'Front photo'],
-      ['baackimage', 'Back photo'],
+      ['backimage', 'Back photo'],
       ['device_image', 'Device photo'],
+      ['billimage', 'Bill photo'],
     ];
     const extractPhotos = r =>
       PHOTO_FIELDS.filter(([k]) => typeof r[k] === 'string' && r[k]).map(([k, label]) => ({
@@ -250,9 +279,9 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   const handleNewTransaction = () => {
     if (onNavigate) {
       if (activeTab === 'purchases') {
-        onNavigate('purchaseEntryStep1');
+        onNavigate('purchaseEntryStep1', { fresh: true });
       } else {
-        onNavigate('saleEntryStep1');
+        onNavigate('saleEntryStep1', { fresh: true });
       }
     }
   };

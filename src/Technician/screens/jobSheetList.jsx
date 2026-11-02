@@ -45,13 +45,26 @@ const STATUS_META = {
 const isJobCompleted = job =>
   Number(job.completed_status) === 3 || job.status === 'completed';
 
-export default function JobSheetList({ onNavigate }) {
+// Matches the Home screen's "Jobs today" count: created today, any status.
+const isJobToday = job => {
+  if (!job.created_at) return false;
+  const created = new Date(job.created_at);
+  if (Number.isNaN(created.getTime())) return false;
+  const now = new Date();
+  return (
+    created.getFullYear() === now.getFullYear() &&
+    created.getMonth() === now.getMonth() &&
+    created.getDate() === now.getDate()
+  );
+};
+
+export default function JobSheetList({ onNavigate, initialFilter }) {
   const insets = useSafeAreaInsets();
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const [selectedNavItem, setSelectedNavItem] = useState('jobs');
   const [searchText, setSearchText] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('active');
+  const [selectedFilter, setSelectedFilter] = useState(initialFilter || 'active');
   const [jobSheets, setJobSheets] = useState([]);
   const [loading, setLoading] = useState(true);
   // "Share job sheet PDF": the card asks for a paper size, then the PDF is built and the
@@ -154,6 +167,7 @@ export default function JobSheetList({ onNavigate }) {
 
   const filters = [
     { id: 'all', label: 'All' },
+    { id: 'today', label: 'Today' },
     { id: 'active', label: 'Active' },
     { id: 'inprogress', label: 'In progress' },
     { id: 'ready', label: 'Ready' },
@@ -171,11 +185,16 @@ export default function JobSheetList({ onNavigate }) {
   };
 
   // Finished jobs live in their own "Completed jobs" section; the status
-  // filters below only apply to the jobs still in progress.
-  const completedJobs = jobSheets.filter(job => isJobCompleted(job) && matchesSearch(job));
+  // filters below only apply to the jobs still in progress. "Today" is a
+  // date filter rather than a status, so it narrows both sections instead of
+  // only the open one.
+  const completedJobs = jobSheets.filter(
+    job => isJobCompleted(job) && matchesSearch(job) && (selectedFilter !== 'today' || isJobToday(job)),
+  );
 
   const openJobMatches = (job, filterId) => {
     if (isJobCompleted(job)) return false;
+    if (filterId === 'today') return isJobToday(job);
     if (filterId === 'active') return job.status === 'open' || job.status === 'draft';
     if (filterId === 'inprogress') return job.status === 'in_progress';
     if (filterId === 'ready') return job.status === 'ready';
@@ -185,17 +204,19 @@ export default function JobSheetList({ onNavigate }) {
 
   const filteredJobs = jobSheets.filter(job => openJobMatches(job, selectedFilter) && matchesSearch(job));
 
-  // Counts shown on the filter chips (ignoring the search text).
-  const countFor = id =>
-    id === 'completed'
-      ? jobSheets.filter(isJobCompleted).length
-      : id === 'all'
-      ? jobSheets.length
-      : jobSheets.filter(job => openJobMatches(job, id)).length;
+  // Counts shown on the filter chips (ignoring the search text). "Today"
+  // counts every status, matching the Home screen's "Jobs today" card.
+  const countFor = id => {
+    if (id === 'completed') return jobSheets.filter(isJobCompleted).length;
+    if (id === 'all') return jobSheets.length;
+    if (id === 'today') return jobSheets.filter(isJobToday).length;
+    return jobSheets.filter(job => openJobMatches(job, id)).length;
+  };
 
   const showOpenSection = selectedFilter !== 'completed';
   const showCompletedSection =
-    (selectedFilter === 'all' || selectedFilter === 'completed') && completedJobs.length > 0;
+    (selectedFilter === 'all' || selectedFilter === 'completed' || selectedFilter === 'today') &&
+    completedJobs.length > 0;
 
   const renderJobItem = item => {
     const completed = isJobCompleted(item);

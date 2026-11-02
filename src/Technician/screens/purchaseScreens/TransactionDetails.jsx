@@ -59,6 +59,8 @@ const LABELS = {
 const HIDDEN = [
   'member_id', 'customer_id', 'user_id', 'seller_id', 'buyer_id',
   'purchase_id', 'verify_otp', 'd_in', 'available',
+  // Shown as actual photo previews above (see `photos`), not as raw URL text.
+  'frontimage', 'backimage', 'baackimage', 'billimage', 'device_image',
 ];
 const MONEY = ['purchase_price', 'purchaseprice', 'sale_price', 'price', 'amount'];
 

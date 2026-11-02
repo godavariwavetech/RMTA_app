@@ -116,14 +116,6 @@ export default function CreateJobSheetStep5({ onNavigate }) {
 
   const handleContinue = () => {
     setTried(true);
-    if (lockType === 'password' && !devicePassword.trim()) {
-      Alert.alert('Missing details', 'Please enter the device password / PIN.');
-      return;
-    }
-    if (lockType === 'pattern' && pattern.length === 0) {
-      Alert.alert('Missing details', 'Please set the unlock pattern.');
-      return;
-    }
     const access = buildAccess();
     dispatch(updateJobDraft({ access }));
     console.log('[JobSheet][Step5] access captured →', access);

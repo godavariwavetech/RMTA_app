@@ -11,6 +11,7 @@ import {
   TextInput,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -28,6 +29,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signOutOtherDevices, setSignOutOtherDevices] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const handleBackPress = () => {
     if (onNavigate) {
@@ -36,7 +38,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
   };
 
   const handleSaveNewPassword = async () => {
-    if (!onNavigate) return;
+    if (!onNavigate || saving) return;
 
     if (!newPassword.trim() || !confirmPassword.trim()) {
       alert('Please fill in both password fields');
@@ -51,9 +53,11 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
       return;
     }
 
+    setSaving(true);
     const result = await dispatch(
       resetPassword({ mobile, otp, new_password: newPassword }),
     );
+    setSaving(false);
 
     if (resetPassword.fulfilled.match(result)) {
       Alert.alert(
@@ -203,12 +207,16 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                !isPasswordValid() && styles.saveButtonDisabled,
+                (!isPasswordValid() || saving) && styles.saveButtonDisabled,
               ]}
               onPress={handleSaveNewPassword}
-              disabled={!isPasswordValid()}
+              disabled={!isPasswordValid() || saving}
             >
-              <Text style={styles.saveButtonText}>Save new password</Text>
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Save new password</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

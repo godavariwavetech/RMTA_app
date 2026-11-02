@@ -13,6 +13,7 @@ import {
   ImageBackground,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
@@ -46,6 +47,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [legalView, setLegalView] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Shop photo / person photo: { uri, base64 } or null. Sent to the backend
   // as raw base64 under shop_image / person_image — no separate upload step.
@@ -91,7 +93,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   };
 
   const handleRegister = async () => {
-    if (!onNavigate) return;
+    if (!onNavigate || isSubmitting) return;
 
     const {
       fullName,
@@ -174,7 +176,9 @@ export default function RegisterScreen({ onNavigate, userInd }) {
     // Dispatch the registration thunk (defined in redux/slices/authSlice.js).
     // It handles the fetch, timeout, duplicate/error responses, and stores the
     // result in redux. Here we just branch on fulfilled vs rejected.
+    setIsSubmitting(true);
     const result = await dispatch(registerMember(registrationData));
+    setIsSubmitting(false);
 
     if (registerMember.fulfilled.match(result)) {
       // Success means the mobile number did NOT already exist and the account
@@ -519,8 +523,13 @@ export default function RegisterScreen({ onNavigate, userInd }) {
             <TouchableOpacity
               style={styles.registerButton}
               onPress={handleRegister}
+              disabled={isSubmitting}
             >
-              <Text style={styles.registerButtonText}>Register</Text>
+              {isSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.registerButtonText}>Register</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

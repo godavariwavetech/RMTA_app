@@ -93,11 +93,19 @@ export default function TechnicianProfileScreen({ onNavigate }) {
     }
   };
 
-  const handleLogout = async () => {
-    await dispatch(logoutUser()); // clear the persisted session
-    if (onNavigate) {
-      onNavigate('logout');
-    }
+  const handleLogout = () => {
+    confirmAction({
+      title: 'Log out?',
+      message: 'Are you sure you want to log out?',
+      confirmText: 'Log out',
+      destructive: true,
+      onConfirm: async () => {
+        await dispatch(logoutUser()); // clear the persisted session
+        if (onNavigate) {
+          onNavigate('logout');
+        }
+      },
+    });
   };
 
   // Account deletion (App Store requirement). Placeholder for now: confirms,

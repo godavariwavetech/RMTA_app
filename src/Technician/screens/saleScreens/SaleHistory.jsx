@@ -115,7 +115,7 @@ export default function SaleHistory({ onNavigate }) {
 
   const handleNewSale = () => {
     if (onNavigate) {
-      onNavigate('saleEntryStep1');
+      onNavigate('saleEntryStep1', { fresh: true });
     }
   };
 

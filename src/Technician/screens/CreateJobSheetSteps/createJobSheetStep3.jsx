@@ -133,16 +133,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
   };
 
   const handleContinue = () => {
-    // Every condition field must be answered before moving on.
     setTried(true);
-    const unanswered = Object.keys(selections).filter(k => !selections[k]);
-    if (unanswered.length > 0) {
-      Alert.alert(
-        'Incomplete',
-        'Please choose a condition for every field before continuing.',
-      );
-      return;
-    }
     const draft = buildDraft();
     dispatch(updateJobDraft(draft));
     if (onNavigate) {

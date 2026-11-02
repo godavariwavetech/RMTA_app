@@ -98,7 +98,6 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   };
 
   const handleContinue = () => {
-    if (!sancharChecked) return;
     const imeiData = { imei: imei, imei2: imei2, verified: imeiVerified, verifiedAt };
     dispatch(updatePurchaseDraft({ imei: imeiData, ceirVerified: sancharChecked }));
     if (onNavigate) {
@@ -303,10 +302,10 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
           <TouchableOpacity
             style={[
               styles.continueButton,
-              (!imeiVerified || !imei2Ok || !sancharChecked) && styles.continueButtonDisabled,
+              !imei2Ok && styles.continueButtonDisabled,
             ]}
             onPress={handleContinue}
-            disabled={!imeiVerified || !imei2Ok || !sancharChecked}
+            disabled={!imei2Ok}
           >
             <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   FlatList,
   ScrollView,
   StatusBar,
@@ -20,6 +21,7 @@ import { getJson, postJson } from '../../redux/slices/authSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../utils/mobileValidation';
 import { useFieldNav, FieldNavBar } from '../../Components/FieldNav';
 import { SkeletonUserList } from '../../Components/Skeleton';
+import BottomNav from '../../Components/BottomNav';
 
 // Staff: lists the technicians added under this member and, from a button at the
 // top, opens the form to add another. Tapping a staff member opens their details,
@@ -48,6 +50,9 @@ const toIdList = value => {
   return list.map(Number).filter(n => !Number.isNaN(n));
 };
 export default function StaffScreen({ onNavigate }) {
+  const handleNavigation = screen => {
+    if (onNavigate) onNavigate(screen);
+  };
   const nav = useFieldNav();
   const user = useSelector(state => state.auth?.user) || {};
   const [mode, setMode] = useState('list'); // 'list' | 'form' | 'detail'
@@ -206,6 +211,18 @@ export default function StaffScreen({ onNavigate }) {
       onNavigate('goBack');
     }
   };
+
+  // The screen stack only knows about the "staff" entry, not this in-screen
+  // mode, so the Android back gesture would otherwise skip straight past the
+  // list and exit the screen while adding/viewing a staff member.
+  useEffect(() => {
+    if (mode === 'list') return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setMode('list');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [mode]);
 
   const handleSave = async () => {
     setTried(true);
@@ -475,6 +492,7 @@ export default function StaffScreen({ onNavigate }) {
           </Text>
         </View>
         {mode === 'form' ? renderForm() : mode === 'detail' ? renderDetail() : renderList()}
+        {mode === 'list' && <BottomNav selectedItem="staff" onNavigate={handleNavigation} />}
       </SafeAreaView>
     </>
   );
@@ -509,7 +527,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   addButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  list: { padding: 14, flexGrow: 1 },
+  list: { padding: 14, paddingBottom: 130, flexGrow: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

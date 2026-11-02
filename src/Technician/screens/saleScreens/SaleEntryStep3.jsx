@@ -69,14 +69,6 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   const handleCreateInvoice = async () => {
     if (!onNavigate || submitting) return;
     setTried(true);
-    if (!(Number(formData.salePrice) > 0)) {
-      Alert.alert('Missing details', 'Please enter the sale price.');
-      return;
-    }
-    if (formData.paymentMode !== 'cash' && !String(formData.transactionId || '').trim()) {
-      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
-      return;
-    }
     dispatch(updateSaleDraft({ sale: formData }));
 
     // deviceData.id is the purchase/inventory record's id (from

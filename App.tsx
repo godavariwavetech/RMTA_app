@@ -622,7 +622,11 @@ function AppContent() {
       ) : currentScreen === 'settings' ? (
         <TechnicianSettingsScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'jobs' ? (
-        <JobSheetList onNavigate={handleScreenNavigation} />
+        <JobSheetList
+          key={`jobs-${navigationParams.initialFilter}`}
+          onNavigate={handleScreenNavigation}
+          initialFilter={navigationParams.initialFilter}
+        />
       ) : currentScreen === 'jobDetails' ? (
         <JobDetailsScreen
           onNavigate={handleScreenNavigation}
@@ -660,7 +664,7 @@ function AppContent() {
           summary={navigationParams.summary}
         />
       ) : currentScreen === 'purchaseEntryStep1' ? (
-        <PurchaseEntryStep1 onNavigate={handleScreenNavigation} />
+        <PurchaseEntryStep1 onNavigate={handleScreenNavigation} fresh={navigationParams.fresh} />
       ) : currentScreen === 'verifySellerMobileNumber' ? (
         <VerifySellerMobileNumber onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} />
       ) : currentScreen === 'purchaseEntryStep2' ? (
@@ -678,7 +682,7 @@ function AppContent() {
       ) : currentScreen === 'viewPurchaseHistory' ? (
         <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="purchases" singleTab />
       ) : currentScreen === 'saleEntryStep1' ? (
-        <SaleEntryStep1 onNavigate={handleScreenNavigation} />
+        <SaleEntryStep1 onNavigate={handleScreenNavigation} fresh={navigationParams.fresh} />
       ) : currentScreen === 'verifyBuyerMobileNumber' ? (
         <VerifyBuyerMobileNumber onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} />
       ) : currentScreen === 'saleEntryStep2' ? (

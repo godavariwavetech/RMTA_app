@@ -40,7 +40,7 @@ const first = (row, keys) => {
 
 const nameOf = r => first(r, ['customer_name', 'buyer_name', 'seller_name', 'name']);
 const mobileOf = r =>
-  first(r, ['customer_mobile', 'mobile_number', 'customer_mobile_number', 'buyer_mobile', 'seller_mobile', 'mobile', 'phone_number'])
+  first(r, ['customer_mobile', 'mobile_number', 'customer_mobile_number', 'customer_number', 'buyer_mobile', 'seller_mobile', 'mobile', 'phone_number'])
     .replace(/\D/g, '')
     .slice(-10);
 
@@ -95,13 +95,16 @@ export default function CustomerDirectoryScreen({ onNavigate }) {
       call(ENDPOINTS.GET_SALES_CUSTOMERS_DATA),
       call(ENDPOINTS.GET_PURCHASE_DATA),
     ]);
-    const next = jobsData.payload ? toBuckets(jobsData.payload) : { jobs: [], sales: [], purchases: [] };
-    // The sales and purchase endpoints return a plain list of rows, or wrap
-    // them under a key such as `sales` / `purchases`.
+    const next = { jobs: [], sales: [], purchases: [] };
+    // Each endpoint is single-purpose (jobs / sales / purchases only), so a
+    // plain array response belongs entirely to that tab — it doesn't carry a
+    // per-row `type` field. Only fall back to toBuckets (type-tagged rows, or
+    // an object keyed by list name) when the response isn't a plain array.
     const rowsFrom = (result, tabKey) => {
       if (!result.payload) return null;
       return Array.isArray(result.payload) ? result.payload : toBuckets(result.payload)[tabKey];
     };
+    next.jobs = rowsFrom(jobsData, 'jobs') || next.jobs;
     next.sales = rowsFrom(salesData, 'sales') || next.sales;
     next.purchases = rowsFrom(purchaseData, 'purchases') || next.purchases;
     setBuckets(next);

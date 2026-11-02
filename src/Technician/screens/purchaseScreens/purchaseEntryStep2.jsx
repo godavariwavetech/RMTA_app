@@ -47,10 +47,6 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
 
   const handleContinue = () => {
     setTried(true);
-    if (!formData.deviceBrand.trim() || !formData.deviceModel.trim()) {
-      Alert.alert('Missing details', 'Please enter the device brand and model.');
-      return;
-    }
     console.log('[Purchase][Step2] device captured →', formData);
     dispatch(updatePurchaseDraft({ device: formData }));
     if (onNavigate) {

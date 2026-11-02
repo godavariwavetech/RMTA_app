@@ -100,18 +100,13 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
 
   const handleContinue = async () => {
     setTried(true);
-    if (!customerName.trim() || !mobileNumber.trim()) {
-      Alert.alert('Missing details', 'Please enter the customer name and mobile number.');
-      return;
-    }
-
-    if (!/^[a-zA-Z\s]+$/.test(customerName.trim())) {
+    if (customerName.trim() && !/^[a-zA-Z\s]+$/.test(customerName.trim())) {
       Alert.alert('Invalid name', 'Customer name should only contain letters.');
       return;
     }
 
     const mobileDigits = normalizeMobileNumber(mobileNumber);
-    if (!isValidIndianMobileNumber(mobileDigits)) {
+    if (mobileNumber.trim() && !isValidIndianMobileNumber(mobileDigits)) {
       Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
       return;
     }
@@ -140,6 +135,29 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
       !(photo && photo.base64 && !draftCustomer.photo_base64);
     if (unchanged) {
       if (onNavigate) onNavigate(draftConsentOtp ? 'createJobSheetStep2' : 'verifyMobileNumber');
+      return;
+    }
+
+    // Nothing to save when both mandatory fields are left blank — skip the
+    // network round trip entirely instead of creating an empty customer.
+    if (!customerName.trim() && !mobileNumber.trim()) {
+      dispatch(
+        updateJobDraft({
+          customer: {
+            customer_id: draftCustomer.customer_id || null,
+            full_name: '',
+            mobile: '',
+            alternate_mobile: normalizeMobileNumber(alternateNumber),
+            aadhaar_last4: aadharDigits.slice(-4),
+            aadhaar_number: aadharNumber,
+            photo_file_id: photo && photo.file_id ? photo.file_id : null,
+            photo_uri: photo && photo.uri ? photo.uri : null,
+            photo_base64: photo && photo.base64 ? photo.base64 : null,
+            consent: true,
+          },
+        }),
+      );
+      if (onNavigate) onNavigate('verifyMobileNumber');
       return;
     }
 

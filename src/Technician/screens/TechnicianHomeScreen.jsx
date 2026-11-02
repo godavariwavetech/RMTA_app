@@ -320,9 +320,9 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
                   if (action.id === 1) {
                     handleNavigation('createJobSheetStep1', { fresh: true });
                   } else if (action.id === 2) {
-                    handleNavigation('purchaseEntryStep1');
+                    handleNavigation('purchaseEntryStep1', { fresh: true });
                   } else if (action.id === 3) {
-                    handleNavigation('saleEntryStep1');
+                    handleNavigation('saleEntryStep1', { fresh: true });
                   } else if (action.id === 4) {
                     handleNavigation('deviceVerification');
                   } else if (action.id === 5) {
@@ -393,7 +393,11 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
                 key={stat.id}
                 activeOpacity={0.85}
                 style={[styles.statCard, { backgroundColor: stat.tint, borderColor: stat.border }]}
-                onPress={() => handleNavigation('jobs')}
+                onPress={() =>
+                  handleNavigation('jobs', {
+                    initialFilter: stat.id === 1 ? 'today' : stat.id === 2 ? 'completed' : 'all',
+                  })
+                }
               >
                 <View style={[styles.statIconCircle, { backgroundColor: stat.accent }]}>
                   <Image source={stat.icon} style={styles.statIcon} />

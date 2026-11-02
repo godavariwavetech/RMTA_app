@@ -74,6 +74,8 @@ export const ENDPOINTS = {
   FORGOT_SEND_OTP: 'public_app/forgot_password/send_otp',
   FORGOT_VERIFY_OTP: 'public_app/forgot_password/verify_otp',
   FORGOT_RESET_PASSWORD: 'public_app/forgot_password/reset',
+  // Admin Access screen's direct forgot-password (mobile + new_password, no OTP step).
+  ADMIN_FORGOT_PASSWORD: 'public_app/forgetpassword',
   TECHNICIANS_LIST: 'public_app/technicians_list',
   GET_SUPPORTERS: 'public_app/getsupporters',
   GET_ALL_MEMBERS: 'public_app/getallmembers',
@@ -84,6 +86,10 @@ export const ENDPOINTS = {
 };
 
 // Build a full URL from an endpoint path, e.g. buildUrl(ENDPOINTS.MEMBER_REGISTRATION)
-export const buildUrl = endpoint => `${BASE_URL}${endpoint}`;
+// Some endpoints (e.g. uploaded photo paths) already come back as a full
+// absolute URL from the server rather than a path relative to BASE_URL —
+// prepending BASE_URL to those would double it up into a broken URL.
+export const buildUrl = endpoint =>
+  /^https?:\/\//i.test(endpoint || '') ? endpoint : `${BASE_URL}${endpoint}`;
 
 export default { BASE_URL, REQUEST_TIMEOUT, ENDPOINTS, buildUrl };

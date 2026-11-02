@@ -33,7 +33,7 @@ export default function ForgotPassStep1({ onNavigate }) {
   };
 
   const handleSendVerificationCode = async () => {
-    if (!onNavigate) return;
+    if (!onNavigate || sending) return;
     const mobile = mobileNumber.replace(/\D/g, '');
     if (!isValidIndianMobileNumber(mobile)) {
       alert('Please enter a valid 10-digit Indian mobile number');

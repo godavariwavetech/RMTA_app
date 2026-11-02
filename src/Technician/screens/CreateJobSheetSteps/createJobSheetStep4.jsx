@@ -72,19 +72,6 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
   const handleContinue = () => {
     setTried(true);
-    // All fields are required before moving on.
-    if (
-      selectedCategories.length === 0 ||
-      !problemDescription.trim() ||
-      !estimatedCost.trim() ||
-      !estimatedDelivery.trim()
-    ) {
-      Alert.alert(
-        'Incomplete',
-        'Please select a repair category and fill in the problem description, estimated cost and delivery.',
-      );
-      return;
-    }
     const repair = buildRepair();
     dispatch(updateJobDraft({ repair }));
     console.log('[JobSheet][Step4] repair captured →', repair);

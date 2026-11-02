@@ -39,14 +39,6 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
   const handleContinue = () => {
     setTried(true);
-    if (!(Number(purchasePrice) > 0)) {
-      Alert.alert('Missing details', 'Please enter the purchase price.');
-      return;
-    }
-    if (paymentMode !== 'Cash' && !transactionId.trim()) {
-      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
-      return;
-    }
     const priceData = buildPrice();
     console.log('[Purchase][Step6] price captured →', priceData);
     dispatch(updatePurchaseDraft({ price: priceData }));

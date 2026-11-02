@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,11 +21,11 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 
 import { Colors } from '../../../Constants/Colors';
-import { updateSaleDraft, createSaleCustomer } from '../../../redux/slices/saleSlice';
+import { updateSaleDraft, createSaleCustomer, resetSaleDraft } from '../../../redux/slices/saleSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 import { useFieldNav, FieldNavBar } from '../../../Components/FieldNav';
 
-export default function SaleEntryStep1({ onNavigate }) {
+export default function SaleEntryStep1({ onNavigate, fresh }) {
   const nav = useFieldNav();
   const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
@@ -41,6 +41,22 @@ export default function SaleEntryStep1({ onNavigate }) {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Only wipe the draft when starting a brand-new sale (the "+ Sale" quick
+  // action and "New sale" buttons pass `fresh`). Navigating back here
+  // mid-flow to edit the buyer must keep what was entered.
+  useEffect(() => {
+    if (fresh) {
+      dispatch(resetSaleDraft());
+      setFormData({
+        buyerName: '',
+        buyerMobile: '',
+        aadhaarNumber: '',
+        address: '',
+        buyerPhoto: null,
+      });
+    }
+  }, [fresh, dispatch]);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -50,18 +66,13 @@ export default function SaleEntryStep1({ onNavigate }) {
 
   const handleContinue = async () => {
     setTried(true);
-    if (!formData.buyerName.trim() || !formData.buyerMobile.trim() || !formData.address.trim()) {
-      Alert.alert('Missing details', 'Please enter the buyer name, mobile number and address.');
-      return;
-    }
-
-    if (!/^[a-zA-Z\s]+$/.test(formData.buyerName.trim())) {
+    if (formData.buyerName.trim() && !/^[a-zA-Z\s]+$/.test(formData.buyerName.trim())) {
       Alert.alert('Invalid name', 'Buyer name should only contain letters.');
       return;
     }
 
     const mobileDigits = normalizeMobileNumber(formData.buyerMobile);
-    if (!isValidIndianMobileNumber(mobileDigits)) {
+    if (formData.buyerMobile.trim() && !isValidIndianMobileNumber(mobileDigits)) {
       Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit Indian mobile number.');
       return;
     }
@@ -85,6 +96,15 @@ export default function SaleEntryStep1({ onNavigate }) {
       !(formData.buyerPhoto && formData.buyerPhoto.base64);
     if (unchanged) {
       if (onNavigate) onNavigate('verifyBuyerMobileNumber', { buyerData: draftBuyer });
+      return;
+    }
+
+    // Nothing to save when all mandatory fields are left blank — skip the
+    // network round trip entirely instead of creating an empty customer.
+    if (!formData.buyerName.trim() && !formData.buyerMobile.trim() && !formData.address.trim()) {
+      const buyer = { ...formData, buyerMobile: mobileDigits, customer_id: draftBuyer.customer_id || null };
+      dispatch(updateSaleDraft({ buyer }));
+      if (onNavigate) onNavigate('verifyBuyerMobileNumber', { buyerData: buyer });
       return;
     }
 

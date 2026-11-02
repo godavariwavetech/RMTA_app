@@ -21,6 +21,7 @@ import { Colors } from '../../Constants/Colors';
 import { useI18n, LANGUAGES } from '../../i18n';
 import { logoutUser } from '../../redux/slices/authSlice';
 import { getAppLockEnabled, isLockAvailable, setAppLockEnabled } from '../../utils/appLock';
+import { confirmAction } from '../../utils/appModal';
 
 export default function TechnicianSettingsScreen({ onNavigate }) {
   const { t, language } = useI18n();
@@ -45,11 +46,19 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
     }
   };
 
-  const handleSignOut = async () => {
-    await dispatch(logoutUser()); // clear the persisted session
-    if (onNavigate) {
-      onNavigate('logout');
-    }
+  const handleSignOut = () => {
+    confirmAction({
+      title: 'Log out?',
+      message: 'Are you sure you want to log out?',
+      confirmText: 'Log out',
+      destructive: true,
+      onConfirm: async () => {
+        await dispatch(logoutUser()); // clear the persisted session
+        if (onNavigate) {
+          onNavigate('logout');
+        }
+      },
+    });
   };
 
   const settingsItems = [

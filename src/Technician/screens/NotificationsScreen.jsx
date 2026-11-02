@@ -139,7 +139,6 @@ export default function NotificationsScreen({ onNavigate }) {
             </Text>
           )}
         </View>
-        {!item.read && <View style={styles.dot} />}
         {!last && <View style={styles.divider} />}
       </TouchableOpacity>
     );
@@ -272,7 +271,6 @@ const styles = StyleSheet.create({
   rowTitleUnread: { fontWeight: '800', color: '#0F172A' },
   rowTime: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
   rowText: { fontSize: 13, lineHeight: 18, color: '#64748B', marginTop: 3 },
-  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.secondary, marginLeft: 8 },
   divider: {
     position: 'absolute',
     left: 70,
