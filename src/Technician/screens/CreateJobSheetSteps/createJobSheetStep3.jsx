@@ -35,8 +35,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
   const draftPhotos = useSelector(state => state.jobSheet.draft.photos);
   const draftConditions = useSelector(state => state.jobSheet.draft.conditions);
 
-  // Nothing selected by default — the technician chooses each one. Overridden
-  // by anything saved in the draft so navigating back keeps their choices.
+  // Conditions must be explicitly selected; saved draft selections are restored.
   const defaultSelections = {
     screen: '',
     body: '',

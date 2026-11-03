@@ -71,14 +71,6 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
   const handleCompletePurchase = async () => {
     if (submitting) return;
-    const defaultCondition = {
-      screen: 'Damaged',
-      body: 'Good',
-      camera: 'Working',
-      speaker: 'Working',
-      chargingPort: 'Working',
-      battery: 'Good',
-    };
     const hasPurchaseDetails = [
       sellerData?.sellerName,
       sellerData?.sellerMobile,
@@ -96,9 +88,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       [sellerData?.sellerPhoto, deviceData?.devicePhoto, draftBillImage]
         .some(photo => photo && photo.base64) ||
       (Array.isArray(draftConditionPhotos) && draftConditionPhotos.some(photo => photo && photo.base64)) ||
-      Object.keys(defaultCondition).some(
-        key => conditionData?.[key] && conditionData[key] !== defaultCondition[key],
-      );
+      Object.values(conditionData || {}).some(value => String(value || '').trim());
 
     if (!hasPurchaseDetails) {
       Alert.alert(

@@ -30,12 +30,12 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
   const [condition, setCondition] = useState(
     draftCondition || {
-      screen: 'Damaged',
-      body: 'Good',
-      camera: 'Working',
-      speaker: 'Working',
-      chargingPort: 'Working',
-      battery: 'Good',
+      screen: '',
+      body: '',
+      camera: '',
+      speaker: '',
+      chargingPort: '',
+      battery: '',
     },
   );
 
