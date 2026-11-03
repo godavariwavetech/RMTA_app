@@ -9,13 +9,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
 
 import { Colors } from '../../Constants/Colors';
+import { ENDPOINTS } from '../../Constants/config';
 import BottomNav from '../../Components/BottomNav';
+import { getJson } from '../../redux/slices/authSlice';
 import useRefresh from '../../utils/useRefresh';
 import {
   clearNotificationHistory,
   getNotificationHistory,
+  mergeNotificationHistory,
   markAllNotificationsRead,
   markNotificationRead,
 } from '../../services/notifications';
@@ -30,6 +34,43 @@ const TYPES = {
   general: { glyph: '🔔', bg: '#E0E7FF', fg: '#4338CA' },
 };
 const typeOf = n => TYPES[n.type] || TYPES.general;
+const EMPTY_USER = {};
+
+const getNotificationRows = value => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'object') return null;
+
+  for (const key of ['data', 'notifications', 'app_notifications', 'notification_list', 'records', 'result']) {
+    const rows = getNotificationRows(value[key]);
+    if (rows) return rows;
+  }
+  return null;
+};
+
+const normalizeNotification = (row, index) => {
+  const title = String(
+    row.title || row.notification_title || row.heading || row.subject || 'RMTA',
+  );
+  const body = String(
+    row.description || row.body || row.message || row.content || row.notification_message || '',
+  );
+  const rawAt =
+    row.created_at || row.sent_at || row.i_ts || row.timestamp || row.date || row.notification_date;
+  const parsedAt = typeof rawAt === 'number' ? rawAt : new Date(rawAt).getTime();
+  const at = Number.isFinite(parsedAt) ? (parsedAt < 1e12 ? parsedAt * 1000 : parsedAt) : Date.now();
+  const rawId = row.id ?? row.notification_id ?? row.app_notification_id;
+  const id = String(rawId ?? `${at}-${index}-${title}`);
+  const rawRead = row.read ?? row.is_read ?? row.read_status;
+
+  return {
+    id,
+    title,
+    body,
+    type: String(row.type || row.notification_type || row.category || 'general').toLowerCase(),
+    at,
+    read: rawRead === true || rawRead === 1 || String(rawRead).toLowerCase() === 'true',
+  };
+};
 
 const dayKey = ms => {
   const d = new Date(ms);
@@ -48,14 +89,51 @@ const timeAgo = ms => {
 
 export default function NotificationsScreen({ onNavigate }) {
   const { tick, refreshControl } = useRefresh();
+  const user = useSelector(state => state.auth.user) || EMPTY_USER;
   const [selectedNavItem, setSelectedNavItem] = useState('home');
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
-    setItems(await getNotificationHistory());
-    setLoaded(true);
-  }, []);
+    const localHistory = await getNotificationHistory();
+    setItems(localHistory);
+    setLoadError('');
+
+    try {
+      const { response, data } = await getJson(ENDPOINTS.GET_APP_NOTIFICATIONS, {
+        user_id: user.user_id,
+        member_id: user.member_id,
+        tech_id: user.tech_id,
+        user_ind: user.user_ind,
+      });
+      if (!response.ok) {
+        throw new Error(
+          response.status >= 500
+            ? `The notification service is unavailable (HTTP ${response.status}). Pull down to try again.`
+            : `Could not load notifications (HTTP ${response.status}).`,
+        );
+      }
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Could not load notifications.');
+      }
+
+      const rows = getNotificationRows(data);
+      if (!Array.isArray(rows)) {
+        throw new Error('The server returned an invalid notifications list.');
+      }
+
+      const remoteNotifications = rows
+        .filter(row => row && !Number(row.d_in))
+        .map(normalizeNotification);
+      setItems(await mergeNotificationHistory(remoteNotifications));
+    } catch (error) {
+      setLoadError(error.message || 'Could not load notifications.');
+      console.warn('[notifications] fetch failed:', error.message);
+    } finally {
+      setLoaded(true);
+    }
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -89,7 +167,7 @@ export default function NotificationsScreen({ onNavigate }) {
         style: 'destructive',
         onPress: async () => {
           await clearNotificationHistory();
-          load();
+          setItems([]);
         },
       },
     ]);
@@ -192,19 +270,29 @@ export default function NotificationsScreen({ onNavigate }) {
           refreshControl={refreshControl}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            loadError && items.length > 0 ? <Text style={styles.errorText}>{loadError}</Text> : null
+          }
           ListEmptyComponent={
             loaded ? (
-              <View style={styles.emptyBox}>
-                <View style={styles.emptyRingOuter}>
-                  <View style={styles.emptyRingInner}>
-                    <Text style={styles.emptyGlyph}>🔔</Text>
-                  </View>
+              loadError ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.errorTitle}>Notifications unavailable</Text>
+                  <Text style={styles.emptyText}>{loadError}</Text>
                 </View>
-                <Text style={styles.emptyTitle}>You're up to date</Text>
-                <Text style={styles.emptyText}>
-                  Job updates, chat messages and announcements will show up here.
-                </Text>
-              </View>
+              ) : (
+                <View style={styles.emptyBox}>
+                  <View style={styles.emptyRingOuter}>
+                    <View style={styles.emptyRingInner}>
+                      <Text style={styles.emptyGlyph}>🔔</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.emptyTitle}>You're up to date</Text>
+                  <Text style={styles.emptyText}>
+                    Job updates, chat messages and announcements will show up here.
+                  </Text>
+                </View>
+              )
             ) : null
           }
         />
@@ -306,4 +394,6 @@ const styles = StyleSheet.create({
   emptyGlyph: { fontSize: 40 },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.primary, marginBottom: 6 },
   emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 },
+  errorTitle: { fontSize: 18, fontWeight: '800', color: '#B91C1C', marginBottom: 6 },
+  errorText: { color: '#B91C1C', fontSize: 13, marginTop: 16, textAlign: 'center' },
 });

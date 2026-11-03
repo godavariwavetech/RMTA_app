@@ -9,7 +9,12 @@ import { Provider, useDispatch, useSelector } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
 import LanguageScreen from './src/Technician/screens/LanguageScreen';
 import { useState, useEffect, useRef } from 'react';
-import { initNotifications, getFcmToken, onFcmTokenRefresh } from './src/services/notifications';
+import {
+  initNotifications,
+  getFcmToken,
+  onFcmTokenRefresh,
+  ensureNotificationPermission,
+} from './src/services/notifications';
 import { ENDPOINTS } from './src/Constants/config';
 import { postJson, logoutUser } from './src/redux/slices/authSlice';
 import { store } from './src/redux/store';
@@ -142,23 +147,45 @@ function StatusBarBackdrop() {
 }
 
 
-// Registers this device for push notifications on the server: every time the
-// app opens with a logged-in member (restored session or fresh login), and again
-// whenever Firebase issues a new token, send { player_id, member_id }.
+// Registers this device token with the signed-in account and on every token
+// refresh so the server can target this app installation.
 function PlayerIdSync() {
-  const memberId = useSelector((state: any) => state.auth?.user?.member_id);
+  const user = useSelector((state: any) => state.auth?.user);
+  const memberId = user?.member_id;
+  const techId = user?.tech_id;
+  const userId = user?.user_id;
 
   useEffect(() => {
-    if (!memberId) {
+    if (!memberId && !techId && !userId) {
       return undefined;
     }
     const send = async (token?: string) => {
-      const playerId = token || (await getFcmToken());
-      if (!playerId) {
-        return;
-      }
       try {
-        await postJson(ENDPOINTS.POST_PLAYER_ID, { player_id: playerId, member_id: memberId });
+        const permissionGranted = await ensureNotificationPermission();
+        if (!permissionGranted) {
+          console.warn('[FCM] cannot register token without notification permission');
+          return;
+        }
+        const playerId = token || (await getFcmToken());
+        if (!playerId) {
+          console.warn('[FCM] no device token available to register');
+          return;
+        }
+        const { response, data } = await postJson(ENDPOINTS.POST_PLAYER_ID, {
+          player_id: playerId,
+          member_id: memberId,
+          tech_id: techId,
+          user_id: userId,
+        });
+        if (!response.ok || data?.success === false) {
+          console.warn(
+            '[FCM] player id registration rejected',
+            response.status,
+            data?.message || data?.msg || '',
+          );
+        } else {
+          console.log('[FCM] player id registered', response.status);
+        }
       } catch (e: any) {
         console.warn('[FCM] player id sync failed', e?.message);
       }
@@ -166,7 +193,7 @@ function PlayerIdSync() {
     send();
     const off = onFcmTokenRefresh(send);
     return () => off();
-  }, [memberId]);
+  }, [memberId, techId, userId]);
 
   return null;
 }
