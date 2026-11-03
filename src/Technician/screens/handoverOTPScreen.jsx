@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   skipButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: '#2F5DDC',
     textDecorationLine: 'underline',
   },
   securityNotice: {

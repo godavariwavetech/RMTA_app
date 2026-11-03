@@ -47,9 +47,9 @@ export default function TechnicianProfileScreen({ onNavigate }) {
   const techLocation = [d.city, d.state].filter(Boolean).join(', ');
   // The member code is empty for some accounts, so fall back to the member id.
   const techRmtaId = d.member_code
-    ? String(d.member_code)
+    ? `Member code: ${d.member_code}`
     : d.member_id
-    ? `Member ID: ${d.member_id}`
+    ? `Member code: ${d.member_id}`
     : '';
   const techValidUntil = d.valid_until;
   const isAdmin = user.role === 'admin';
@@ -263,7 +263,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                     'Location',
                     [adminProfile.address, adminProfile.city, adminProfile.state].filter(Boolean).join(', '),
                   ],
-                  ['Member ID', user.member_id ? String(user.member_id) : ''],
+                  ['Member code', user.member_id ? String(user.member_id) : ''],
                 ]
                   .filter(([, value]) => !!value)
                   .map(([label, value], idx, rows) => (

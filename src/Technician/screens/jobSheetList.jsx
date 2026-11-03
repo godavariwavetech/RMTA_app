@@ -28,6 +28,7 @@ import { postJson } from '../../redux/slices/authSlice';
 import useRefresh from '../../utils/useRefresh';
 import PdfSizeModal from '../../Components/PdfSizeModal';
 import { shareJobSheetPdf } from '../../utils/jobSheetPdf';
+import { canAccessTechnicianMenu } from '../../utils/technicianPermissions';
 
 // DB status → display label + colour for the card badge.
 const STATUS_META = {
@@ -62,6 +63,7 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
   const insets = useSafeAreaInsets();
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
+  const canCreateJobSheet = canAccessTechnicianMenu(user, 1);
   const [selectedNavItem, setSelectedNavItem] = useState('jobs');
   const [searchText, setSearchText] = useState('');
   const [selectedFilter, setSelectedFilter] = useState(initialFilter || 'active');
@@ -407,22 +409,24 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
         </ScrollView>
 
         {/* New job sheet: a floating button */}
-        <View
-          style={[
-            styles.newJobButtonContainer,
-            { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0) + 20 },
-          ]}
-          pointerEvents="box-none"
-        >
-          <TouchableOpacity
-            style={styles.newJobButton}
-            activeOpacity={0.9}
-            onPress={() => onNavigate('createJobSheetStep1', { fresh: true })}
+        {canCreateJobSheet && (
+          <View
+            style={[
+              styles.newJobButtonContainer,
+              { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0) + 20 },
+            ]}
+            pointerEvents="box-none"
           >
-            <Text style={styles.newJobPlus}>＋</Text>
-            <Text style={styles.newJobButtonText}>New job sheet</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.newJobButton}
+              activeOpacity={0.9}
+              onPress={() => onNavigate('createJobSheetStep1', { fresh: true })}
+            >
+              <Text style={styles.newJobPlus}>＋</Text>
+              <Text style={styles.newJobButtonText}>New job sheet</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <PdfSizeModal
           visible={pdfJob !== null}

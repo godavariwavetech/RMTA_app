@@ -331,6 +331,19 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     setOtpError('');
   };
 
+  const handleSkipOtp = () => {
+    if (verifyingOtp || starting) return;
+    confirmAction({
+      title: 'Skip OTP verification?',
+      message: 'Complete the handover without verifying the customer OTP.',
+      confirmText: 'Skip & complete',
+      onConfirm: () => {
+        closeOtp();
+        handleAdvanceStatus(3);
+      },
+    });
+  };
+
   // Each step of the job process asks for confirmation before it is sent.
   const STAGE_CONFIRM = {
     0: {
@@ -845,6 +858,12 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
               >
                 <Text style={styles.otpResend}>Resend OTP</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSkipOtp}
+                disabled={verifyingOtp || starting}
+              >
+                <Text style={styles.otpSkip}>Skip verification for now</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -1223,6 +1242,7 @@ const styles = StyleSheet.create({
   otpConfirmText: { color: '#FFFFFF', fontWeight: '600' },
   otpDisabled: { opacity: 0.5 },
   otpResend: { textAlign: 'center', color: Colors.primary, fontWeight: '600', marginTop: 16 },
+  otpSkip: { textAlign: 'center', color: '#2F5DDC', fontWeight: '600', marginTop: 16 },
   buttonContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
