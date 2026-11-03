@@ -459,6 +459,37 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
       ...(hasTime ? { hour: '2-digit', minute: '2-digit' } : {}),
     });
   };
+  const fmtDateOnly = v => {
+    if (!v) return '';
+    const value = String(v).trim();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const datePart = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    if (datePart) {
+      const [, year, month, day] = datePart;
+      const monthNumber = Number(month);
+      const dayNumber = Number(day);
+      const parsedDate = new Date(Date.UTC(Number(year), monthNumber - 1, dayNumber));
+      if (
+        monthNumber >= 1 &&
+        monthNumber <= 12 &&
+        parsedDate.getUTCFullYear() === Number(year) &&
+        parsedDate.getUTCMonth() === monthNumber - 1 &&
+        parsedDate.getUTCDate() === dayNumber
+      ) {
+        return `${dayNumber} ${months[monthNumber - 1]} ${year}`;
+      }
+    }
+
+    const d = new Date(value.replace(' ', 'T'));
+    if (isNaN(d)) return value;
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+  const handedOverDate =
+    (repairStatus >= 3 || j.status === 'completed')
+      ? fmtDateOnly(j.completed_at) || fmtDateOnly(j.updated_at)
+      : '';
+  const deliveryDate =
+    handedOverDate || fmtDateOnly(j.estimated_delivery) || '—';
   const money = v =>
     v != null && v !== '' ? `₹${Number(v).toLocaleString('en-IN')}` : '';
   const STAGE_LABEL = { 0: 'Not started', 1: 'Repair in progress', 2: 'Repair completed', 3: 'Handed over' };
@@ -567,7 +598,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                   {[
                     ['Estimate', estimate, '#2563EB'],
                     ['Final cost', money(j.final_cost) || '—', '#16A34A'],
-                    ['Delivery', fmtDateTime(j.estimated_delivery) || '—', '#D97706'],
+                    ['Delivery', deliveryDate, '#D97706'],
                   ].map(([label, value, color]) => (
                     <View key={label} style={styles.statCard}>
                       <Text style={styles.statLabel}>{label}</Text>

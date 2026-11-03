@@ -71,6 +71,43 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
   const handleCompletePurchase = async () => {
     if (submitting) return;
+    const defaultCondition = {
+      screen: 'Damaged',
+      body: 'Good',
+      camera: 'Working',
+      speaker: 'Working',
+      chargingPort: 'Working',
+      battery: 'Good',
+    };
+    const hasPurchaseDetails = [
+      sellerData?.sellerName,
+      sellerData?.sellerMobile,
+      sellerData?.aadhaarNumber,
+      sellerData?.address,
+      deviceData?.deviceBrand,
+      deviceData?.deviceModel,
+      deviceData?.storage,
+      deviceData?.color,
+      imeiData?.imei,
+      imeiData?.imei2,
+      priceData?.purchasePrice,
+      priceData?.transactionId,
+    ].some(value => String(value || '').trim()) ||
+      [sellerData?.sellerPhoto, deviceData?.devicePhoto, draftBillImage]
+        .some(photo => photo && photo.base64) ||
+      (Array.isArray(draftConditionPhotos) && draftConditionPhotos.some(photo => photo && photo.base64)) ||
+      Object.keys(defaultCondition).some(
+        key => conditionData?.[key] && conditionData[key] !== defaultCondition[key],
+      );
+
+    if (!hasPurchaseDetails) {
+      Alert.alert(
+        'Purchase details required',
+        'Please fill in some details to complete the purchase.',
+      );
+      return;
+    }
+
     const payload = buildPayload();
     setSubmitting(true);
     try {

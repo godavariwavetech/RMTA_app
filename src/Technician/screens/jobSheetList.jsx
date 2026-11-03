@@ -370,7 +370,7 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
               <>
                 {showOpenSection && filteredJobs.map(renderJobItem)}
 
-                {showOpenSection && filteredJobs.length === 0 && (completedJobs.length === 0 || selectedFilter !== 'all') && (
+                {showOpenSection && filteredJobs.length === 0 && !showCompletedSection && (
                   <View style={styles.emptyBox}>
                     <View style={styles.emptyCircle}>
                       <Text style={styles.emptyGlyph}>🛠️</Text>

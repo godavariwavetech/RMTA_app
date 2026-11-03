@@ -245,7 +245,10 @@ export default function NotesScreen({ onNavigate }) {
 
   const saveEditor = async () => {
     const value = draft.trim();
-    if (!value) return;
+    if (!value) {
+      Alert.alert('Note required', 'Please enter some details to save this note.');
+      return;
+    }
     if (editor && editor.id) {
       const editedId = editor.id;
       const edited = {
