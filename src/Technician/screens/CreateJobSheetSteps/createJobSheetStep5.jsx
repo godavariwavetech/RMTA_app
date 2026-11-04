@@ -212,7 +212,7 @@ export default function CreateJobSheetStep5({ onNavigate }) {
             {/* Password input — only for the Password option */}
             {lockType === 'password' && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Device password / PIN <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.label}>Device password / PIN {/* <Text style={styles.required}>*</Text> */}</Text>
                 <TextInput
                   style={[styles.input, tried && !String(devicePassword).trim() && styles.inputError]}
                   placeholder="Enter the device password"
@@ -227,7 +227,7 @@ export default function CreateJobSheetStep5({ onNavigate }) {
             {/* Pattern entry — only for the Pattern option */}
             {lockType === 'pattern' && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Unlock pattern <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.label}>Unlock pattern {/* <Text style={styles.required}>*</Text> */}</Text>
                 <TouchableOpacity
                   style={styles.patternOpenButton}
                   onPress={() => setPatternModalVisible(true)}

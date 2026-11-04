@@ -112,7 +112,10 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
     let active = true;
     (async () => {
       try {
+        console.log('--------- BANNER EFFECT START ---------');
         const { response, data } = await getJson(ENDPOINTS.GET_BANNERS, undefined, 10000);
+        console.log('--------- BANNER API RESPONSE ---------', response);
+        console.log('--------- BANNER API DATA ---------', data);
         const rows = Array.isArray(data) ? data : data && (data.data || data.banners);
         if (!active) return;
         if (!response.ok || !Array.isArray(rows)) {
@@ -129,6 +132,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
               const uri = /^https?:\/\//.test(v) ? v : `${BASE_URL}${v.replace(/^\//, '')}`;
               return { id: `api-${row.id ?? i}`, image: { uri, cache: 'force-cache' } };
             });
+        console.log('---------banners----------------', next);
         // Only replace what's on screen when the list really changed.
         const same =
           bannerCache &&

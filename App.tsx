@@ -39,6 +39,7 @@ import TechnicianHomeScreen from './src/Technician/screens/TechnicianHomeScreen'
 import NotificationsScreen from './src/Technician/screens/NotificationsScreen';
 import TechnicianProfileScreen from './src/Technician/screens/TechnicianProfileScreen';
 import TechnicianSettingsScreen from './src/Technician/screens/TechnicianSettingsScreen';
+import HelpSupportScreen from './src/Technician/screens/HelpSupportScreen';
 import JobSheetList from './src/Technician/screens/jobSheetList';
 import JobDetailsScreen from './src/Technician/screens/jobDetailsScreen';
 import RepairProgressScreen from './src/Technician/screens/repairProgressScreen';
@@ -424,6 +425,7 @@ function AppContent() {
       profile: 'profile',
       notifications: 'notifications',
       settings: 'settings',
+      helpSupport: 'helpSupport',
       jobDetails: 'jobDetails',
       repairProgress: 'repairProgress',
       jobTimeline: 'jobTimeline',
@@ -648,6 +650,8 @@ function AppContent() {
         <TechnicianProfileScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'settings' ? (
         <TechnicianSettingsScreen onNavigate={handleScreenNavigation} />
+      ) : currentScreen === 'helpSupport' ? (
+        <HelpSupportScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'jobs' ? (
         <JobSheetList
           key={`jobs-${navigationParams.initialFilter}`}

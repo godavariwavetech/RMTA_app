@@ -120,7 +120,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
           <View style={styles.content}>
             {/* Device Brand Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Device brand <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Device brand {/* <Text style={styles.required}>*</Text> */}</Text>
               <TextInput {...nav.props(0)}
                 style={[styles.input, tried && !String(formData.deviceBrand).trim() && styles.inputError]}
                 placeholder="e.g., OnePlus, Samsung"
@@ -132,7 +132,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
 
             {/* Device Model Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Device model <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Device model {/* <Text style={styles.required}>*</Text> */}</Text>
               <TextInput {...nav.props(1)}
                 style={[styles.input, tried && !String(formData.deviceModel).trim() && styles.inputError]}
                 placeholder="e.g., 9R, S21"

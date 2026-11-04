@@ -123,7 +123,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
 
             {/* New Password Field */}
             <View style={styles.fieldSection}>
-              <Text style={styles.fieldLabel}>New password <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>New password {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.passwordFieldContainer}>
                 <TextInput
                   style={styles.passwordInput}
@@ -152,7 +152,7 @@ export default function ForgotPassStep3({ onNavigate, mobile, otp }) {
 
             {/* Confirm Password Field */}
             <View style={styles.fieldSection}>
-              <Text style={styles.fieldLabel}>Confirm new password <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Confirm new password {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.passwordFieldContainer}>
                 <TextInput
                   style={styles.passwordInput}

@@ -223,7 +223,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
                 <View key={category.id} style={styles.categorySection}>
                   <Text style={[styles.categoryLabel, tried && !selections[category.id] && styles.categoryLabelError]}>
                     {category.label}
-                    <Text style={styles.required}> *</Text>
+                    {/* <Text style={styles.required}> *</Text> */}
                     {tried && !selections[category.id] ? '  — choose one' : ''}
                   </Text>
                   <View style={styles.optionsContainer}>

@@ -259,7 +259,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
               {/* Customer Name */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Customer Name <Text style={styles.required}>*</Text>
+                  Customer Name {/* <Text style={styles.required}>*</Text> */}
                 </Text>
                 <TextInput {...nav.props(0)}
                   style={[styles.input, tried && !String(customerName).trim() && styles.inputError]}
@@ -274,7 +274,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
               {/* Mobile Number */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Mobile Number <Text style={styles.required}>*</Text>
+                  Mobile Number {/* <Text style={styles.required}>*</Text> */}
                 </Text>
                 <TextInput {...nav.props(1)}
                   style={[styles.input, tried && !String(mobileNumber).trim() && styles.inputError]}

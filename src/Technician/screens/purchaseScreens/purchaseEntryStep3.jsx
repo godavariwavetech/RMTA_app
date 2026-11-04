@@ -164,7 +164,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
             {/* IMEI Input Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>
-                IMEI 1 <Text style={styles.required}>*</Text>
+                IMEI 1 {/* <Text style={styles.required}>*</Text> */}
               </Text>
               <TextInput
                 style={styles.input}
@@ -241,7 +241,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
                     {sancharChecked && <Text style={styles.checkMark}>✓</Text>}
                   </View>
                   <Text style={[styles.checkText, sancharChecked && styles.checkTextDone]}>
-                    IMEI verified on Sanchar Saathi <Text style={styles.required}>*</Text>
+                    IMEI verified on Sanchar Saathi {/* <Text style={styles.required}>*</Text> */}
                   </Text>
                 </TouchableOpacity>
                 {!sancharChecked && (

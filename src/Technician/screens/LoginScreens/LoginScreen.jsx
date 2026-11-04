@@ -355,7 +355,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>{t('mobileNumber')} <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('mobileNumber')} {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -382,7 +382,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>{t('password')} <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('password')} {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   ref={passwordInput}

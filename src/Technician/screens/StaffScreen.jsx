@@ -284,7 +284,7 @@ export default function StaffScreen({ onNavigate }) {
         <Text style={styles.subheading}>Add a technician who works with you.</Text>
 
         <Text style={styles.label}>
-          Name <Text style={styles.required}>*</Text>
+          Name {/* <Text style={styles.required}>*</Text> */}
         </Text>
         <TextInput
           {...nav.props(0)}
@@ -297,7 +297,7 @@ export default function StaffScreen({ onNavigate }) {
         />
 
         <Text style={styles.label}>
-          Mobile number <Text style={styles.required}>*</Text>
+          Mobile number {/* <Text style={styles.required}>*</Text> */}
         </Text>
         <TextInput
           {...nav.props(1)}
@@ -323,7 +323,7 @@ export default function StaffScreen({ onNavigate }) {
         />
 
         <Text style={styles.label}>
-          Password <Text style={styles.required}>*</Text>
+          Password {/* <Text style={styles.required}>*</Text> */}
         </Text>
         <View style={[styles.passwordRow, tried && !password && styles.inputError]}>
           <TextInput

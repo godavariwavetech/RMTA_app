@@ -230,7 +230,7 @@ export default function PurchaseEntryStep1({ onNavigate, fresh }) {
           {/* Seller Name Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              Seller Name <Text style={styles.required}>*</Text>
+              Seller Name {/* <Text style={styles.required}>*</Text> */}
             </Text>
             <TextInput {...nav.props(0)}
               style={[styles.input, tried && !String(formData.sellerName).trim() && styles.inputError]}
@@ -245,7 +245,7 @@ export default function PurchaseEntryStep1({ onNavigate, fresh }) {
           {/* Seller Mobile Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              Seller Mobile <Text style={styles.required}>*</Text>
+              Seller Mobile {/* <Text style={styles.required}>*</Text> */}
             </Text>
             <TextInput {...nav.props(1)}
               style={[styles.input, tried && !String(formData.sellerMobile).trim() && styles.inputError]}
@@ -312,7 +312,7 @@ export default function PurchaseEntryStep1({ onNavigate, fresh }) {
           {/* Address Field */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              Address <Text style={styles.required}>*</Text>
+              Address {/* <Text style={styles.required}>*</Text> */}
             </Text>
             <TextInput {...nav.props(3)}
               style={[

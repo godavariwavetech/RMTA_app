@@ -108,10 +108,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   languageButton: {
-    position: 'absolute',
-    top: hp('2%'),
-    right: wp('5%'),
-    zIndex: 1,
+    alignSelf: 'flex-end',
+    marginTop: hp('1%'),
+    marginRight: wp('5%'),
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,

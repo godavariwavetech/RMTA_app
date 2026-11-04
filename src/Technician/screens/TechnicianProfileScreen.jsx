@@ -159,6 +159,12 @@ export default function TechnicianProfileScreen({ onNavigate }) {
       title: t('language'),
       subtitle: LANGUAGES.find(l => l.code === language)?.native,
     },
+    {
+      id: 5,
+      icon: require('../../Assets/icons/helpIcon.png'),
+      title: t('helpSupport'),
+      subtitle: t('rmtaOffice'),
+    },
   ];
 
   return (
@@ -313,6 +319,8 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                   } else if (item.id === 4) {
                     // Language
                     onNavigate('language', { fromSettings: true });
+                  } else if (item.id === 5) {
+                    onNavigate('helpSupport');
                   }
                 }}
               >

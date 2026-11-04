@@ -111,6 +111,7 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
       title: t('helpSupport'),
       subtitle: t('rmtaOffice'),
       type: 'action',
+      onPress: () => onNavigate && onNavigate('helpSupport'),
     },
   ];
 
