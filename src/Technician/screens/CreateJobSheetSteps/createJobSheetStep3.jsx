@@ -151,32 +151,32 @@ export default function CreateJobSheetStep3({ onNavigate }) {
     {
       id: 'screen',
       label: 'Screen',
-      options: ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'],
+      options: ['Good', 'Damaged', 'Cracked', 'Dead on Arrival', 'Not Tested'],
     },
     {
       id: 'body',
       label: 'Body',
-      options: ['Good', 'Scratched', 'Damaged'],
+      options: ['Good', 'Scratched', 'Damaged', 'Not Tested'],
     },
     {
       id: 'camera',
       label: 'Camera',
-      options: ['Working', 'Not working'],
+      options: ['Working', 'Not working', 'Not Tested'],
     },
     {
       id: 'speaker',
       label: 'Speaker',
-      options: ['Working', 'Not working'],
+      options: ['Working', 'Not working','Not Tested'],
     },
     {
       id: 'chargingPort',
       label: 'Charging port',
-      options: ['Working', 'Not working'],
+      options: ['Working', 'Not working', 'Not Tested'],
     },
     {
       id: 'battery',
       label: 'Battery',
-      options: ['Good', 'Weak', 'Damaged'],
+      options: ['Good', 'Weak', 'Damaged', 'Not Tested'],
     },
   ];
 

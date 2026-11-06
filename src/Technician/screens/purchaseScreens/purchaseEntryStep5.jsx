@@ -133,10 +133,11 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
 
   const completedSteps = 4;
 
-  const screenOptions = ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'];
-  const bodyOptions = ['Good', 'Scratched', 'Damaged'];
+  const screenOptions = ['Good', 'Damaged', 'Cracked', 'Dead on Arrival', 'Not Tested'];
+  const bodyOptions = ['Good', 'Scratched', 'Damaged', 'Not Tested'];
   const workingOptions = ['Working', 'Not working'];
-  const batteryOptions = ['Good', 'Weak', 'Damaged'];
+  const workingConditionOptions = [...workingOptions, 'Not Tested'];
+  const batteryOptions = ['Good', 'Weak', 'Damaged', 'Not Tested'];
 
   return (
     <>
@@ -231,7 +232,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
             <View style={styles.conditionGroup}>
               <Text style={styles.conditionLabel}>Camera</Text>
               <View style={styles.optionsContainer}>
-                {workingOptions.map((option) => (
+                {workingConditionOptions.map((option) => (
                   <TouchableOpacity
                     key={option}
                     style={[
@@ -257,7 +258,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
             <View style={styles.conditionGroup}>
               <Text style={styles.conditionLabel}>Speaker</Text>
               <View style={styles.optionsContainer}>
-                {workingOptions.map((option) => (
+                {workingConditionOptions.map((option) => (
                   <TouchableOpacity
                     key={option}
                     style={[
@@ -283,7 +284,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
             <View style={styles.conditionGroup}>
               <Text style={styles.conditionLabel}>Charging port</Text>
               <View style={styles.optionsContainer}>
-                {workingOptions.map((option) => (
+                {workingConditionOptions.map((option) => (
                   <TouchableOpacity
                     key={option}
                     style={[

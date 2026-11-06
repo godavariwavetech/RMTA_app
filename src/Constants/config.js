@@ -79,6 +79,8 @@ export const ENDPOINTS = {
   ADMIN_FORGOT_PASSWORD: 'public_app/forgetpassword',
   TECHNICIANS_LIST: 'public_app/technicians_list',
   GET_SUPPORTERS: 'public_app/getsupporters',
+  SUBMIT_SUPPORT: 'public_app/submitsupport',
+  GET_SUPPORT_REPORTS: 'public_app/getsupport',
   GET_ALL_MEMBERS: 'public_app/getallmembers',
   GET_QR_DATA: 'public_app/getqrdata',
   ADD_TECHNICIAN: 'public_app/add_technician',

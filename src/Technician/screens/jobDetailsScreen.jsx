@@ -48,7 +48,12 @@ const conditionTone = value => {
   return { fg: '#B45309', bg: '#FEF3C7' };
 };
 
-const LOCK_LABEL = { none: 'No lock', password: 'Password', pattern: 'Pattern' };
+const LOCK_LABEL = {
+  none: 'No lock',
+  password: 'Password',
+  pattern: 'Pattern',
+  unknown: 'Unknown',
+};
 
 export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const { tick, refreshControl } = useRefresh();
@@ -56,6 +61,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const user = useSelector(state => state.auth.user) || {};
   const [activeTab, setActiveTab] = useState('overview');
   const [job, setJob] = useState(null);
+  const [customerPhotoFailed, setCustomerPhotoFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   // Set when the full record couldn't be loaded.
   const [loadError, setLoadError] = useState('');
@@ -72,7 +78,19 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const [otpError, setOtpError] = useState('');
 
   useEffect(() => {
+    if (!job) return;
+    const customerPhoto = job.customer_photo || job.customer_image || null;
+    console.log(
+      'customer photo----------------->',
+      typeof customerPhoto === 'string' && customerPhoto.length > 80
+        ? `${customerPhoto.slice(0, 80)}...(${customerPhoto.length})`
+        : customerPhoto,
+    );
+  }, [job]);
+
+  useEffect(() => {
     let active = true;
+    setCustomerPhotoFailed(false);
 
     // If the details API fails, use the main job list API: prefer the row we
     // were opened with, otherwise look the job up in get_job_sheets.
@@ -124,24 +142,37 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                 aadharnumber: c.aadharnumber,
                 address: c.address,
                 ...record,
+                customer_photo:
+                  record.customer_photo ||
+                  record.customer_image ||
+                  c.customer_photo ||
+                  c.customer_image ||
+                  c.photo ||
+                  null,
               };
             }
             // The job record carries only customer_id (its customer_name / mobile come back
             // empty). Customers are listed by getjobsdata ({ id, customer_name, customer_number,
             // customer_alternatenumber, aadharnumber, customer_image }), so match on that id.
-            if (record.customer_id && !record.customer_name) {
+            if (record.customer_id && (!record.customer_name || !record.customer_photo)) {
               try {
                 const res = await postJson(ENDPOINTS.GET_JOBS_DATA, { member_id: user.member_id });
                 const rows = res.response.ok && res.data && Array.isArray(res.data.data) ? res.data.data : [];
-                const c = rows.find(r => String(r.id) === String(record.customer_id));
-                if (c) {
+                const customerRow = rows.find(r => String(r.id) === String(record.customer_id));
+                if (customerRow) {
                   record = {
                     ...record,
-                    customer_name: c.customer_name,
-                    customer_mobile: c.customer_number,
-                    alternate_mobile: c.customer_alternatenumber || record.alternate_mobile,
-                    aadharnumber: c.aadharnumber || record.aadharnumber,
-                    customer_photo: c.customer_image || record.customer_photo,
+                    customer_name: record.customer_name || customerRow.customer_name,
+                    customer_mobile: record.customer_mobile || customerRow.customer_number,
+                    alternate_mobile:
+                      customerRow.customer_alternatenumber || record.alternate_mobile,
+                    aadharnumber: customerRow.aadharnumber || record.aadharnumber,
+                    customer_photo:
+                      record.customer_photo ||
+                      customerRow.customer_photo ||
+                      customerRow.customer_image ||
+                      customerRow.photo ||
+                      null,
                   };
                 }
               } catch (e) {
@@ -151,7 +182,10 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
             // ... or be missing altogether: then take them from the job list row the screen
             // was opened with (or look the job up in the list). The details record wins
             // wherever it has a value.
-            if (!record.customer_name && !record.customer_mobile && !record.mobile_number) {
+            if (
+              (!record.customer_name && !record.customer_mobile && !record.mobile_number) ||
+              !record.customer_photo
+            ) {
               const row = await fallbackFromList();
               if (row) {
                 const filled = Object.fromEntries(
@@ -395,18 +429,18 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     j.estimated_cost != null ? `₹${Number(j.estimated_cost).toLocaleString('en-IN')}` : '—';
   const unlockValue = j.unlock_value || (parsed.access && parsed.access.unlock_value) || '';
   // The job record keeps the saved lock in `devicelock` (access_mode can still say
-  // customer_unlocks), so a value there means there is a lock: a pattern looks like
-  // "1 → 2 → 5", anything else is a password / PIN.
+  // customer_unlocks); recognize its encoded value when details_json is unavailable.
   const savedLock = String(unlockValue || j.devicelock || '').trim();
-  const lockType =
-    (parsed.access && parsed.access.lock_type) ||
-    (savedLock
-      ? /→|^\d(\s*[-,>]\s*\d)+$/.test(savedLock)
-        ? 'pattern'
-        : 'password'
-      : j.access_mode === 'temporary_pin'
-      ? 'password'
-      : 'none');
+  const inferredLockType = savedLock
+    ? /^unknown$/i.test(savedLock)
+      ? 'unknown'
+      : /→|^\d(\s*[-,>]\s*\d)+$/.test(savedLock)
+      ? 'pattern'
+      : 'password'
+    : j.access_mode === 'temporary_pin'
+    ? 'password'
+    : 'none';
+  const lockType = (parsed.access && parsed.access.lock_type) || inferredLockType;
   const lockLabel = LOCK_LABEL[lockType] || lockType;
   // The job can come from job_sheet_details (conditions[] / photos[] arrays,
   // customer_mobile) or from the list API (flat screen/body/... fields,
@@ -431,6 +465,19 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     if (!v || typeof v !== 'string' || v.length > 500) return null;
     return /^https?:\/\//.test(v) ? v : `${BASE_URL}${String(v).replace(/^\//, '')}`;
   };
+  const customerPhoto = j.customer_photo || j.customer_image;
+  const customerPhotoSource = (() => {
+    if (typeof customerPhoto !== 'string' || !customerPhoto.trim()) return null;
+    const value = customerPhoto.trim();
+    if (/^(https?:\/\/|file:\/\/|content:\/\/|data:image\/)/i.test(value)) {
+      return { uri: value };
+    }
+    if (value.length > 500) {
+      return { uri: `data:image/jpeg;base64,${value}` };
+    }
+    const uri = imageUri(value);
+    return uri ? { uri } : null;
+  })();
   const photos =
     Array.isArray(j.photos) && j.photos.length > 0
       ? j.photos
@@ -650,7 +697,12 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                     icon: '🔒',
                     title: 'Access & security',
                     rows: [
-                      ['Device lock', savedLock ? `${lockLabel} · ${savedLock}` : lockLabel],
+                      [
+                        'Device lock',
+                        savedLock && lockType !== 'unknown'
+                          ? `${lockLabel} · ${savedLock}`
+                          : lockLabel,
+                      ],
                       ['Consent OTP', parsed.consent_otp],
                     ],
                   },
@@ -658,7 +710,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                   const rows = section.rows.filter(
                     ([, v]) => v !== undefined && v !== null && v !== '',
                   );
-                  if (rows.length === 0) return null;
+                  if (rows.length === 0 && section.title !== 'Customer') return null;
                   return (
                     <View key={section.title} style={styles.sectionCard}>
                       <View style={styles.sectionHead}>
@@ -682,6 +734,24 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                           <Text style={styles.kvValue}>{String(value)}</Text>
                         </View>
                       ))}
+                      {section.title === 'Customer' && (
+                        <View style={styles.customerPhotoContainer}>
+                          <Text style={styles.customerPhotoLabel}>Customer photo</Text>
+                          {customerPhotoSource && !customerPhotoFailed ? (
+                            <Image
+                              source={customerPhotoSource}
+                              style={styles.customerPhoto}
+                              resizeMode="contain"
+                              onError={() => setCustomerPhotoFailed(true)}
+                            />
+                          ) : (
+                            <View style={styles.customerPhotoPlaceholder}>
+                              <Text style={styles.customerPhotoPlaceholderIcon}>🖼️</Text>
+                              <Text style={styles.customerPhotoPlaceholderText}>No image found</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
                   );
                 })}
@@ -1415,6 +1485,25 @@ const styles = StyleSheet.create({
   kvRowLast: { borderBottomWidth: 0 },
   kvLabel: { fontSize: 12, color: '#94A3B8', marginRight: 10 },
   kvValue: { flex: 1, fontSize: 13, fontWeight: '700', color: '#0F172A', textAlign: 'right' },
+  customerPhotoContainer: { marginTop: 10 },
+  customerPhotoLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 8 },
+  customerPhoto: {
+    width: '100%',
+    height: 190,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  customerPhotoPlaceholder: {
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerPhotoPlaceholderIcon: { fontSize: 30 },
+  customerPhotoPlaceholderText: { fontSize: 13, color: '#94A3B8', marginTop: 8 },
 
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 },
   condChip: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, marginRight: 6, marginBottom: 6 },

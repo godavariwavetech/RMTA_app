@@ -232,9 +232,16 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
         ? `₹${Number(item.estimated_cost).toLocaleString('en-IN')}`
         : '';
     const summaryOf = () =>
-      Object.fromEntries(
-        Object.entries(item).filter(([, v]) => !(typeof v === 'string' && v.length > 300)),
-      );
+      ({
+        ...Object.fromEntries(
+          Object.entries(item).filter(([, v]) => !(typeof v === 'string' && v.length > 300)),
+        ),
+        customer_photo:
+          item.customer_photo ||
+          item.customer_image ||
+          (item.customer && (item.customer.customer_photo || item.customer.customer_image)) ||
+          null,
+      });
     return (
       <View key={item.id} style={styles.jobCard}>
         <View style={[styles.stripe, { backgroundColor: meta.color }]} />
@@ -243,7 +250,7 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
             activeOpacity={0.85}
             onPress={() => {
               // Pass the list row too, so details can fall back to it if the
-              // details request fails. Long values (e.g. base64) are dropped.
+              // details request fails. Keep the customer photo even if it is base64.
               onNavigate('jobDetails', { jobId: item.id, jobSummary: summaryOf() });
             }}
           >
