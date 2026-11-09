@@ -39,14 +39,6 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
   const handleContinue = () => {
     setTried(true);
-    if (!(Number(purchasePrice) > 0)) {
-      Alert.alert('Missing details', 'Please enter the purchase price.');
-      return;
-    }
-    if (paymentMode !== 'Cash' && !transactionId.trim()) {
-      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
-      return;
-    }
     const priceData = buildPrice();
     console.log('[Purchase][Step6] price captured →', priceData);
     dispatch(updatePurchaseDraft({ price: priceData }));
@@ -107,7 +99,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
             {/* Purchase Price Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Purchase Price <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Purchase Price {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.priceInputContainer, tried && !(Number(purchasePrice) > 0) && styles.inputError]}>
                 <Text style={styles.currencySymbol}>₹</Text>
                 <TextInput {...nav.props(0)}
@@ -150,7 +142,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
             {/* Transaction ID Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>
-                Transaction ID{paymentMode !== 'Cash' && <Text style={styles.required}> *</Text>}
+                Transaction ID{paymentMode !== 'Cash' && {/* <Text style={styles.required}> *</Text> */}}
               </Text>
               <TextInput {...nav.props(1)}
                 style={[styles.input, tried && paymentMode !== 'Cash' && !transactionId.trim() && styles.inputError]}

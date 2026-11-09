@@ -23,7 +23,8 @@ import {
 import { Colors } from '../../../Constants/Colors';
 import { useI18n } from '../../../i18n';
 import { useDispatch } from 'react-redux';
-import { loginUser } from '../../../redux/slices/authSlice';
+import { loginUser, postJson } from '../../../redux/slices/authSlice';
+import { ENDPOINTS } from '../../../Constants/config';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
 
 // The "Forgot password?" link is switched off for now.
@@ -37,6 +38,14 @@ export default function LoginScreen({ onNavigate, initialMode }) {
   const [loginError, setLoginError] = useState('');
   const [messageModal, setMessageModal] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Admin Access screen's own "Forgot password" — mobile + new password
+  // posted straight to ENDPOINTS.ADMIN_FORGOT_PASSWORD, no OTP step.
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [fpMobile, setFpMobile] = useState('');
+  const [fpNewPassword, setFpNewPassword] = useState('');
+  const [fpSubmitting, setFpSubmitting] = useState(false);
+  const [fpError, setFpError] = useState('');
+  const [fpPasswordVisible, setFpPasswordVisible] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const passwordInput = useRef(null);
@@ -70,6 +79,50 @@ export default function LoginScreen({ onNavigate, initialMode }) {
   const handleForgotPassword = () => {
     if (onNavigate) {
       onNavigate('forgotPassword');
+    }
+  };
+
+  const handleOpenAdminForgotPassword = () => {
+    setFpMobile(mobileNumber);
+    setFpNewPassword('');
+    setFpError('');
+    setForgotModalVisible(true);
+  };
+
+  const handleCloseAdminForgotPassword = () => {
+    if (fpSubmitting) return;
+    setForgotModalVisible(false);
+  };
+
+  const handleSubmitAdminForgotPassword = async () => {
+    if (fpSubmitting) return;
+    setFpError('');
+
+    if (!fpMobile.trim() || !isValidIndianMobileNumber(fpMobile)) {
+      setFpError('Enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (!fpNewPassword.trim()) {
+      setFpError('Enter a new password.');
+      return;
+    }
+
+    setFpSubmitting(true);
+    try {
+      const { response, data } = await postJson(ENDPOINTS.ADMIN_FORGOT_PASSWORD, {
+        mobile: normalizeMobileNumber(fpMobile),
+        new_password: fpNewPassword,
+      });
+      setFpSubmitting(false);
+      if (!response.ok || (data && data.success === false)) {
+        setFpError((data && data.message) || 'Could not reset the password. Please try again.');
+        return;
+      }
+      setForgotModalVisible(false);
+      showMessageModal('Password reset', 'Your password has been reset. Please sign in with your new password.');
+    } catch (err) {
+      setFpSubmitting(false);
+      setFpError(err.message || 'Could not reach the server. Please try again.');
     }
   };
 
@@ -158,6 +211,10 @@ export default function LoginScreen({ onNavigate, initialMode }) {
       const notFound =
         payload &&
         (payload.code === 'ACCOUNT_NOT_FOUND' || payload.status === 404);
+      // status 0 = network/timeout failure (see the catch block in
+      // loginUser), not a credentials problem — keep the server/network
+      // message as-is rather than mislabeling it as wrong mobile/password.
+      const isNetworkError = payload && payload.status === 0;
 
       if (notFound && loginMode === 'admin') {
         // Non-existing admin number → prompt them to register.
@@ -169,10 +226,21 @@ export default function LoginScreen({ onNavigate, initialMode }) {
             onPress: () => onNavigate('register', { user_ind: 1 }),
           },
         );
-      } else {
-        // Wrong password, server error, or network/timeout.
+      } else if (isNetworkError) {
         const message =
           (payload && payload.message) || 'Login failed. Please try again.';
+        setLoginError(message);
+        showMessageModal('Sign in failed', message);
+      } else if (notFound) {
+        // The mobile number itself isn't registered.
+        const message = 'Incorrect mobile number. Please check and try again.';
+        setLoginError(message);
+        showMessageModal('Sign in failed', message);
+      } else {
+        // The backend checks mobile + password together and returns the same
+        // "no match" result either way, so there's no way to tell which one
+        // is wrong — be honest about that instead of guessing.
+        const message = 'Invalid credentials. Please check your mobile number or password.';
         setLoginError(message);
         showMessageModal('Sign in failed', message);
       }
@@ -287,7 +355,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>{t('mobileNumber')} <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('mobileNumber')} {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -314,7 +382,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
 
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>{t('password')} <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('password')} {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   ref={passwordInput}
@@ -355,10 +423,21 @@ export default function LoginScreen({ onNavigate, initialMode }) {
             {!!loginError && <Text style={styles.loginError}>{loginError}</Text>}
 
             {/* Forgot Password — plain text link (hidden for now; set SHOW_FORGOT_PASSWORD to true to bring it back) */}
-            {SHOW_FORGOT_PASSWORD && (
+            {SHOW_FORGOT_PASSWORD && loginMode !== 'admin' && (
               <TouchableOpacity
                 style={styles.forgotPasswordContainer}
                 onPress={handleForgotPassword}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Admin Access forgot password — mobile + new password, no OTP. */}
+            {loginMode === 'admin' && (
+              <TouchableOpacity
+                style={styles.forgotPasswordContainer}
+                onPress={handleOpenAdminForgotPassword}
                 activeOpacity={0.7}
               >
                 <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
@@ -438,6 +517,101 @@ export default function LoginScreen({ onNavigate, initialMode }) {
             </View>
           </View>
         </View>
+      </Modal>
+      <Modal
+        visible={forgotModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleCloseAdminForgotPassword}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Forgot password</Text>
+            <Text style={styles.modalMessage}>
+              Enter your mobile number and a new password for your admin account.
+            </Text>
+
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>{t('mobileNumber')}</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="98765 43210"
+                  placeholderTextColor="#999999"
+                  value={fpMobile}
+                  onChangeText={text => {
+                    setFpMobile(normalizeMobileNumber(text));
+                    setFpError('');
+                  }}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  editable={!fpSubmitting}
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>New password</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter new password"
+                  placeholderTextColor="#999999"
+                  value={fpNewPassword}
+                  onChangeText={text => {
+                    setFpNewPassword(text);
+                    setFpError('');
+                  }}
+                  secureTextEntry={!fpPasswordVisible}
+                  editable={!fpSubmitting}
+                />
+                <TouchableOpacity
+                  onPress={() => setFpPasswordVisible(!fpPasswordVisible)}
+                  style={styles.eyeIcon}
+                >
+                  <Image
+                    source={
+                      fpPasswordVisible
+                        ? require('../../../Assets/icons/eyeOpen.png')
+                        : require('../../../Assets/icons/eyeClose.png')
+                    }
+                    style={styles.eyeIconImage}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {!!fpError && <Text style={styles.validationError}>{fpError}</Text>}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalSecondaryButton}
+                onPress={handleCloseAdminForgotPassword}
+                activeOpacity={0.8}
+                disabled={fpSubmitting}
+              >
+                <Text style={styles.modalSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalPrimaryButton}
+                onPress={handleSubmitAdminForgotPassword}
+                activeOpacity={0.85}
+                disabled={fpSubmitting}
+              >
+                {fpSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalPrimaryText}>Reset password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

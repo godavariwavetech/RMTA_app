@@ -78,10 +78,8 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
 
 
 
-  const handleVerify = async () => {
-    const fullOtp = otp.join('');
-    if (fullOtp.length !== 6 || submitting) return;
-
+  const completeSale = async () => {
+    if (submitting) return;
     // Buyer confirmed → create the sale in the DB, then show completion.
     // deviceData.id is the purchase/inventory record's id (from
     // inventory_list / search_purchase), used here as purchase_id.
@@ -127,6 +125,16 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
       setSubmitting(false);
       Alert.alert('Could not complete sale', err.message);
     }
+  };
+
+  const handleVerify = async () => {
+    const fullOtp = otp.join('');
+    if (fullOtp.length !== 6 || submitting) return;
+    await completeSale();
+  };
+
+  const handleSkip = async () => {
+    await completeSale();
   };
 
   const handleUseAnotherNumber = () => {
@@ -208,6 +216,11 @@ export default function BuyerConfirmationOTP({ onNavigate, buyerData, deviceData
               onPress={handleUseAnotherNumber}
             >
               <Text style={styles.alternateButtonText}>Use another number</Text>
+            </TouchableOpacity>
+
+            {/* Skip Button */}
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip} disabled={submitting}>
+              <Text style={styles.skipButtonText}>Skip verification for now</Text>
             </TouchableOpacity>
 
             <View style={styles.bottomSpacer} />
@@ -317,7 +330,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
+  },
   timerContainer: {
     alignItems: 'center',
     marginBottom: 24,
@@ -368,6 +381,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  skipButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2F5DDC',
+    textDecorationLine: 'underline',
   },
   bottomSpacer: {
     height: 24,

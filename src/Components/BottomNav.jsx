@@ -7,9 +7,13 @@ import {
   TouchableOpacity,
   Text,
   Image,
+  Platform,
 } from 'react-native';
 
 import { useI18n } from '../i18n';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
+import { canAccessTechnicianMenu } from '../utils/technicianPermissions';
 
 // The bar drifts through deep cool shades (navy, blue, indigo, violet, teal) and the
 // centre button through light warm ones (amber, peach, yellow, rose, pink) at the same
@@ -36,6 +40,9 @@ const loop = (value, duration, easing = Easing.linear, useNativeDriver = true) =
 
 export default function BottomNav({ selectedItem, onNavigate }) {
   const { t } = useI18n();
+  const insets = useSafeAreaInsets();
+  const user = useSelector(state => state.auth.user);
+  const canAccessJobs = canAccessTechnicianMenu(user, 1);
   const buttonHue = useRef(new Animated.Value(0)).current;
   const centerFloat = useRef(new Animated.Value(0)).current;
 
@@ -71,7 +78,7 @@ export default function BottomNav({ selectedItem, onNavigate }) {
     { id: 'add', isCenter: true },
     { id: 'reports', icon: require('../Assets/bottomTabIcons/reports.png'), label: t('navReports') },
     { id: 'profile', icon: require('../Assets/icons/profile.png'), label: t('navProfile') },
-  ];
+  ].filter(item => canAccessJobs || (item.id !== 'jobs' && item.id !== 'add'));
 
   const centerY = centerFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
   const inputRange = BUTTON_COLORS.map((_, i) => i / (BUTTON_COLORS.length - 1));
@@ -79,7 +86,13 @@ export default function BottomNav({ selectedItem, onNavigate }) {
   const barColor = buttonHue.interpolate({ inputRange, outputRange: BAR_COLORS });
 
   return (
-    <View style={styles.bottomNavContainer} pointerEvents="box-none">
+      <View
+        style={[
+          styles.bottomNavContainer,
+          { bottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0) + 8 },
+        ]}
+        pointerEvents="box-none"
+      >
       <Animated.View style={[styles.navBarShell, { backgroundColor: barColor }]}>
         <View style={styles.bottomNav}>
           {navItems.map(item => {
@@ -111,40 +124,42 @@ export default function BottomNav({ selectedItem, onNavigate }) {
           })}
         </View>
 
-        <Animated.View style={[styles.floatingCenter, { transform: [{ translateY: centerY }] }]}>
-          <TouchableOpacity
-            onPress={() => onNavigate('createJobSheetStep1', { fresh: true })}
-            accessibilityRole="button"
-            accessibilityLabel={t('navAdd')}
-          >
-            <Animated.View style={[styles.centerButton, { backgroundColor: buttonColor }]}>
-              {GLOSS_SIZES.map(size => (
-                <View
-                  key={size}
-                  pointerEvents="none"
-                  style={[
-                    styles.gloss,
-                    {
-                      width: size,
-                      height: size,
-                      borderRadius: size / 2,
-                      left: GLOSS_CENTER.x - size / 2,
-                      top: GLOSS_CENTER.y - size / 2,
-                    },
-                  ]}
-                />
-              ))}
-              {SHADE_OFFSETS.map(offset => (
-                <View
-                  key={offset}
-                  pointerEvents="none"
-                  style={[styles.shade, { left: offset, top: offset + 2 }]}
-                />
-              ))}
-              <Text style={styles.centerPlus}>+</Text>
-            </Animated.View>
-          </TouchableOpacity>
-        </Animated.View>
+        {canAccessJobs && (
+          <Animated.View style={[styles.floatingCenter, { transform: [{ translateY: centerY }] }]}>
+            <TouchableOpacity
+              onPress={() => onNavigate('createJobSheetStep1', { fresh: true })}
+              accessibilityRole="button"
+              accessibilityLabel={t('navAdd')}
+            >
+              <Animated.View style={[styles.centerButton, { backgroundColor: buttonColor }]}>
+                {GLOSS_SIZES.map(size => (
+                  <View
+                    key={size}
+                    pointerEvents="none"
+                    style={[
+                      styles.gloss,
+                      {
+                        width: size,
+                        height: size,
+                        borderRadius: size / 2,
+                        left: GLOSS_CENTER.x - size / 2,
+                        top: GLOSS_CENTER.y - size / 2,
+                      },
+                    ]}
+                  />
+                ))}
+                {SHADE_OFFSETS.map(offset => (
+                  <View
+                    key={offset}
+                    pointerEvents="none"
+                    style={[styles.shade, { left: offset, top: offset + 2 }]}
+                  />
+                ))}
+                <Text style={styles.centerPlus}>+</Text>
+              </Animated.View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </Animated.View>
     </View>
   );

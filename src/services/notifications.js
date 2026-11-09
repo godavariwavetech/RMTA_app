@@ -14,6 +14,24 @@ import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 export const FCM_TOKEN_KEY = 'rmta_fcm_token';
 export const NOTIF_HISTORY_KEY = 'rmta_notification_history';
 const NOTIF_HISTORY_MAX = 60;
+let permissionRequest;
+let permissionGranted;
+
+const logFcmToken = token => {
+  const value = String(token || '');
+  if (!value) {
+    console.log('[FCM] device token: unavailable');
+    return;
+  }
+  if (__DEV__) {
+    console.log('[FCM] device token (development only):', value);
+    return;
+  }
+  const masked = value.length > 10
+    ? `${value.slice(0, 6)}${'*'.repeat(12)}${value.slice(-4)}`
+    : '*'.repeat(value.length);
+  console.log('[FCM] device token:', masked);
+};
 
 // ---- Notification history, shown on the Notifications screen -----------------------------
 // Every push the app handles is also saved here (newest first, last 60), so the screen
@@ -26,6 +44,22 @@ export async function getNotificationHistory() {
   } catch (e) {
     return [];
   }
+}
+
+export async function mergeNotificationHistory(notifications) {
+  const history = await getNotificationHistory();
+  const existingById = new Map(history.map(notification => [String(notification.id), notification]));
+  const incomingIds = new Set(notifications.map(notification => String(notification.id)));
+  const merged = [
+    ...notifications.map(notification => ({
+      ...notification,
+      read: existingById.get(String(notification.id))?.read ?? notification.read,
+    })),
+    ...history.filter(notification => !incomingIds.has(String(notification.id))),
+  ].sort((a, b) => Number(b.at) - Number(a.at));
+
+  await saveNotificationHistory(merged);
+  return merged.slice(0, NOTIF_HISTORY_MAX);
 }
 
 async function saveNotificationHistory(list) {
@@ -91,6 +125,21 @@ export async function requestNotificationPermission() {
   return settings.authorizationStatus >= 1;
 }
 
+export function ensureNotificationPermission() {
+  if (permissionGranted) return Promise.resolve(true);
+  if (!permissionRequest) {
+    permissionRequest = requestNotificationPermission()
+      .then(granted => {
+        permissionGranted = granted;
+        return granted;
+      })
+      .finally(() => {
+        permissionRequest = null;
+      });
+  }
+  return permissionRequest;
+}
+
 // Shows an FCM message through notifee. Chat messages use their own channel.
 export async function displayRemoteMessage(message) {
   recordNotification(message).catch(() => {});
@@ -103,7 +152,7 @@ export async function displayRemoteMessage(message) {
     title,
     body,
     data,
-    android: { channelId, pressAction: { id: 'default' }, smallIcon: 'ic_launcher' },
+    android: { channelId, pressAction: { id: 'default' }, smallIcon: 'ic_notification' },
   });
 }
 
@@ -139,17 +188,27 @@ export function onFcmTokenRefresh(callback) {
 // `onOpen(data)` fires when the user taps a notification.
 export async function initNotifications({ onOpen, onToken } = {}) {
   await createChannels();
-  await requestNotificationPermission();
+  try {
+    const granted = await ensureNotificationPermission();
+    if (!granted) {
+      console.warn('[FCM] notification permission not granted');
+    }
+  } catch (e) {
+    console.warn('[FCM] notification permission request failed', e?.message);
+  }
   try {
     const token = await getToken(getMessaging());
-    console.log('[FCM] token', token);
-    await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
-    if (onToken) onToken(token);
+    logFcmToken(token);
+    if (token) {
+      await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+      if (onToken) onToken(token);
+    }
   } catch (e) {
     console.warn('[FCM] token failed', e?.message);
   }
 
   const offToken = onTokenRefresh(getMessaging(), token => {
+    logFcmToken(token);
     AsyncStorage.setItem(FCM_TOKEN_KEY, token).catch(() => {});
     if (onToken) onToken(token);
   });

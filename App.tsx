@@ -1,5 +1,6 @@
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Alert, AppState, BackHandler, KeyboardAvoidingView, Platform, View, useWindowDimensions } from 'react-native';
+import { Alert, AppState, BackHandler, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import VersionCheck from 'react-native-version-check';
 import { Colors } from './src/Constants/Colors';
 import { APP_MAX_WIDTH } from './src/utils/responsive';
 import AppLockGate from './src/Components/AppLockGate';
@@ -8,7 +9,12 @@ import { Provider, useDispatch, useSelector } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
 import LanguageScreen from './src/Technician/screens/LanguageScreen';
 import { useState, useEffect, useRef } from 'react';
-import { initNotifications, getFcmToken, onFcmTokenRefresh } from './src/services/notifications';
+import {
+  initNotifications,
+  getFcmToken,
+  onFcmTokenRefresh,
+  ensureNotificationPermission,
+} from './src/services/notifications';
 import { ENDPOINTS } from './src/Constants/config';
 import { postJson, logoutUser } from './src/redux/slices/authSlice';
 import { store } from './src/redux/store';
@@ -33,6 +39,7 @@ import TechnicianHomeScreen from './src/Technician/screens/TechnicianHomeScreen'
 import NotificationsScreen from './src/Technician/screens/NotificationsScreen';
 import TechnicianProfileScreen from './src/Technician/screens/TechnicianProfileScreen';
 import TechnicianSettingsScreen from './src/Technician/screens/TechnicianSettingsScreen';
+import HelpSupportScreen from './src/Technician/screens/HelpSupportScreen';
 import JobSheetList from './src/Technician/screens/jobSheetList';
 import JobDetailsScreen from './src/Technician/screens/jobDetailsScreen';
 import RepairProgressScreen from './src/Technician/screens/repairProgressScreen';
@@ -141,23 +148,45 @@ function StatusBarBackdrop() {
 }
 
 
-// Registers this device for push notifications on the server: every time the
-// app opens with a logged-in member (restored session or fresh login), and again
-// whenever Firebase issues a new token, send { player_id, member_id }.
+// Registers this device token with the signed-in account and on every token
+// refresh so the server can target this app installation.
 function PlayerIdSync() {
-  const memberId = useSelector((state: any) => state.auth?.user?.member_id);
+  const user = useSelector((state: any) => state.auth?.user);
+  const memberId = user?.member_id;
+  const techId = user?.tech_id;
+  const userId = user?.user_id;
 
   useEffect(() => {
-    if (!memberId) {
+    if (!memberId && !techId && !userId) {
       return undefined;
     }
     const send = async (token?: string) => {
-      const playerId = token || (await getFcmToken());
-      if (!playerId) {
-        return;
-      }
       try {
-        await postJson(ENDPOINTS.POST_PLAYER_ID, { player_id: playerId, member_id: memberId });
+        const permissionGranted = await ensureNotificationPermission();
+        if (!permissionGranted) {
+          console.warn('[FCM] cannot register token without notification permission');
+          return;
+        }
+        const playerId = token || (await getFcmToken());
+        if (!playerId) {
+          console.warn('[FCM] no device token available to register');
+          return;
+        }
+        const { response, data } = await postJson(ENDPOINTS.POST_PLAYER_ID, {
+          player_id: playerId,
+          member_id: memberId,
+          tech_id: techId,
+          user_id: userId,
+        });
+        if (!response.ok || data?.success === false) {
+          console.warn(
+            '[FCM] player id registration rejected',
+            response.status,
+            data?.message || data?.msg || '',
+          );
+        } else {
+          console.log('[FCM] player id registered', response.status);
+        }
       } catch (e: any) {
         console.warn('[FCM] player id sync failed', e?.message);
       }
@@ -165,7 +194,7 @@ function PlayerIdSync() {
     send();
     const off = onFcmTokenRefresh(send);
     return () => off();
-  }, [memberId]);
+  }, [memberId, techId, userId]);
 
   return null;
 }
@@ -262,6 +291,8 @@ function AppContent() {
   // Block the first render until we've checked for a persisted session, so we
   // don't flash the IntroScreen before restoring a logged-in admin/technician.
   const [booting, setBooting] = useState<boolean>(true);
+  const storeUpdateCheckStarted = useRef(false);
+  const [storeUpdate, setStoreUpdate] = useState<{ version: string; url: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -282,6 +313,38 @@ function AppContent() {
       setBooting(false);
     })();
   }, []);
+
+  // On Android, compare the installed version with the version currently
+  // published on Google Play and offer a direct store update when one exists.
+  useEffect(() => {
+    if (booting || !i18nReady || Platform.OS !== 'android' || storeUpdateCheckStarted.current) {
+      return undefined;
+    }
+    storeUpdateCheckStarted.current = true;
+    let active = true;
+
+    (async () => {
+      try {
+        const update = await VersionCheck.needUpdate({
+          provider: 'playStore',
+          packageName: 'com.rmta',
+          forceUpdate: true,
+          ignoreErrors: false,
+        });
+        if (!active || !update?.isNeeded || !update.storeUrl) return;
+
+        setStoreUpdate({ version: update.latestVersion, url: update.storeUrl });
+      } catch (error: any) {
+        // A missing/unpublished Play Store listing or temporary network failure
+        // should not block app startup.
+        console.warn('[AppUpdate] Version check failed', error?.message);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [booting, i18nReady]);
 
   // Push notifications (FCM shown through notifee) once the session is restored.
   useEffect(() => {
@@ -362,6 +425,7 @@ function AppContent() {
       profile: 'profile',
       notifications: 'notifications',
       settings: 'settings',
+      helpSupport: 'helpSupport',
       jobDetails: 'jobDetails',
       repairProgress: 'repairProgress',
       jobTimeline: 'jobTimeline',
@@ -475,6 +539,44 @@ function AppContent() {
     <Provider store={store}>
     <SafeAreaProvider>
       <AppModalHost />
+      <Modal
+        visible={!!storeUpdate}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setStoreUpdate(null)}
+      >
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.55)' }}>
+          <View style={{ width: '100%', maxWidth: 360, borderRadius: 20, padding: 24, backgroundColor: '#FFFFFF' }}>
+            <Text style={{ color: Colors.primary, fontSize: 20, fontWeight: '700', marginBottom: 10 }}>Update available</Text>
+            <Text style={{ color: '#4B5563', fontSize: 15, lineHeight: 22, marginBottom: 8 }}>
+              Version {storeUpdate?.version} is available on Google Play.
+            </Text>
+            <Text style={{ color: '#6B7280', fontSize: 14, lineHeight: 21, marginBottom: 24 }}>
+              Update now to get the latest improvements.
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <Pressable onPress={() => setStoreUpdate(null)} hitSlop={8} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#4B5563', fontSize: 15, fontWeight: '600' }}>Later</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const updateUrl = storeUpdate?.url;
+                  setStoreUpdate(null);
+                  if (updateUrl) {
+                    Linking.openURL(updateUrl).catch(error =>
+                      console.warn('[AppUpdate] Could not open Google Play', error?.message),
+                    );
+                  }
+                }}
+                style={{ marginLeft: 8, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 18, backgroundColor: Colors.primary }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>Update</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={{ flex: 1, alignItems: 'center', backgroundColor: isTabletScreen ? '#E5E9F0' : undefined }}>
       <View style={{ flex: 1, width: '100%', maxWidth: isTabletScreen ? APP_MAX_WIDTH : undefined, overflow: 'hidden' }}>
       <KeyboardAvoidingView
@@ -548,8 +650,14 @@ function AppContent() {
         <TechnicianProfileScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'settings' ? (
         <TechnicianSettingsScreen onNavigate={handleScreenNavigation} />
+      ) : currentScreen === 'helpSupport' ? (
+        <HelpSupportScreen onNavigate={handleScreenNavigation} />
       ) : currentScreen === 'jobs' ? (
-        <JobSheetList onNavigate={handleScreenNavigation} />
+        <JobSheetList
+          key={`jobs-${navigationParams.initialFilter}`}
+          onNavigate={handleScreenNavigation}
+          initialFilter={navigationParams.initialFilter}
+        />
       ) : currentScreen === 'jobDetails' ? (
         <JobDetailsScreen
           onNavigate={handleScreenNavigation}
@@ -587,7 +695,7 @@ function AppContent() {
           summary={navigationParams.summary}
         />
       ) : currentScreen === 'purchaseEntryStep1' ? (
-        <PurchaseEntryStep1 onNavigate={handleScreenNavigation} />
+        <PurchaseEntryStep1 onNavigate={handleScreenNavigation} fresh={navigationParams.fresh} />
       ) : currentScreen === 'verifySellerMobileNumber' ? (
         <VerifySellerMobileNumber onNavigate={handleScreenNavigation} sellerData={navigationParams.sellerData} />
       ) : currentScreen === 'purchaseEntryStep2' ? (
@@ -605,7 +713,7 @@ function AppContent() {
       ) : currentScreen === 'viewPurchaseHistory' ? (
         <PurchaseAndSaleHistory onNavigate={handleScreenNavigation} initialTab="purchases" singleTab />
       ) : currentScreen === 'saleEntryStep1' ? (
-        <SaleEntryStep1 onNavigate={handleScreenNavigation} />
+        <SaleEntryStep1 onNavigate={handleScreenNavigation} fresh={navigationParams.fresh} />
       ) : currentScreen === 'verifyBuyerMobileNumber' ? (
         <VerifyBuyerMobileNumber onNavigate={handleScreenNavigation} buyerData={navigationParams.buyerData} />
       ) : currentScreen === 'saleEntryStep2' ? (

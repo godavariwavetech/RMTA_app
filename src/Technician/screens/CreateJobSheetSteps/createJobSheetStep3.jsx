@@ -35,8 +35,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
   const draftPhotos = useSelector(state => state.jobSheet.draft.photos);
   const draftConditions = useSelector(state => state.jobSheet.draft.conditions);
 
-  // Nothing selected by default — the technician chooses each one. Overridden
-  // by anything saved in the draft so navigating back keeps their choices.
+  // Conditions must be explicitly selected; saved draft selections are restored.
   const defaultSelections = {
     screen: '',
     body: '',
@@ -133,16 +132,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
   };
 
   const handleContinue = () => {
-    // Every condition field must be answered before moving on.
     setTried(true);
-    const unanswered = Object.keys(selections).filter(k => !selections[k]);
-    if (unanswered.length > 0) {
-      Alert.alert(
-        'Incomplete',
-        'Please choose a condition for every field before continuing.',
-      );
-      return;
-    }
     const draft = buildDraft();
     dispatch(updateJobDraft(draft));
     if (onNavigate) {
@@ -161,32 +151,32 @@ export default function CreateJobSheetStep3({ onNavigate }) {
     {
       id: 'screen',
       label: 'Screen',
-      options: ['Good', 'Damaged', 'Cracked', 'Dead on Arrival'],
+      options: ['Good', 'Damaged', 'Cracked', 'Dead on Arrival', 'Not Tested'],
     },
     {
       id: 'body',
       label: 'Body',
-      options: ['Good', 'Scratched', 'Damaged'],
+      options: ['Good', 'Scratched', 'Damaged', 'Not Tested'],
     },
     {
       id: 'camera',
       label: 'Camera',
-      options: ['Working', 'Not working'],
+      options: ['Working', 'Not working', 'Not Tested'],
     },
     {
       id: 'speaker',
       label: 'Speaker',
-      options: ['Working', 'Not working'],
+      options: ['Working', 'Not working','Not Tested'],
     },
     {
       id: 'chargingPort',
       label: 'Charging port',
-      options: ['Working', 'Not working'],
+      options: ['Working', 'Not working', 'Not Tested'],
     },
     {
       id: 'battery',
       label: 'Battery',
-      options: ['Good', 'Weak', 'Damaged'],
+      options: ['Good', 'Weak', 'Damaged', 'Not Tested'],
     },
   ];
 
@@ -233,7 +223,7 @@ export default function CreateJobSheetStep3({ onNavigate }) {
                 <View key={category.id} style={styles.categorySection}>
                   <Text style={[styles.categoryLabel, tried && !selections[category.id] && styles.categoryLabelError]}>
                     {category.label}
-                    <Text style={styles.required}> *</Text>
+                    {/* <Text style={styles.required}> *</Text> */}
                     {tried && !selections[category.id] ? '  — choose one' : ''}
                   </Text>
                   <View style={styles.optionsContainer}>

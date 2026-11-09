@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -25,6 +26,8 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
   const otpBox = useRef(null);
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Timer for resend code
   useEffect(() => {
@@ -45,13 +48,16 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
 
 
   const handleVerifyAndContinue = async () => {
+    if (verifying) return;
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
       alert('Please enter the complete 6-digit code');
       return;
     }
 
+    setVerifying(true);
     const result = await dispatch(verifyForgotOtp({ mobile, otp: otpCode }));
+    setVerifying(false);
     if (verifyForgotOtp.fulfilled.match(result)) {
       // Carry the verified mobile + otp to the reset step.
       onNavigate('forgotPassStep3', { mobile, otp: otpCode });
@@ -70,12 +76,15 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
   };
 
   const handleResendCode = async () => {
+    if (resending) return;
     setOtp(['', '', '', '', '', '']);
     setResendTimer(30);
     setCanResend(false);
     otpBox.current?.focus();
 
+    setResending(true);
     const result = await dispatch(sendForgotOtp({ mobile }));
+    setResending(false);
     if (sendForgotOtp.fulfilled.match(result)) {
       const devOtp = result.payload && result.payload.otp;
       if (devOtp) {
@@ -136,8 +145,13 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
                 <TouchableOpacity
                   onPress={handleResendCode}
                   activeOpacity={0.7}
+                  disabled={resending}
                 >
-                  <Text style={styles.resendLink}>Resend code</Text>
+                  {resending ? (
+                    <ActivityIndicator color={Colors.secondary} />
+                  ) : (
+                    <Text style={styles.resendLink}>Resend code</Text>
+                  )}
                 </TouchableOpacity>
               ) : (
                 <Text style={styles.resendText}>
@@ -174,8 +188,13 @@ export default function ForgotPassStep2({ onNavigate, mobile }) {
             <TouchableOpacity
               style={styles.verifyButton}
               onPress={handleVerifyAndContinue}
+              disabled={verifying}
             >
-              <Text style={styles.verifyButtonText}>Verify & continue</Text>
+              {verifying ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.verifyButtonText}>Verify & continue</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -256,7 +275,7 @@ const styles = StyleSheet.create({
   otpSection: {
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('3%'),
-  },
+  },
 
   /* Resend Section */
   resendSection: {

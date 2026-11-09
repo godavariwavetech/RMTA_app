@@ -11,6 +11,7 @@
     "icon": "./src/Assets/images/appLogo.png",
     "splash": {
       "image": "./src/Assets/images/appLogo.png",
+      "imageWidth": 280,
       "resizeMode": "contain",
       "backgroundColor": "#071A3D"
     },

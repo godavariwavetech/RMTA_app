@@ -19,6 +19,7 @@ import { Colors } from '../../Constants/Colors';
 import { ENDPOINTS } from '../../Constants/config';
 import { getJson } from '../../redux/slices/authSlice';
 import { SkeletonUserList } from '../../Components/Skeleton';
+import BottomNav from '../../Components/BottomNav';
 import { FCM_TOKEN_KEY } from '../../services/notifications';
 import { confirmAction, showAppActionSheet } from '../../utils/appModal';
 import {
@@ -67,6 +68,9 @@ const senderColor = id => {
 const fmtTime = ms => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 export default function ChatScreen({ onNavigate }) {
+  const handleNavigation = screen => {
+    if (onNavigate) onNavigate(screen);
+  };
   const user = useSelector(state => state.auth?.user) || {};
   const me = String(user.member_id ?? user.id ?? '');
   const meName = user.name || user.full_name || '';
@@ -297,6 +301,7 @@ export default function ChatScreen({ onNavigate }) {
             )}
           </>
         )}
+        {!active && <BottomNav selectedItem="chat" onNavigate={handleNavigation} />}
         <Modal
           visible={showMembers}
           transparent
@@ -752,7 +757,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8ECF3',
   },
-  userList: { padding: 14, flexGrow: 1 },
+  userList: { padding: 14, paddingBottom: 130, flexGrow: 1 },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -340,7 +340,17 @@ export const loginUser = createAsyncThunk(
       const user = {
         ...safeUser,
         user_id: responseUser.user_id ?? responseUser.id,
-        member_id: responseUser.member_id ?? responseUser.id,
+        // A technician's `id` belongs to the technician table. Never treat it
+        // as the parent member id when the API omits the relationship; those
+        // tables have independent numeric IDs and can point at another member.
+        member_id: responseUser.member_id ?? (isTechnician ? undefined : responseUser.id),
+        // Some login responses omit the phone field even though the login
+        // mobile is known. Preserve it as a fallback for the user's own card.
+        mobile:
+          responseUser.mobile ||
+          responseUser.mobile_number ||
+          responseUser.phone_number ||
+          payload.mobile,
         // Staff rows name the person tech_name; the app reads full_name.
         full_name: responseUser.full_name ?? responseUser.tech_name,
         tech_id: isTechnician ? responseUser.id : undefined,

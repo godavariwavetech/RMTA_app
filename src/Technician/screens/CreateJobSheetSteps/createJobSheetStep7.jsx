@@ -8,6 +8,7 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -64,15 +65,41 @@ export default function CreateJobSheetStep7({ onNavigate }) {
   const handleCreateJobSheet = async () => {
     if (submitting) return;
 
+    const conditions = Array.isArray(draft.conditions) ? draft.conditions : [];
+    const photos = Array.isArray(draft.photos) ? draft.photos : [];
+    const hasJobDetails = [
+      customer.full_name,
+      customer.mobile,
+      device.brand,
+      device.model,
+      device.imei1,
+      device.imei2,
+      device.color,
+      device.storage,
+      repair.category,
+      repair.problem_description,
+      repair.estimated_cost,
+      repair.estimated_delivery_text,
+      draft.access && draft.access.unlock_value,
+    ].some(value => String(value || '').trim()) ||
+      conditions.some(condition => String(condition && condition.condition_value || '').trim()) ||
+      allPhotos.some(photo => photo && photo.base64);
+
+    if (!hasJobDetails) {
+      Alert.alert(
+        'Job details required',
+        'Please fill in some details to create a job sheet.',
+      );
+      return;
+    }
+
     // The backend's condition_checks component names (step 3) → the flat
     // screen/body/camera/speaker/chargingpoint/batterey fields it expects here.
-    const conditions = Array.isArray(draft.conditions) ? draft.conditions : [];
     const conditionValue = component =>
       (conditions.find(c => c && c.component === component) || {}).condition_value || '';
 
     // Step 3 captures exactly one photo per category — front/back/damage map
     // 1:1 onto frontimage/backimage/damageimage, sent as raw base64.
-    const photos = Array.isArray(draft.photos) ? draft.photos : [];
     const photoBase64 = type => (photos.find(p => p && p.photo_type === type) || {}).base64 || null;
 
     const access = draft.access || {};

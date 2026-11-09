@@ -13,6 +13,7 @@ import {
   ImageBackground,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
@@ -46,6 +47,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [legalView, setLegalView] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Shop photo / person photo: { uri, base64 } or null. Sent to the backend
   // as raw base64 under shop_image / person_image — no separate upload step.
@@ -91,7 +93,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   };
 
   const handleRegister = async () => {
-    if (!onNavigate) return;
+    if (!onNavigate || isSubmitting) return;
 
     const {
       fullName,
@@ -174,7 +176,9 @@ export default function RegisterScreen({ onNavigate, userInd }) {
     // Dispatch the registration thunk (defined in redux/slices/authSlice.js).
     // It handles the fetch, timeout, duplicate/error responses, and stores the
     // result in redux. Here we just branch on fulfilled vs rejected.
+    setIsSubmitting(true);
     const result = await dispatch(registerMember(registrationData));
+    setIsSubmitting(false);
 
     if (registerMember.fulfilled.match(result)) {
       // Success means the mobile number did NOT already exist and the account
@@ -272,7 +276,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Full Name Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Full name <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Full name {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.fullName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -287,7 +291,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Mobile Number Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Mobile number <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Mobile number {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.mobileNumber).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -303,7 +307,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Shop / Business Name Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop / Business name <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Shop / Business name {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.shopName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -318,7 +322,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Shop Address Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop address <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Shop address {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, styles.textAreaWrapper, tried && !String(form.shopAddress).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
@@ -336,7 +340,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
             {/* City & State Row */}
             <View style={styles.rowContainer}>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>City <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.fieldLabel}>City {/* <Text style={styles.required}>*</Text> */}</Text>
                 <View style={[styles.inputWrapper, tried && !String(form.city).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
@@ -349,7 +353,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 </View>
               </View>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>State <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.fieldLabel}>State {/* <Text style={styles.required}>*</Text> */}</Text>
                 <View style={[styles.inputWrapper, tried && !String(form.state).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
@@ -411,7 +415,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Password <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Password {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.password).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -440,7 +444,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Confirm Password Field */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Confirm password <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Confirm password {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.confirmPassword).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -519,8 +523,13 @@ export default function RegisterScreen({ onNavigate, userInd }) {
             <TouchableOpacity
               style={styles.registerButton}
               onPress={handleRegister}
+              disabled={isSubmitting}
             >
-              <Text style={styles.registerButtonText}>Register</Text>
+              {isSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.registerButtonText}>Register</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

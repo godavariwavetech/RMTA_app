@@ -115,7 +115,7 @@ export default function ViewPurchaseHistory({ onNavigate }) {
 
   const handleNewPurchase = () => {
     if (onNavigate) {
-      onNavigate('purchaseEntryStep1');
+      onNavigate('purchaseEntryStep1', { fresh: true });
     }
   };
 

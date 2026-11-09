@@ -39,6 +39,12 @@ export default function VerifyMobileNumber({ onNavigate }) {
     }
   };
 
+  const handleSkip = () => {
+    if (onNavigate) {
+      onNavigate('createJobSheetStep2');
+    }
+  };
+
   const handleVerify = async () => {
     const fullOtp = otp.join('');
     if (fullOtp.length !== 6) return;
@@ -138,6 +144,11 @@ export default function VerifyMobileNumber({ onNavigate }) {
             {/* Use Another Number Button */}
             <TouchableOpacity style={styles.alternateButton} onPress={handleBackPress}>
               <Text style={styles.alternateButtonText}>Use another number</Text>
+            </TouchableOpacity>
+
+            {/* Skip Button */}
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+              <Text style={styles.skipButtonText}>Skip verification for now</Text>
             </TouchableOpacity>
 
             <View style={styles.bottomSpacer} />
@@ -279,6 +290,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  skipButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2F5DDC',
+    textDecorationLine: 'underline',
   },
   bottomSpacer: {
     height: 24,

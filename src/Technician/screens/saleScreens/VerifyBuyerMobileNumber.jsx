@@ -97,6 +97,15 @@ export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
     }
   };
 
+  const handleSkip = () => {
+    if (onNavigate) {
+      onNavigate('saleEntryStep2', {
+        buyerData,
+        otpVerified: false,
+      });
+    }
+  };
+
   const formatTime = () => {
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
@@ -159,6 +168,11 @@ export default function VerifyBuyerMobileNumber({ onNavigate, buyerData }) {
               onPress={handleUseAnotherNumber}
             >
               <Text style={styles.alternateButtonText}>Use another number</Text>
+            </TouchableOpacity>
+
+            {/* Skip Button */}
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+              <Text style={styles.skipButtonText}>Skip verification for now</Text>
             </TouchableOpacity>
 
             <View style={styles.bottomSpacer} />
@@ -245,7 +259,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginBottom: 32,
-  },
+  },
   timerContainer: {
     alignItems: 'center',
     marginBottom: 24,
@@ -296,6 +310,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  skipButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2F5DDC',
+    textDecorationLine: 'underline',
   },
   bottomSpacer: {
     height: 24,

@@ -69,14 +69,6 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
   const handleCreateInvoice = async () => {
     if (!onNavigate || submitting) return;
     setTried(true);
-    if (!(Number(formData.salePrice) > 0)) {
-      Alert.alert('Missing details', 'Please enter the sale price.');
-      return;
-    }
-    if (formData.paymentMode !== 'cash' && !String(formData.transactionId || '').trim()) {
-      Alert.alert('Missing details', 'Please enter the transaction ID for this payment mode.');
-      return;
-    }
     dispatch(updateSaleDraft({ sale: formData }));
 
     // deviceData.id is the purchase/inventory record's id (from
@@ -177,7 +169,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {/* Sale Price Field */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>
-                Sale Price <Text style={styles.required}>*</Text>
+                Sale Price {/* <Text style={styles.required}>*</Text> */}
               </Text>
               <View style={[styles.priceInputContainer, tried && !(Number(formData.salePrice) > 0) && styles.inputError]}>
                 <Text style={styles.currencySymbol}>₹</Text>
@@ -195,7 +187,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {/* Payment Mode Selection */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>
-                Payment Mode <Text style={styles.required}>*</Text>
+                Payment Mode {/* <Text style={styles.required}>*</Text> */}
               </Text>
               <View style={styles.paymentModeContainer}>
                 <TouchableOpacity
@@ -255,7 +247,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
             {(formData.paymentMode === 'upi' || formData.paymentMode === 'bank') && (
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Transaction ID <Text style={styles.required}>*</Text>
+                  Transaction ID {/* <Text style={styles.required}>*</Text> */}
                 </Text>
                 <TextInput {...nav.props(1)}
                   style={[styles.input, tried && !String(formData.transactionId || '').trim() && styles.inputError]}

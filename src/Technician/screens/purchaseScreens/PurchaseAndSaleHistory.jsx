@@ -66,11 +66,17 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [reloadKey, setReloadKey] = useState(0);
 
-  const fmtDate = v =>
-    v
-      ? new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '';
-  const fmtAmount = v => (v != null ? `₹${Number(v).toLocaleString('en-IN')}` : '');
+  const fmtDate = v => {
+    if (!v) return 'NA';
+    const date = new Date(v);
+    return isNaN(date)
+      ? 'NA'
+      : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+  const fmtAmount = v =>
+    v != null && v !== '' && !isNaN(Number(v))
+      ? `₹${Number(v).toLocaleString('en-IN')}`
+      : 'NA';
   const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
   // Log rows compactly: long values (e.g. base64 images) are truncated so
@@ -90,6 +96,33 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   useEffect(() => {
     let active = true;
 
+    // The backend's list query can return more than one row for the same
+    // sale/purchase id (e.g. a join against a table with more than one
+    // matching record) — the duplicates usually differ only in which copy
+    // has a field filled in (like warranty_notes). Merge them into a single
+    // row per id, preferring whichever copy has each field filled in, so one
+    // sale/purchase shows as exactly one card instead of several.
+    const dedupeById = rows => {
+      const byId = new Map();
+      rows.forEach(r => {
+        const existing = byId.get(r.id);
+        if (!existing) {
+          byId.set(r.id, r);
+          return;
+        }
+        const merged = { ...existing };
+        Object.keys(r).forEach(k => {
+          const v = r[k];
+          const isEmpty = x => x === null || x === undefined || x === '';
+          if (!isEmpty(v) && isEmpty(merged[k])) {
+            merged[k] = v;
+          }
+        });
+        byId.set(r.id, merged);
+      });
+      return Array.from(byId.values());
+    };
+
     // Fetch one list; the two lists load in parallel and only the tab(s) the
     // screen actually shows are requested.
     const load = async (endpoint, label, mapRow, setRows, setLoading) => {
@@ -98,8 +131,9 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
           member_id: user.member_id,
         });
         if (active && response.ok && data && data.success !== false) {
-          const rows = Array.isArray(data.data) ? data.data : [];
-          logRows(label, rows);
+          const rawRows = Array.isArray(data.data) ? data.data : [];
+          logRows(label, rawRows);
+          const rows = dedupeById(rawRows);
           setRows(rows.map(mapRow));
         } else if (active) {
           console.log(`[${label}] request failed:`, response.status, data && data.message);
@@ -124,8 +158,9 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
     // Photos arrive as base64 JPEGs (no data: prefix) or short server paths.
     const PHOTO_FIELDS = [
       ['frontimage', 'Front photo'],
-      ['baackimage', 'Back photo'],
+      ['backimage', 'Back photo'],
       ['device_image', 'Device photo'],
+      ['billimage', 'Bill photo'],
     ];
     const extractPhotos = r =>
       PHOTO_FIELDS.filter(([k]) => typeof r[k] === 'string' && r[k]).map(([k, label]) => ({
@@ -149,10 +184,10 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
             ? r.sold_at || r.sale_date || r.created_at
             : r.purchase_date || r.created_date || r.created_at,
         ),
-        deviceName: [r.device_brand, r.device_model].filter(Boolean).join(' ').trim() || 'Device',
+        deviceName: [r.device_brand, r.device_model].filter(Boolean).join(' ').trim() || 'NA',
         storage: r.storage || '',
         color: r.color || '',
-        imei: r.imei1 || '',
+        imei: r.imei1 || 'NA',
         // Purchases: `available` 0 (or missing) → Available, 1 → Sold out.
         soldOut: type === 'purchases' && Number(r.available) === 1,
         status:
@@ -182,7 +217,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
         (r, i) => ({
           ...mapCommon(r, i, 'purchases'),
           date: fmtDate(r.purchase_date || r.created_date || r.created_at),
-          seller: r.seller_name || r.customer_name || '',
+          seller: r.seller_name || r.customer_name || 'NA',
           amount: fmtAmount(r.purchase_price ?? r.purchaseprice),
         }),
         setPurchaseHistory,
@@ -198,7 +233,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
         (r, i) => ({
           ...mapCommon(r, i, 'sales'),
           date: fmtDate(r.sold_at || r.sale_date || r.created_at),
-          buyer: r.buyer_name || r.customer_name || '',
+          buyer: r.buyer_name || r.customer_name || 'NA',
           amount: fmtAmount(r.sale_price),
         }),
         setSalesHistory,
@@ -250,9 +285,9 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
   const handleNewTransaction = () => {
     if (onNavigate) {
       if (activeTab === 'purchases') {
-        onNavigate('purchaseEntryStep1');
+        onNavigate('purchaseEntryStep1', { fresh: true });
       } else {
-        onNavigate('saleEntryStep1');
+        onNavigate('saleEntryStep1', { fresh: true });
       }
     }
   };
@@ -280,7 +315,7 @@ export default function PurchaseAndSaleHistory({ onNavigate, initialTab = 'purch
         <View style={styles.deviceInfo}>
           <Text style={styles.deviceName}>{item.deviceName}</Text>
           <Text style={styles.deviceDetails}>
-            {item.storage} · {item.color}
+            {[item.storage, item.color].filter(Boolean).join(' · ') || 'NA'}
           </Text>
           <Text style={styles.imeiText}>IMEI {item.imei}</Text>
         </View>

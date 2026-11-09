@@ -270,7 +270,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
           {/* Content */}
           <View style={styles.content}>
             {/* Section Title */}
-            <Text style={styles.sectionTitle}>Choose from your inventory <Text style={{ color: '#EF4444' }}>*</Text></Text>
+            <Text style={styles.sectionTitle}>Choose from your inventory {/* <Text style={{ color: '#EF4444' }}>*</Text> */}</Text>
 
             {/* Search Field */}
             <View style={styles.searchContainer}>

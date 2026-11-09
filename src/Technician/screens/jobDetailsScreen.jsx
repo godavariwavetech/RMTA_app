@@ -48,7 +48,12 @@ const conditionTone = value => {
   return { fg: '#B45309', bg: '#FEF3C7' };
 };
 
-const LOCK_LABEL = { none: 'No lock', password: 'Password', pattern: 'Pattern' };
+const LOCK_LABEL = {
+  none: 'No lock',
+  password: 'Password',
+  pattern: 'Pattern',
+  unknown: 'Unknown',
+};
 
 export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const { tick, refreshControl } = useRefresh();
@@ -56,6 +61,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const user = useSelector(state => state.auth.user) || {};
   const [activeTab, setActiveTab] = useState('overview');
   const [job, setJob] = useState(null);
+  const [customerPhotoFailed, setCustomerPhotoFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   // Set when the full record couldn't be loaded.
   const [loadError, setLoadError] = useState('');
@@ -72,7 +78,19 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   const [otpError, setOtpError] = useState('');
 
   useEffect(() => {
+    if (!job) return;
+    const customerPhoto = job.customer_photo || job.customer_image || null;
+    console.log(
+      'customer photo----------------->',
+      typeof customerPhoto === 'string' && customerPhoto.length > 80
+        ? `${customerPhoto.slice(0, 80)}...(${customerPhoto.length})`
+        : customerPhoto,
+    );
+  }, [job]);
+
+  useEffect(() => {
     let active = true;
+    setCustomerPhotoFailed(false);
 
     // If the details API fails, use the main job list API: prefer the row we
     // were opened with, otherwise look the job up in get_job_sheets.
@@ -124,24 +142,37 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                 aadharnumber: c.aadharnumber,
                 address: c.address,
                 ...record,
+                customer_photo:
+                  record.customer_photo ||
+                  record.customer_image ||
+                  c.customer_photo ||
+                  c.customer_image ||
+                  c.photo ||
+                  null,
               };
             }
             // The job record carries only customer_id (its customer_name / mobile come back
             // empty). Customers are listed by getjobsdata ({ id, customer_name, customer_number,
             // customer_alternatenumber, aadharnumber, customer_image }), so match on that id.
-            if (record.customer_id && !record.customer_name) {
+            if (record.customer_id && (!record.customer_name || !record.customer_photo)) {
               try {
                 const res = await postJson(ENDPOINTS.GET_JOBS_DATA, { member_id: user.member_id });
                 const rows = res.response.ok && res.data && Array.isArray(res.data.data) ? res.data.data : [];
-                const c = rows.find(r => String(r.id) === String(record.customer_id));
-                if (c) {
+                const customerRow = rows.find(r => String(r.id) === String(record.customer_id));
+                if (customerRow) {
                   record = {
                     ...record,
-                    customer_name: c.customer_name,
-                    customer_mobile: c.customer_number,
-                    alternate_mobile: c.customer_alternatenumber || record.alternate_mobile,
-                    aadharnumber: c.aadharnumber || record.aadharnumber,
-                    customer_photo: c.customer_image || record.customer_photo,
+                    customer_name: record.customer_name || customerRow.customer_name,
+                    customer_mobile: record.customer_mobile || customerRow.customer_number,
+                    alternate_mobile:
+                      customerRow.customer_alternatenumber || record.alternate_mobile,
+                    aadharnumber: customerRow.aadharnumber || record.aadharnumber,
+                    customer_photo:
+                      record.customer_photo ||
+                      customerRow.customer_photo ||
+                      customerRow.customer_image ||
+                      customerRow.photo ||
+                      null,
                   };
                 }
               } catch (e) {
@@ -151,7 +182,10 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
             // ... or be missing altogether: then take them from the job list row the screen
             // was opened with (or look the job up in the list). The details record wins
             // wherever it has a value.
-            if (!record.customer_name && !record.customer_mobile && !record.mobile_number) {
+            if (
+              (!record.customer_name && !record.customer_mobile && !record.mobile_number) ||
+              !record.customer_photo
+            ) {
               const row = await fallbackFromList();
               if (row) {
                 const filled = Object.fromEntries(
@@ -331,6 +365,19 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     setOtpError('');
   };
 
+  const handleSkipOtp = () => {
+    if (verifyingOtp || starting) return;
+    confirmAction({
+      title: 'Skip OTP verification?',
+      message: 'Complete the handover without verifying the customer OTP.',
+      confirmText: 'Skip & complete',
+      onConfirm: () => {
+        closeOtp();
+        handleAdvanceStatus(3);
+      },
+    });
+  };
+
   // Each step of the job process asks for confirmation before it is sent.
   const STAGE_CONFIRM = {
     0: {
@@ -375,25 +422,25 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   let parsed = {};
   try { parsed = j.details_json ? JSON.parse(j.details_json) : {}; } catch (e) {}
   const statusMeta =
-    STATUS_META[j.status] || { label: j.status || '—', color: '#9CA3AF', bg: '#F3F4F6' };
-  const deviceName = [j.device_brand, j.device_model].filter(Boolean).join(' ') || 'Device';
-  const deviceSpec = [j.storage, j.color].filter(Boolean).join(' · ');
+    STATUS_META[j.status] || { label: j.status || 'NA', color: '#9CA3AF', bg: '#F3F4F6' };
+  const deviceName = [j.device_brand, j.device_model].filter(Boolean).join(' ') || 'NA';
+  const deviceSpec = [j.storage, j.color].filter(Boolean).join(' · ') || 'NA';
   const estimate =
-    j.estimated_cost != null ? `₹${Number(j.estimated_cost).toLocaleString('en-IN')}` : '—';
+    j.estimated_cost != null ? `₹${Number(j.estimated_cost).toLocaleString('en-IN')}` : 'NA';
   const unlockValue = j.unlock_value || (parsed.access && parsed.access.unlock_value) || '';
   // The job record keeps the saved lock in `devicelock` (access_mode can still say
-  // customer_unlocks), so a value there means there is a lock: a pattern looks like
-  // "1 → 2 → 5", anything else is a password / PIN.
+  // customer_unlocks); recognize its encoded value when details_json is unavailable.
   const savedLock = String(unlockValue || j.devicelock || '').trim();
-  const lockType =
-    (parsed.access && parsed.access.lock_type) ||
-    (savedLock
-      ? /→|^\d(\s*[-,>]\s*\d)+$/.test(savedLock)
-        ? 'pattern'
-        : 'password'
-      : j.access_mode === 'temporary_pin'
-      ? 'password'
-      : 'none');
+  const inferredLockType = savedLock
+    ? /^unknown$/i.test(savedLock)
+      ? 'unknown'
+      : /→|^\d(\s*[-,>]\s*\d)+$/.test(savedLock)
+      ? 'pattern'
+      : 'password'
+    : j.access_mode === 'temporary_pin'
+    ? 'password'
+    : 'none';
+  const lockType = (parsed.access && parsed.access.lock_type) || inferredLockType;
   const lockLabel = LOCK_LABEL[lockType] || lockType;
   // The job can come from job_sheet_details (conditions[] / photos[] arrays,
   // customer_mobile) or from the list API (flat screen/body/... fields,
@@ -418,6 +465,17 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     if (!v || typeof v !== 'string' || v.length > 500) return null;
     return /^https?:\/\//.test(v) ? v : `${BASE_URL}${String(v).replace(/^\//, '')}`;
   };
+  const imageSource = (value, label) => {
+    if (typeof value !== 'string' || !/(image|photo)/i.test(label)) return null;
+    const uri = value.trim();
+    if (!uri) return null;
+    if (/^(https?:\/\/|file:\/\/|content:\/\/|data:image\/)/i.test(uri)) return { uri };
+    if (uri.length > 500) return { uri: `data:image/jpeg;base64,${uri}` };
+    const resolvedUri = imageUri(uri);
+    return resolvedUri ? { uri: resolvedUri } : null;
+  };
+  const customerPhoto = j.customer_photo || j.customer_image;
+  const customerPhotoSource = imageSource(customerPhoto, 'customer photo');
   const photos =
     Array.isArray(j.photos) && j.photos.length > 0
       ? j.photos
@@ -436,23 +494,199 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     j.aadhaar_last4 || (j.aadharnumber ? String(j.aadharnumber).slice(-4) : '');
   const fmtDateTime = v => {
     if (!v) return '';
-    const d = new Date(String(v).replace(' ', 'T'));
+    const value = String(v).trim();
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (dateOnly) {
+      return `${dateOnly[3]}-${dateOnly[2]}-${dateOnly[1]}`;
+    }
+    const d = new Date(value.replace(' ', 'T'));
     if (isNaN(d)) return String(v);
-    const hasTime = !/00:00:00(\.000)?Z?$/.test(String(v));
-    return d.toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      ...(hasTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-    });
+    const pad = number => String(number).padStart(2, '0');
+    return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(
+      d.getHours(),
+    )}:${pad(d.getMinutes())}`;
   };
+  const completedDate =
+    j.completed_at ||
+    j.completed_date ||
+    j.completion_date ||
+    j.completed_on ||
+    j.handover_at ||
+    j.handover_date ||
+    j.handed_over_at ||
+    j.delivered_at;
+  const fmtDateOnly = v => {
+    if (!v) return '';
+    const value = String(v).trim();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const datePart = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    if (datePart) {
+      const [, year, month, day] = datePart;
+      const monthNumber = Number(month);
+      const dayNumber = Number(day);
+      const parsedDate = new Date(Date.UTC(Number(year), monthNumber - 1, dayNumber));
+      if (
+        monthNumber >= 1 &&
+        monthNumber <= 12 &&
+        parsedDate.getUTCFullYear() === Number(year) &&
+        parsedDate.getUTCMonth() === monthNumber - 1 &&
+        parsedDate.getUTCDate() === dayNumber
+      ) {
+        return `${dayNumber} ${months[monthNumber - 1]} ${year}`;
+      }
+    }
+
+    const d = new Date(value.replace(' ', 'T'));
+    if (isNaN(d)) return value;
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+  const handedOverDate =
+    (repairStatus >= 3 || j.status === 'completed')
+      ? fmtDateOnly(j.completed_at) || fmtDateOnly(j.updated_at)
+      : '';
+  const deliveryDate =
+    handedOverDate || fmtDateOnly(j.estimated_delivery) || 'NA';
   const money = v =>
     v != null && v !== '' ? `₹${Number(v).toLocaleString('en-IN')}` : '';
   const STAGE_LABEL = { 0: 'Not started', 1: 'Repair in progress', 2: 'Repair completed', 3: 'Handed over' };
   const prettify = s =>
     String(s || '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
       .replace(/_/g, ' ')
+      .replace(/-/g, ' ')
       .replace(/\b\w/g, c => c.toUpperCase());
+  const displayedDetailKeys = new Set([
+    'id',
+    'jobid',
+    'jobcode',
+    'memberid',
+    'customerid',
+    'status',
+    'completedstatus',
+    'estimatedcost',
+    'finalcost',
+    'estimateddelivery',
+    'approvalstatus',
+    'repaircategory',
+    'problemdescription',
+    'techniciannotes',
+    'customername',
+    'customermobile',
+    'customernumber',
+    'mobilenumber',
+    'alternate',
+    'alternatemobile',
+    'customeralternatenumber',
+    'aadhaarlast4',
+    'aadharnumber',
+    'address',
+    'devicebrand',
+    'brand',
+    'devicemodel',
+    'model',
+    'storage',
+    'color',
+    'imei1',
+    'imei2',
+    'unlockvalue',
+    'devicelock',
+    'accessmode',
+    'locktype',
+    'consentotp',
+    'conditions',
+    'screen',
+    'body',
+    'camera',
+    'speaker',
+    'chargingport',
+    'chargingpoint',
+    'battery',
+    'batterey',
+    'photos',
+    'frontimage',
+    'backimage',
+    'damageimage',
+    'frontphoto',
+    'backphoto',
+    'damagephoto',
+    'customerphoto',
+    'customerimage',
+    'createdat',
+    'updatedat',
+    'completedat',
+    'completeddate',
+    'completiondate',
+    'completedon',
+    'handoverat',
+    'handoverdate',
+    'handedoverat',
+    'deliveredat',
+  ]);
+  const isAlreadyDisplayed = (key, label) => {
+    const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+    return (
+      displayedDetailKeys.has(normalizedKey) ||
+      /^(front|back|damage)(image|photo|picture)(url)?$/.test(normalizedKey) ||
+      /(customer.*(photo|image)|(photo|image).*customer)/i.test(label)
+    );
+  };
+  const otherDetailRows = [];
+  const appendOtherDetail = (value, label, key = label) => {
+    if (isAlreadyDisplayed(key, label)) return;
+    if (value !== null && typeof value === 'object') {
+      const entries = Array.isArray(value)
+        ? value.map((item, index) => [`Item ${index + 1}`, item])
+        : Object.entries(value).filter(([childKey]) => !isAlreadyDisplayed(childKey, label));
+      if (entries.length === 0) {
+        if (Object.keys(value).length === 0) otherDetailRows.push([label, 'NA']);
+        return;
+      }
+      entries.forEach(([childKey, child]) => {
+        const childLabel = `${label} · ${prettify(childKey)}`;
+        if (
+          ['created_at', 'updated_at', 'completed_at'].includes(String(childKey).toLowerCase()) &&
+          child
+        ) {
+          appendOtherDetail(fmtDateTime(child), childLabel, childKey);
+        } else {
+          appendOtherDetail(child, childLabel, childKey);
+        }
+      });
+      return;
+    }
+
+    const text = value === null || value === undefined || value === ''
+      ? 'NA'
+      : typeof value === 'boolean'
+      ? value ? 'Yes' : 'No'
+      : String(value);
+    const aadhaarDigits = text.replace(/\D/g, '');
+    const isAadhaar = /(aadhaar|aadhar)/i.test(label) && aadhaarDigits.length >= 8;
+    const source = imageSource(value, label);
+    otherDetailRows.push([
+      label,
+      isAadhaar ? `•••• ${aadhaarDigits.slice(-4)}` : source ? '' : text,
+      source,
+    ]);
+  };
+  Object.entries(j).forEach(([key, value]) => {
+    if (key !== 'details_json' && isAlreadyDisplayed(key, prettify(key))) return;
+    const label = prettify(key);
+    if (key === 'details_json' && typeof value === 'string') {
+      try {
+        appendOtherDetail(JSON.parse(value), label);
+        return;
+      } catch (e) {
+        // Show the original field when it is not valid JSON.
+      }
+    }
+    if (['created_at', 'updated_at', 'completed_at'].includes(key.toLowerCase()) && value) {
+      appendOtherDetail(fmtDateTime(value), label);
+    } else {
+      appendOtherDetail(value, label);
+    }
+  });
+  if (otherDetailRows.length === 0) otherDetailRows.push(['Job data', 'NA']);
 
   return (
     <>
@@ -497,8 +731,8 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                     <Text style={styles.heroDeviceName} numberOfLines={2}>
                       {deviceName}
                     </Text>
-                    {!!deviceSpec && <Text style={styles.heroDeviceSpec}>{deviceSpec}</Text>}
-                    <Text style={styles.heroImei}>IMEI {j.imei1 || '—'}</Text>
+                    <Text style={styles.heroDeviceSpec}>{deviceSpec}</Text>
+                    <Text style={styles.heroImei}>IMEI {j.imei1 || 'NA'}</Text>
                     {j.status !== 'draft' && (
                       <View style={[styles.heroStatus, { backgroundColor: statusMeta.bg }]}>
                         <View style={[styles.heroStatusDot, { backgroundColor: statusMeta.color }]} />
@@ -553,8 +787,8 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                 <View style={styles.statRow}>
                   {[
                     ['Estimate', estimate, '#2563EB'],
-                    ['Final cost', money(j.final_cost) || '—', '#16A34A'],
-                    ['Delivery', fmtDateTime(j.estimated_delivery) || '—', '#D97706'],
+                    ['Final cost', money(j.final_cost) || 'NA', '#16A34A'],
+                    ['Delivery', deliveryDate, '#D97706'],
                   ].map(([label, value, color]) => (
                     <View key={label} style={styles.statCard}>
                       <Text style={styles.statLabel}>{label}</Text>
@@ -571,7 +805,14 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                     icon: '🛠️',
                     title: 'Repair',
                     rows: [
-                      ['Repair stage', STAGE_LABEL[repairStatus]],
+                      [
+                        'Repair stage',
+                        j.completed_status === undefined ||
+                        j.completed_status === null ||
+                        j.completed_status === ''
+                          ? 'NA'
+                          : STAGE_LABEL[repairStatus],
+                      ],
                       ['Approval', prettify(j.approval_status)],
                       ['Category', prettify(j.repair_category)],
                       ['Complaint', j.problem_description],
@@ -606,15 +847,16 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                     icon: '🔒',
                     title: 'Access & security',
                     rows: [
-                      ['Device lock', savedLock ? `${lockLabel} · ${savedLock}` : lockLabel],
+                      [
+                        'Device lock',
+                        savedLock && lockType !== 'unknown'
+                          ? `${lockLabel} · ${savedLock}`
+                          : lockLabel,
+                      ],
                       ['Consent OTP', parsed.consent_otp],
                     ],
                   },
                 ].map(section => {
-                  const rows = section.rows.filter(
-                    ([, v]) => v !== undefined && v !== null && v !== '',
-                  );
-                  if (rows.length === 0) return null;
                   return (
                     <View key={section.title} style={styles.sectionCard}>
                       <View style={styles.sectionHead}>
@@ -632,48 +874,78 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                           </TouchableOpacity>
                         )}
                       </View>
-                      {rows.map(([label, value], idx) => (
-                        <View key={label} style={[styles.kvRow, idx === rows.length - 1 && styles.kvRowLast]}>
+                      {section.rows.map(([label, value], idx) => (
+                        <View
+                          key={label}
+                          style={[styles.kvRow, idx === section.rows.length - 1 && styles.kvRowLast]}
+                        >
                           <Text style={styles.kvLabel}>{label}</Text>
-                          <Text style={styles.kvValue}>{String(value)}</Text>
+                          <Text style={styles.kvValue}>
+                            {value === null || value === undefined || value === '' ? 'NA' : String(value)}
+                          </Text>
                         </View>
                       ))}
+                      {section.title === 'Customer' && (
+                        <View style={styles.customerPhotoContainer}>
+                          <Text style={styles.customerPhotoLabel}>Customer photo</Text>
+                          {customerPhotoSource && !customerPhotoFailed ? (
+                            <Image
+                              source={customerPhotoSource}
+                              style={styles.customerPhoto}
+                              resizeMode="contain"
+                              onError={() => setCustomerPhotoFailed(true)}
+                            />
+                          ) : (
+                            <View style={styles.customerPhotoPlaceholder}>
+                              <Text style={styles.customerPhotoPlaceholderIcon}>🖼️</Text>
+                              <Text style={styles.customerPhotoPlaceholderText}>NA</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
                   );
                 })}
 
                 {/* Device condition as coloured chips */}
-                {conditions.length > 0 && (
-                  <View style={styles.sectionCard}>
-                    <View style={styles.sectionHead}>
-                      <View style={styles.sectionIcon}>
-                        <Text style={styles.sectionIconText}>🩺</Text>
-                      </View>
-                      <Text style={styles.sectionTitle}>Device condition</Text>
+                <View style={styles.sectionCard}>
+                  <View style={styles.sectionHead}>
+                    <View style={styles.sectionIcon}>
+                      <Text style={styles.sectionIconText}>🩺</Text>
                     </View>
+                    <Text style={styles.sectionTitle}>Device condition</Text>
+                  </View>
+                  {conditions.length > 0 ? (
                     <View style={styles.chipWrap}>
                       {conditions.map((c, idx) => {
                         const tone = conditionTone(c.condition_value);
                         return (
                           <View key={`${c.component}-${idx}`} style={[styles.condChip, { backgroundColor: tone.bg }]}>
-                            <Text style={styles.condName}>{prettify(c.component)}</Text>
-                            <Text style={[styles.condValue, { color: tone.fg }]}>{prettify(c.condition_value)}</Text>
+                            <Text style={styles.condName}>{prettify(c.component) || 'NA'}</Text>
+                            <Text style={[styles.condValue, { color: tone.fg }]}>
+                              {prettify(c.condition_value) || 'NA'}
+                            </Text>
                           </View>
                         );
                       })}
                     </View>
-                  </View>
-                )}
+                  ) : (
+                    <View style={[styles.kvRow, styles.kvRowLast]}>
+                      <Text style={styles.kvLabel}>Condition</Text>
+                      <Text style={styles.kvValue}>NA</Text>
+                    </View>
+                  )}
+                </View>
 
                 {/* Photos */}
-                {photos.length > 0 && (
-                  <View style={styles.sectionCard}>
-                    <View style={styles.sectionHead}>
-                      <View style={styles.sectionIcon}>
-                        <Text style={styles.sectionIconText}>🖼️</Text>
-                      </View>
-                      <Text style={styles.sectionTitle}>Device photos</Text>
+                <View style={styles.sectionCard}>
+                  <View style={styles.sectionHead}>
+                    <View style={styles.sectionIcon}>
+                      <Text style={styles.sectionIconText}>🖼️</Text>
                     </View>
+                    <Text style={styles.sectionTitle}>Device photos</Text>
+                  </View>
+                  {photos.length > 0 ? (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       {photos.map((p, idx) => (
                         <View key={`${p.type}-${idx}`} style={styles.photoItem}>
@@ -682,29 +954,54 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                         </View>
                       ))}
                     </ScrollView>
+                  ) : (
+                    <View style={[styles.kvRow, styles.kvRowLast]}>
+                      <Text style={styles.kvLabel}>Photos</Text>
+                      <Text style={styles.kvValue}>NA</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* All fields from the job record, including fields not shown above. */}
+                <View style={styles.sectionCard}>
+                  <View style={styles.sectionHead}>
+                    <View style={styles.sectionIcon}>
+                      <Text style={styles.sectionIconText}>📋</Text>
+                    </View>
+                    <Text style={styles.sectionTitle}>Other Details</Text>
                   </View>
-                )}
+                  {otherDetailRows.map(([label, value, source], idx) => (
+                    <View
+                      key={`${label}-${idx}`}
+                      style={[
+                        styles.otherDetailRow,
+                        source && styles.otherDetailImageRow,
+                        idx === otherDetailRows.length - 1 && styles.kvRowLast,
+                      ]}
+                    >
+                      <Text style={styles.otherDetailLabel}>{label}</Text>
+                      {source ? (
+                        <Image source={source} style={styles.otherDetailImage} resizeMode="cover" />
+                      ) : (
+                        <Text style={styles.otherDetailValue}>{value}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
 
                 {/* Timeline */}
-                {[
-                  ['Created', fmtDateTime(j.created_at)],
-                  ['Last updated', fmtDateTime(j.updated_at)],
-                  ['Completed', fmtDateTime(j.completed_at)],
-                ].some(([, v]) => v) && (
-                  <View style={styles.sectionCard}>
-                    <View style={styles.sectionHead}>
-                      <View style={styles.sectionIcon}>
-                        <Text style={styles.sectionIconText}>🕒</Text>
-                      </View>
-                      <Text style={styles.sectionTitle}>Timeline</Text>
+                <View style={styles.sectionCard}>
+                  <View style={styles.sectionHead}>
+                    <View style={styles.sectionIcon}>
+                      <Text style={styles.sectionIconText}>🕒</Text>
                     </View>
-                    {[
-                      ['Created', fmtDateTime(j.created_at)],
-                      ['Last updated', fmtDateTime(j.updated_at)],
-                      ['Completed', fmtDateTime(j.completed_at)],
-                    ]
-                      .filter(([, v]) => v)
-                      .map(([label, value], idx, arr) => (
+                    <Text style={styles.sectionTitle}>Timeline</Text>
+                  </View>
+                  {[
+                    ['Created', fmtDateTime(j.created_at) || 'NA'],
+                    ['Last updated', fmtDateTime(j.updated_at) || 'NA'],
+                    ['Completed', fmtDateTime(completedDate) || 'NA'],
+                  ].map(([label, value], idx, arr) => (
                         <View key={label} style={styles.tlRow}>
                           <View style={styles.tlRail}>
                             <View style={styles.tlDot} />
@@ -715,9 +1012,8 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                             <Text style={styles.tlValue}>{value}</Text>
                           </View>
                         </View>
-                      ))}
-                  </View>
-                )}
+                  ))}
+                </View>
               </>
             )}
 
@@ -844,6 +1140,12 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                 }}
               >
                 <Text style={styles.otpResend}>Resend OTP</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSkipOtp}
+                disabled={verifyingOtp || starting}
+              >
+                <Text style={styles.otpSkip}>Skip verification for now</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1223,6 +1525,7 @@ const styles = StyleSheet.create({
   otpConfirmText: { color: '#FFFFFF', fontWeight: '600' },
   otpDisabled: { opacity: 0.5 },
   otpResend: { textAlign: 'center', color: Colors.primary, fontWeight: '600', marginTop: 16 },
+  otpSkip: { textAlign: 'center', color: '#2F5DDC', fontWeight: '600', marginTop: 16 },
   buttonContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
@@ -1364,6 +1667,49 @@ const styles = StyleSheet.create({
   kvRowLast: { borderBottomWidth: 0 },
   kvLabel: { fontSize: 12, color: '#94A3B8', marginRight: 10 },
   kvValue: { flex: 1, fontSize: 13, fontWeight: '700', color: '#0F172A', textAlign: 'right' },
+  otherDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 7,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+  },
+  otherDetailLabel: { flex: 1, fontSize: 12, color: '#94A3B8', marginRight: 10 },
+  otherDetailValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'right',
+  },
+  otherDetailImageRow: { flexDirection: 'column' },
+  otherDetailImage: {
+    width: '100%',
+    height: 190,
+    marginTop: 8,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  customerPhotoContainer: { marginTop: 10 },
+  customerPhotoLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 8 },
+  customerPhoto: {
+    width: '100%',
+    height: 190,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  customerPhotoPlaceholder: {
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerPhotoPlaceholderIcon: { fontSize: 30 },
+  customerPhotoPlaceholderText: { fontSize: 13, color: '#94A3B8', marginTop: 8 },
 
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 },
   condChip: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, marginRight: 6, marginBottom: 6 },

@@ -26,6 +26,7 @@ import { fetchJobCounts } from '../../redux/slices/jobSheetSlice';
 import { getJson, postJson, setUserMenuIds } from '../../redux/slices/authSlice';
 import { ENDPOINTS, BASE_URL } from '../../Constants/config';
 import useRefresh from '../../utils/useRefresh';
+import { canAccessTechnicianMenu, toMenuIds } from '../../utils/technicianPermissions';
 // Re-enable together with the NFC option in the QR tile below.
 // import { showAppActionSheet } from '../../utils/appModal';
 
@@ -41,21 +42,6 @@ const COMMON_ACTIONS = [7, 4, 5, 6, 9];
 // (1 New job Sheet, 2 Purchase, 3 Sale, 4 Reports, 5 Customer Directory).
 const ACTION_MENU = { 1: 1, 2: 2, 3: 3, 8: 4, 11: 5 };
 
-// menu_ids may arrive as an array, a JSON string or a comma-separated string.
-const toMenuIds = value => {
-  if (value === undefined || value === null) return null;
-  let list = value;
-  if (typeof list === 'string') {
-    try {
-      list = JSON.parse(list);
-    } catch (e) {
-      list = list.split(',');
-    }
-  }
-  if (!Array.isArray(list)) return null;
-  return list.map(Number).filter(n => !Number.isNaN(n));
-};
-
 export default function TechnicianHomeScreen({ onNavigate, active: screenActive = true }) {
   const { tick, refreshControl } = useRefresh();
   const { t } = useI18n();
@@ -70,6 +56,8 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
 
   const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user);
+  const techId = user && user.tech_id;
+  const memberId = user && user.member_id;
 
   // Full profile (admin_details for admins, technician_details for technicians).
   const profile = useAccountProfile();
@@ -90,19 +78,19 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
   // A technician's assigned modules can change while they are signed in, so ask the
   // server again each time Home is shown and update the saved list.
   useEffect(() => {
-    if (!screenActive || !user || !user.tech_id || !user.member_id) return undefined;
+    if (!screenActive || !techId || !memberId) return undefined;
     let cancelled = false;
     (async () => {
       try {
         const { response, data } = await postJson(ENDPOINTS.GET_TECHNICIAN_PERMISSIONS, {
-          member_id: user.member_id,
-          tech_id: user.tech_id,
+          member_id: memberId,
+          tech_id: techId,
         });
         const rows = Array.isArray(data) ? data : data && data.data;
         if (cancelled || !response.ok || !Array.isArray(rows)) return;
-        const row = rows.find(r => r && String(r.id) === String(user.tech_id));
+        const row = rows.find(r => r && String(r.id) === String(techId));
         const ids = row ? toMenuIds(row.menu_ids) : null;
-        if (ids) dispatch(setUserMenuIds(ids));
+        dispatch(setUserMenuIds(ids || []));
       } catch (e) {
         // keep the modules from login
       }
@@ -110,7 +98,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
     return () => {
       cancelled = true;
     };
-  }, [dispatch, screenActive, tick, user && user.tech_id, user && user.member_id]);
+  }, [dispatch, screenActive, tick, techId, memberId]);
 
   // Home banners from GET /public_app/getbanners. Each row's picture URL may be
   // absolute or relative to the server; rows flagged deleted (d_in) are skipped.
@@ -124,7 +112,10 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
     let active = true;
     (async () => {
       try {
+        console.log('--------- BANNER EFFECT START ---------');
         const { response, data } = await getJson(ENDPOINTS.GET_BANNERS, undefined, 10000);
+        console.log('--------- BANNER API RESPONSE ---------', response);
+        console.log('--------- BANNER API DATA ---------', data);
         const rows = Array.isArray(data) ? data : data && (data.data || data.banners);
         if (!active) return;
         if (!response.ok || !Array.isArray(rows)) {
@@ -141,6 +132,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
               const uri = /^https?:\/\//.test(v) ? v : `${BASE_URL}${v.replace(/^\//, '')}`;
               return { id: `api-${row.id ?? i}`, image: { uri, cache: 'force-cache' } };
             });
+        console.log('---------banners----------------', next);
         // Only replace what's on screen when the list really changed.
         const same =
           bannerCache &&
@@ -246,11 +238,18 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
   // the common actions. Other accounts (no menu_ids) see everything.
   const menuIds = toMenuIds(user && user.menu_ids);
   const isStaff = !!(user && user.tech_id);
+  const canAccessJobs = canAccessTechnicianMenu(user, 1);
   const visibleActions = menuIds
     ? quickActions.filter(
         a => COMMON_ACTIONS.includes(a.id) || (ACTION_MENU[a.id] && menuIds.includes(ACTION_MENU[a.id])),
       )
-    : quickActions;
+    : quickActions.filter(a => !isStaff || a.id !== 1);
+  const allowedActions = canAccessJobs
+    ? visibleActions
+    : visibleActions.filter(action => action.id !== 1);
+  const allowedBanners = canAccessJobs
+    ? banners
+    : banners.filter(banner => banner.id !== 1 && banner.id !== 4);
 
   const fmt = n => String(n || 0);
   const todayStats = [
@@ -297,7 +296,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
 
         {/* Featured banners */}
         {bannersLoaded || apiBanners.length ? (
-          <BannerCarousel slides={apiBanners.length ? apiBanners : banners} />
+          <BannerCarousel slides={apiBanners.length ? apiBanners : allowedBanners} />
         ) : (
           <View style={styles.bannerPlaceholder} />
         )}
@@ -307,7 +306,7 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
           <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
           <View style={styles.sectionUnderline} />
           <View style={styles.quickActionsGrid}>
-            {visibleActions.map((action, index) => (
+            {allowedActions.map((action, index) => (
               <TouchableOpacity
                 key={action.id}
                 style={[
@@ -320,9 +319,9 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
                   if (action.id === 1) {
                     handleNavigation('createJobSheetStep1', { fresh: true });
                   } else if (action.id === 2) {
-                    handleNavigation('purchaseEntryStep1');
+                    handleNavigation('purchaseEntryStep1', { fresh: true });
                   } else if (action.id === 3) {
-                    handleNavigation('saleEntryStep1');
+                    handleNavigation('saleEntryStep1', { fresh: true });
                   } else if (action.id === 4) {
                     handleNavigation('deviceVerification');
                   } else if (action.id === 5) {
@@ -393,7 +392,11 @@ export default function TechnicianHomeScreen({ onNavigate, active: screenActive 
                 key={stat.id}
                 activeOpacity={0.85}
                 style={[styles.statCard, { backgroundColor: stat.tint, borderColor: stat.border }]}
-                onPress={() => handleNavigation('jobs')}
+                onPress={() =>
+                  handleNavigation('jobs', {
+                    initialFilter: stat.id === 1 ? 'today' : stat.id === 2 ? 'completed' : 'all',
+                  })
+                }
               >
                 <View style={[styles.statIconCircle, { backgroundColor: stat.accent }]}>
                   <Image source={stat.icon} style={styles.statIcon} />

@@ -14,6 +14,14 @@ import { getJson, postJson } from '../redux/slices/authSlice';
 // already gave us (the details endpoints can return only a few fields).
 const NO_USER = {};
 
+const phoneFrom = record => {
+  if (!record) return undefined;
+  const value = [record.mobile, record.mobile_number, record.phone_number, record.phone].find(
+    v => v !== undefined && v !== null && String(v).trim() !== '',
+  );
+  return value === undefined ? undefined : String(value).trim();
+};
+
 export default function useAccountProfile() {
   const user = useSelector(state => state.auth.user) || NO_USER;
   const isAdmin = user.role === 'admin';
@@ -42,17 +50,21 @@ export default function useAccountProfile() {
     };
   }, [lookupId, isAdmin]);
 
-  return useMemo(
-    () => ({
-      ...user,
-      ...Object.fromEntries(
-        Object.entries(profile || {}).filter(
-          ([, v]) => v !== null && v !== undefined && v !== '',
-        ),
+  return useMemo(() => {
+    const freshProfile = Object.fromEntries(
+      Object.entries(profile || {}).filter(
+        ([, v]) => v !== null && v !== undefined && v !== '',
       ),
-    }),
-    [user, profile],
-  );
+    );
+    const merged = { ...user, ...freshProfile };
+    // The authenticated login mobile identifies this account. Some details
+    // responses are incorrectly joined to another account and arrive later;
+    // keep the login number authoritative while still accepting profile aliases
+    // for older sessions that did not save a mobile field.
+    const phone = phoneFrom(user) || phoneFrom(profile);
+    if (phone) merged.mobile = phone;
+    return merged;
+  }, [user, profile]);
 }
 
 // The record shown on the Digital ID. For a normal account that is its own profile.
@@ -62,26 +74,47 @@ export function useMemberProfile() {
   const user = useSelector(state => state.auth.user) || NO_USER;
   const account = useAccountProfile();
   const [member, setMember] = useState(null);
+  const [memberLookupDone, setMemberLookupDone] = useState(false);
   const isStaff = !!user.tech_id;
+  // Old persisted sessions may contain the technician id copied into
+  // `member_id` by the previous login normalization. That is not a valid link
+  // between the independent technician and member tables.
+  const hasLinkedMember =
+    isStaff &&
+    !!user.member_id &&
+    String(user.member_id) !== String(user.tech_id);
 
   useEffect(() => {
-    if (!isStaff || !user.member_id) return undefined;
+    setMember(null);
+    if (!hasLinkedMember) {
+      setMemberLookupDone(true);
+      return undefined;
+    }
     let active = true;
+    setMemberLookupDone(false);
     (async () => {
       try {
         const { response, data } = await getJson(ENDPOINTS.GET_ALL_MEMBERS);
         const rows = Array.isArray(data) ? data : data && data.data;
-        if (!active || !response.ok || !Array.isArray(rows)) return;
+        if (!active) return;
+        if (!response.ok || !Array.isArray(rows)) {
+          setMemberLookupDone(true);
+          return;
+        }
         const row = rows.find(r => r && String(r.id) === String(user.member_id));
-        if (row) setMember({ ...row, member_id: user.member_id });
+        if (row) {
+          const phone = phoneFrom(row);
+          setMember({ ...row, ...(phone ? { mobile: phone } : {}), member_id: user.member_id });
+        }
+        setMemberLookupDone(true);
       } catch (e) {
-        // leave the card empty if the lookup fails
+        if (active) setMemberLookupDone(true);
       }
     })();
     return () => {
       active = false;
     };
-  }, [isStaff, user.member_id]);
+  }, [hasLinkedMember, user.member_id]);
 
-  return isStaff ? member || {} : account;
+  return isStaff ? member || (memberLookupDone ? account : {}) : account;
 }

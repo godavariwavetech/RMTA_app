@@ -87,6 +87,19 @@ export default function HandoverOTPScreen({ onNavigate }) {
     }
   };
 
+  const handleSkip = () => {
+    confirmAction({
+      title: 'Skip OTP verification?',
+      message: 'Hand the device over to the customer without verifying the OTP.',
+      confirmText: 'Skip & hand over',
+      onConfirm: () => {
+        if (onNavigate) {
+          onNavigate('replaceStack', { target: 'handoverCompleted', base: ['home', 'jobs'] });
+        }
+      },
+    });
+  };
+
   const handleResendOTP = async () => {
     setTimer(300);
     setIsResendDisabled(true);
@@ -153,6 +166,11 @@ export default function HandoverOTPScreen({ onNavigate }) {
             {/* Use Another Number Button */}
             <TouchableOpacity style={styles.anotherNumberButton}>
               <Text style={styles.anotherNumberButtonText}>Use another number</Text>
+            </TouchableOpacity>
+
+            {/* Skip Button */}
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+              <Text style={styles.skipButtonText}>Skip verification for now</Text>
             </TouchableOpacity>
 
             {/* Security Notice */}
@@ -279,6 +297,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#596579',
+  },
+  skipButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skipButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2F5DDC',
+    textDecorationLine: 'underline',
   },
   securityNotice: {
     flexDirection: 'row',

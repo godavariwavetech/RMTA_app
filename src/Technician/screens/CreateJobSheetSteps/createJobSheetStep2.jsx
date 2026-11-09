@@ -57,15 +57,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
 
   const handleContinue = () => {
     setTried(true);
-    // Device brand, model and IMEI 1 are required.
-    if (!deviceBrand.trim() || !deviceModel.trim() || !imei1.trim()) {
-      Alert.alert(
-        'Incomplete',
-        'Please enter the device brand, device model and IMEI 1.',
-      );
-      return;
-    }
-    if (!isValidImei(imei1)) {
+    if (imei1.trim() && !isValidImei(imei1)) {
       Alert.alert('Invalid IMEI', 'IMEI 1 must be a valid 15-digit IMEI number.');
       return;
     }
@@ -127,7 +119,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
               {/* Device Brand */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Device Brand <Text style={styles.required}>*</Text>
+                  Device Brand {/* <Text style={styles.required}>*</Text> */}
                 </Text>
                 <TextInput {...nav.props(0)}
                   style={[styles.input, tried && !String(deviceBrand).trim() && styles.inputError]}
@@ -141,7 +133,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
               {/* Device Model */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Device Model <Text style={styles.required}>*</Text>
+                  Device Model {/* <Text style={styles.required}>*</Text> */}
                 </Text>
                 <TextInput {...nav.props(1)}
                   style={[styles.input, tried && !String(deviceModel).trim() && styles.inputError]}
@@ -155,7 +147,7 @@ export default function CreateJobSheetStep2({ onNavigate }) {
               {/* IMEI 1 */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  IMEI 1 <Text style={styles.required}>*</Text>
+                  IMEI 1 {/* <Text style={styles.required}>*</Text> */}
                 </Text>
                 <TextInput {...nav.props(2)}
                   style={[styles.input, tried && !String(imei1).trim() && styles.inputError]}

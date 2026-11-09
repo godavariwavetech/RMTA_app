@@ -47,9 +47,9 @@ export default function TechnicianProfileScreen({ onNavigate }) {
   const techLocation = [d.city, d.state].filter(Boolean).join(', ');
   // The member code is empty for some accounts, so fall back to the member id.
   const techRmtaId = d.member_code
-    ? String(d.member_code)
+    ? `Member code: ${d.member_code}`
     : d.member_id
-    ? `Member ID: ${d.member_id}`
+    ? `Member code: ${d.member_id}`
     : '';
   const techValidUntil = d.valid_until;
   const isAdmin = user.role === 'admin';
@@ -93,11 +93,19 @@ export default function TechnicianProfileScreen({ onNavigate }) {
     }
   };
 
-  const handleLogout = async () => {
-    await dispatch(logoutUser()); // clear the persisted session
-    if (onNavigate) {
-      onNavigate('logout');
-    }
+  const handleLogout = () => {
+    confirmAction({
+      title: 'Log out?',
+      message: 'Are you sure you want to log out?',
+      confirmText: 'Log out',
+      destructive: true,
+      onConfirm: async () => {
+        await dispatch(logoutUser()); // clear the persisted session
+        if (onNavigate) {
+          onNavigate('logout');
+        }
+      },
+    });
   };
 
   // Account deletion (App Store requirement). Placeholder for now: confirms,
@@ -150,6 +158,12 @@ export default function TechnicianProfileScreen({ onNavigate }) {
       icon: require('../../Assets/icons/languageIcon.png'),
       title: t('language'),
       subtitle: LANGUAGES.find(l => l.code === language)?.native,
+    },
+    {
+      id: 5,
+      icon: require('../../Assets/icons/helpIcon.png'),
+      title: t('helpSupport'),
+      subtitle: t('rmtaOffice'),
     },
   ];
 
@@ -255,7 +269,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                     'Location',
                     [adminProfile.address, adminProfile.city, adminProfile.state].filter(Boolean).join(', '),
                   ],
-                  ['Member ID', user.member_id ? String(user.member_id) : ''],
+                  ['Member code', user.member_id ? String(user.member_id) : ''],
                 ]
                   .filter(([, value]) => !!value)
                   .map(([label, value], idx, rows) => (
@@ -305,6 +319,8 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                   } else if (item.id === 4) {
                     // Language
                     onNavigate('language', { fromSettings: true });
+                  } else if (item.id === 5) {
+                    onNavigate('helpSupport');
                   }
                 }}
               >

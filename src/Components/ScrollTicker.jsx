@@ -7,14 +7,91 @@ import { getJson } from '../redux/slices/authSlice';
 // Time the ticker takes to move one pixel: 16.7 ms is about 60 px per second.
 const SPEED_MS_PER_PX = 16.7;
 
+// One pass of the marquee: the content starts just past the right edge of the
+// viewport and slides left until it's fully past the left edge, then jumps
+// back to the right and repeats. On some Android devices/GPUs, that instant
+// jump in a native-driven transform renders one ghost frame where the old
+// (just-finished) position and the new (just-reset) position both show —
+// which is what looked like one message's text overlapping the next one's.
+// A brief fade to transparent timed around the jump hides that frame, so the
+// jump itself is never visible, regardless of which device is rendering it.
+function Marquee({ items, viewportWidth }) {
+  const [contentWidth, setContentWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(viewportWidth)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const stoppedRef = useRef(false);
+
+  useEffect(() => {
+    stoppedRef.current = false;
+    return () => {
+      stoppedRef.current = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!contentWidth || !viewportWidth) return undefined;
+    stoppedRef.current = false;
+    const travel = viewportWidth + contentWidth;
+    const duration = Math.max(4000, travel * SPEED_MS_PER_PX);
+    const FADE_MS = 180;
+
+    const runPass = () => {
+      if (stoppedRef.current) return;
+      // Jump happens here, while fully transparent.
+      translateX.setValue(viewportWidth);
+      opacity.setValue(0);
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: FADE_MS,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start();
+      Animated.timing(translateX, {
+        toValue: -contentWidth,
+        duration,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished || stoppedRef.current) return;
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: FADE_MS,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }).start(({ finished: faded }) => {
+          if (faded && !stoppedRef.current) runPass();
+        });
+      });
+    };
+
+    runPass();
+    return () => {
+      stoppedRef.current = true;
+    };
+  }, [contentWidth, viewportWidth, translateX, opacity]);
+
+  return (
+    <Animated.View
+      onLayout={event => setContentWidth(event.nativeEvent.layout.width)}
+      style={[styles.track, { opacity, transform: [{ translateX }] }]}
+    >
+      {items.map(item => (
+        <View key={item.id} style={styles.item}>
+          <Text style={styles.text}>{item.text}</Text>
+          <View style={styles.dot} />
+        </View>
+      ))}
+    </Animated.View>
+  );
+}
+
 // Scrolling announcement banner. Loads the messages from
 // GET /public_app/getscroll -> { data: [{ id, description, d_in, i_ts }] } and
 // scrolls them one after the other, each separated by a dot. While loading, or
 // if the call fails or returns nothing, `fallbackText` is shown instead.
 export default function ScrollTicker({ fallbackText, refreshKey = 0 }) {
   const [messages, setMessages] = useState([]);
-  const [contentWidth, setContentWidth] = useState(0);
-  const translateX = useRef(new Animated.Value(0)).current;
+  const [viewportWidth, setViewportWidth] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -36,52 +113,23 @@ export default function ScrollTicker({ fallbackText, refreshKey = 0 }) {
     };
   }, [refreshKey]);
 
-  // The track holds two identical copies side by side; sliding left by the
-  // width of one copy and restarting makes the loop seamless.
-  useEffect(() => {
-    if (!contentWidth) return undefined;
-    translateX.setValue(0);
-    const distance = contentWidth / 2;
-    const animation = Animated.loop(
-      Animated.timing(translateX, {
-        toValue: -distance,
-        duration: Math.max(6000, distance * SPEED_MS_PER_PX),
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [contentWidth, translateX]);
-
   const items = messages.length
     ? messages
     : [{ id: 'fallback', text: fallbackText }];
-
-  const renderCopy = copy => (
-    <View key={copy} style={styles.copy}>
-      {items.map(item => (
-        <View key={`${copy}-${item.id}`} style={styles.item}>
-          <Text style={styles.text}>{item.text}</Text>
-          <View style={styles.dot} />
-        </View>
-      ))}
-    </View>
-  );
+  const signature = items.map(item => `${item.id}:${item.text}`).join('|');
 
   return (
     <View style={styles.ticker}>
       <View style={styles.badge}>
         <Text style={styles.badgeIcon}>📢</Text>
       </View>
-      <View style={styles.viewport}>
-        <Animated.View
-          onLayout={event => setContentWidth(event.nativeEvent.layout.width)}
-          style={[styles.track, { transform: [{ translateX }] }]}
-        >
-          {renderCopy(0)}
-          {renderCopy(1)}
-        </Animated.View>
+      <View
+        style={styles.viewport}
+        onLayout={event => setViewportWidth(event.nativeEvent.layout.width)}
+      >
+        {viewportWidth > 0 && (
+          <Marquee key={signature} items={items} viewportWidth={viewportWidth} />
+        )}
       </View>
     </View>
   );
@@ -113,15 +161,13 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     overflow: 'hidden',
-    paddingLeft: 12,
   },
   track: {
+    position: 'absolute',
     flexDirection: 'row',
-    alignSelf: 'flex-start',
     flexShrink: 0,
     alignItems: 'center',
   },
-  copy: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   item: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   text: {
     color: '#FFFFFF',

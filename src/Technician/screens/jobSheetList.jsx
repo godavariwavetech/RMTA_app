@@ -10,8 +10,9 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   widthPercentageToDP as wp,
@@ -27,6 +28,7 @@ import { postJson } from '../../redux/slices/authSlice';
 import useRefresh from '../../utils/useRefresh';
 import PdfSizeModal from '../../Components/PdfSizeModal';
 import { shareJobSheetPdf } from '../../utils/jobSheetPdf';
+import { canAccessTechnicianMenu } from '../../utils/technicianPermissions';
 
 // DB status → display label + colour for the card badge.
 const STATUS_META = {
@@ -44,12 +46,27 @@ const STATUS_META = {
 const isJobCompleted = job =>
   Number(job.completed_status) === 3 || job.status === 'completed';
 
-export default function JobSheetList({ onNavigate }) {
+// Matches the Home screen's "Jobs today" count: created today, any status.
+const isJobToday = job => {
+  if (!job.created_at) return false;
+  const created = new Date(job.created_at);
+  if (Number.isNaN(created.getTime())) return false;
+  const now = new Date();
+  return (
+    created.getFullYear() === now.getFullYear() &&
+    created.getMonth() === now.getMonth() &&
+    created.getDate() === now.getDate()
+  );
+};
+
+export default function JobSheetList({ onNavigate, initialFilter }) {
+  const insets = useSafeAreaInsets();
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
+  const canCreateJobSheet = canAccessTechnicianMenu(user, 1);
   const [selectedNavItem, setSelectedNavItem] = useState('jobs');
   const [searchText, setSearchText] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('active');
+  const [selectedFilter, setSelectedFilter] = useState(initialFilter || 'active');
   const [jobSheets, setJobSheets] = useState([]);
   const [loading, setLoading] = useState(true);
   // "Share job sheet PDF": the card asks for a paper size, then the PDF is built and the
@@ -152,6 +169,7 @@ export default function JobSheetList({ onNavigate }) {
 
   const filters = [
     { id: 'all', label: 'All' },
+    { id: 'today', label: 'Today' },
     { id: 'active', label: 'Active' },
     { id: 'inprogress', label: 'In progress' },
     { id: 'ready', label: 'Ready' },
@@ -169,11 +187,16 @@ export default function JobSheetList({ onNavigate }) {
   };
 
   // Finished jobs live in their own "Completed jobs" section; the status
-  // filters below only apply to the jobs still in progress.
-  const completedJobs = jobSheets.filter(job => isJobCompleted(job) && matchesSearch(job));
+  // filters below only apply to the jobs still in progress. "Today" is a
+  // date filter rather than a status, so it narrows both sections instead of
+  // only the open one.
+  const completedJobs = jobSheets.filter(
+    job => isJobCompleted(job) && matchesSearch(job) && (selectedFilter !== 'today' || isJobToday(job)),
+  );
 
   const openJobMatches = (job, filterId) => {
     if (isJobCompleted(job)) return false;
+    if (filterId === 'today') return isJobToday(job);
     if (filterId === 'active') return job.status === 'open' || job.status === 'draft';
     if (filterId === 'inprogress') return job.status === 'in_progress';
     if (filterId === 'ready') return job.status === 'ready';
@@ -183,17 +206,19 @@ export default function JobSheetList({ onNavigate }) {
 
   const filteredJobs = jobSheets.filter(job => openJobMatches(job, selectedFilter) && matchesSearch(job));
 
-  // Counts shown on the filter chips (ignoring the search text).
-  const countFor = id =>
-    id === 'completed'
-      ? jobSheets.filter(isJobCompleted).length
-      : id === 'all'
-      ? jobSheets.length
-      : jobSheets.filter(job => openJobMatches(job, id)).length;
+  // Counts shown on the filter chips (ignoring the search text). "Today"
+  // counts every status, matching the Home screen's "Jobs today" card.
+  const countFor = id => {
+    if (id === 'completed') return jobSheets.filter(isJobCompleted).length;
+    if (id === 'all') return jobSheets.length;
+    if (id === 'today') return jobSheets.filter(isJobToday).length;
+    return jobSheets.filter(job => openJobMatches(job, id)).length;
+  };
 
   const showOpenSection = selectedFilter !== 'completed';
   const showCompletedSection =
-    (selectedFilter === 'all' || selectedFilter === 'completed') && completedJobs.length > 0;
+    (selectedFilter === 'all' || selectedFilter === 'completed' || selectedFilter === 'today') &&
+    completedJobs.length > 0;
 
   const renderJobItem = item => {
     const completed = isJobCompleted(item);
@@ -207,9 +232,16 @@ export default function JobSheetList({ onNavigate }) {
         ? `₹${Number(item.estimated_cost).toLocaleString('en-IN')}`
         : '';
     const summaryOf = () =>
-      Object.fromEntries(
-        Object.entries(item).filter(([, v]) => !(typeof v === 'string' && v.length > 300)),
-      );
+      ({
+        ...Object.fromEntries(
+          Object.entries(item).filter(([, v]) => !(typeof v === 'string' && v.length > 300)),
+        ),
+        customer_photo:
+          item.customer_photo ||
+          item.customer_image ||
+          (item.customer && (item.customer.customer_photo || item.customer.customer_image)) ||
+          null,
+      });
     return (
       <View key={item.id} style={styles.jobCard}>
         <View style={[styles.stripe, { backgroundColor: meta.color }]} />
@@ -218,7 +250,7 @@ export default function JobSheetList({ onNavigate }) {
             activeOpacity={0.85}
             onPress={() => {
               // Pass the list row too, so details can fall back to it if the
-              // details request fails. Long values (e.g. base64) are dropped.
+              // details request fails. Keep the customer photo even if it is base64.
               onNavigate('jobDetails', { jobId: item.id, jobSummary: summaryOf() });
             }}
           >
@@ -281,7 +313,7 @@ export default function JobSheetList({ onNavigate }) {
         barStyle="light-content"
         translucent={true}
       />
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         {/* Navy header with the title, a count and the search field */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
@@ -345,7 +377,7 @@ export default function JobSheetList({ onNavigate }) {
               <>
                 {showOpenSection && filteredJobs.map(renderJobItem)}
 
-                {showOpenSection && filteredJobs.length === 0 && (completedJobs.length === 0 || selectedFilter !== 'all') && (
+                {showOpenSection && filteredJobs.length === 0 && !showCompletedSection && (
                   <View style={styles.emptyBox}>
                     <View style={styles.emptyCircle}>
                       <Text style={styles.emptyGlyph}>🛠️</Text>
@@ -384,16 +416,24 @@ export default function JobSheetList({ onNavigate }) {
         </ScrollView>
 
         {/* New job sheet: a floating button */}
-        <View style={styles.newJobButtonContainer} pointerEvents="box-none">
-          <TouchableOpacity
-            style={styles.newJobButton}
-            activeOpacity={0.9}
-            onPress={() => onNavigate('createJobSheetStep1', { fresh: true })}
+        {canCreateJobSheet && (
+          <View
+            style={[
+              styles.newJobButtonContainer,
+              { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0) + 20 },
+            ]}
+            pointerEvents="box-none"
           >
-            <Text style={styles.newJobPlus}>＋</Text>
-            <Text style={styles.newJobButtonText}>New job sheet</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.newJobButton}
+              activeOpacity={0.9}
+              onPress={() => onNavigate('createJobSheetStep1', { fresh: true })}
+            >
+              <Text style={styles.newJobPlus}>＋</Text>
+              <Text style={styles.newJobButtonText}>New job sheet</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <PdfSizeModal
           visible={pdfJob !== null}
@@ -546,11 +586,10 @@ const styles = StyleSheet.create({
 
   bottomSpacer: { height: 110 },
   newJobButtonContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 22,
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    backgroundColor: '#F4F6FB',
   },
   newJobButton: {
     flexDirection: 'row',

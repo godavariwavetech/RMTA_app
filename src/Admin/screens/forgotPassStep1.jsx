@@ -33,7 +33,7 @@ export default function ForgotPassStep1({ onNavigate }) {
   };
 
   const handleSendVerificationCode = async () => {
-    if (!onNavigate) return;
+    if (!onNavigate || sending) return;
     const mobile = mobileNumber.replace(/\D/g, '');
     if (!isValidIndianMobileNumber(mobile)) {
       alert('Please enter a valid 10-digit Indian mobile number');
@@ -104,7 +104,7 @@ export default function ForgotPassStep1({ onNavigate }) {
 
             {/* Mobile Number Input */}
             <View style={styles.mobileSection}>
-              <Text style={styles.mobileLabel}>Registered mobile number <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.mobileLabel}>Registered mobile number {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={styles.mobileNumberContainer}>
                 <TextInput
                   style={styles.mobileNumber}

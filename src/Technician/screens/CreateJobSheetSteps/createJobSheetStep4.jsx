@@ -72,19 +72,6 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
   const handleContinue = () => {
     setTried(true);
-    // All fields are required before moving on.
-    if (
-      selectedCategories.length === 0 ||
-      !problemDescription.trim() ||
-      !estimatedCost.trim() ||
-      !estimatedDelivery.trim()
-    ) {
-      Alert.alert(
-        'Incomplete',
-        'Please select a repair category and fill in the problem description, estimated cost and delivery.',
-      );
-      return;
-    }
     const repair = buildRepair();
     dispatch(updateJobDraft({ repair }));
     console.log('[JobSheet][Step4] repair captured →', repair);
@@ -131,7 +118,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Repair Category */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Repair Category <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Repair Category {/* <Text style={styles.required}>*</Text> */}</Text>
               <Text style={styles.multiHint}>Select all that apply</Text>
               <View style={styles.categoryContainer}>
                 {repairCategories.map((category) => {
@@ -155,7 +142,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Problem Description */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Problem Description <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Problem Description {/* <Text style={styles.required}>*</Text> */}</Text>
               <TextInput {...nav.props(0)}
                 style={[styles.input, styles.descriptionInput, tried && !String(problemDescription).trim() && styles.inputError]}
                 placeholder="Describe the problem"
@@ -169,7 +156,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Estimated Repair Cost */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Estimated Repair Cost <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Estimated Repair Cost {/* <Text style={styles.required}>*</Text> */}</Text>
               <TextInput {...nav.props(1)}
                 style={[styles.input, tried && !String(estimatedCost).trim() && styles.inputError]}
                 placeholder="Enter estimated cost"
@@ -182,7 +169,7 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
             {/* Estimated Delivery */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Estimated Delivery <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>Estimated Delivery {/* <Text style={styles.required}>*</Text> */}</Text>
               <TouchableOpacity
                 style={[styles.input, styles.dateInput]}
                 activeOpacity={0.7}

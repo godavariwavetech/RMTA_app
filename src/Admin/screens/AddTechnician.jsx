@@ -167,7 +167,7 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Full Name */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Full name <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Full name {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.fullName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -182,7 +182,7 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Mobile Number */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Mobile number <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Mobile number {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.mobileNumber).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -198,7 +198,7 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Shop / Business Name */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop / Business name <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Shop / Business name {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.shopName).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -213,7 +213,7 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Shop Address */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Shop address <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Shop address {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, styles.textAreaWrapper, tried && !String(form.shopAddress).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={[styles.input, styles.textArea]}
@@ -231,7 +231,7 @@ export default function AddTechnician({ onNavigate }) {
             {/* City & State Row */}
             <View style={styles.rowContainer}>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>City <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.fieldLabel}>City {/* <Text style={styles.required}>*</Text> */}</Text>
                 <View style={[styles.inputWrapper, tried && !String(form.city).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
@@ -244,7 +244,7 @@ export default function AddTechnician({ onNavigate }) {
                 </View>
               </View>
               <View style={styles.rowFieldContainer}>
-                <Text style={styles.fieldLabel}>State <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.fieldLabel}>State {/* <Text style={styles.required}>*</Text> */}</Text>
                 <View style={[styles.inputWrapper, tried && !String(form.state).trim() && styles.inputWrapperError]}>
                   <TextInput
                     style={styles.input}
@@ -260,7 +260,7 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Password */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Password <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Password {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.password).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
@@ -289,7 +289,7 @@ export default function AddTechnician({ onNavigate }) {
 
             {/* Confirm Password */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Confirm password <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>Confirm password {/* <Text style={styles.required}>*</Text> */}</Text>
               <View style={[styles.inputWrapper, tried && !String(form.confirmPassword).trim() && styles.inputWrapperError]}>
                 <TextInput
                   style={styles.input}
