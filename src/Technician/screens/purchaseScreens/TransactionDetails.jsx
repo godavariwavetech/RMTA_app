@@ -61,6 +61,7 @@ const HIDDEN = [
   'purchase_id', 'verify_otp', 'd_in', 'available',
   // Shown as actual photo previews above (see `photos`), not as raw URL text.
   'frontimage', 'backimage', 'baackimage', 'billimage', 'device_image',
+  'condition_images',
 ];
 const MONEY = ['purchase_price', 'purchaseprice', 'sale_price', 'price', 'amount'];
 
@@ -122,6 +123,7 @@ export default function TransactionDetails({ onNavigate, type = 'purchases', ite
     .filter(
       k =>
         !HIDDEN.includes(k) &&
+        !/(front|back|damage|bill|device)_?(image|photo|picture)$/i.test(k) &&
         raw[k] !== null &&
         raw[k] !== '' &&
         raw[k] !== undefined &&
@@ -140,12 +142,47 @@ export default function TransactionDetails({ onNavigate, type = 'purchases', ite
     keys: [],
     test: sec.test,
   }));
-  const other = { title: 'Other details', keys: [] };
   rows.forEach(k => {
     const sec = sections.find(x => x.test.test(k));
-    (sec || other).keys.push(k);
+    if (sec) sec.keys.push(k);
   });
-  const visibleSections = [...sections, other].filter(x => x.keys.length > 0);
+  const visibleSections = sections.filter(x => x.keys.length > 0);
+  const otherRows = [];
+  const appendOtherValue = (key, value, label = prettify(key)) => {
+    if (
+      HIDDEN.includes(key) ||
+      /(front|back|damage|bill|device)_?(image|photo|picture)$/i.test(key)
+    ) {
+      return;
+    }
+    if (value !== null && typeof value === 'object') {
+      const nestedEntries = Array.isArray(value)
+        ? value.map((child, index) => [`Item ${index + 1}`, child])
+        : Object.entries(value);
+      if (nestedEntries.length === 0) {
+        otherRows.push([label, 'NA']);
+        return;
+      }
+      nestedEntries.forEach(([childKey, childValue]) => {
+        appendOtherValue(childKey, childValue, `${label} · ${prettify(childKey)}`);
+      });
+      return;
+    }
+    const formattedValue =
+      value === null || value === undefined || value === ''
+        ? 'NA'
+        : typeof value === 'boolean'
+        ? value
+          ? 'Yes'
+          : 'No'
+        : formatValue(key, value);
+    otherRows.push([label, formattedValue]);
+  };
+  Object.keys(raw).forEach(key => {
+    if (HIDDEN.includes(key) || SECTIONS.some(section => section.test.test(key))) return;
+    appendOtherValue(key, raw[key]);
+  });
+  if (otherRows.length === 0) otherRows.push(['Other details', 'NA']);
 
   const statusText = item?.status || formatValue('status', raw.status || '');
   const amountText = item?.amount || '';
@@ -208,6 +245,21 @@ export default function TransactionDetails({ onNavigate, type = 'purchases', ite
                   </View>
                 </View>
               ))}
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Other details</Text>
+                <View style={styles.card}>
+                  {otherRows.map(([label, value], index) => (
+                    <View
+                      key={`${label}-${index}`}
+                      style={[styles.row, index === otherRows.length - 1 && styles.lastRow]}
+                    >
+                      <Text style={styles.label}>{label}</Text>
+                      <Text style={styles.value}>{value}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </View>
           ) : (
             <Text style={styles.empty}>No details available</Text>
