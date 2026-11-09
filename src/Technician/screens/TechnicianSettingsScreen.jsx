@@ -8,6 +8,7 @@ import {
   Image,
   StatusBar,
   Switch,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,6 +23,7 @@ import { useI18n, LANGUAGES } from '../../i18n';
 import { logoutUser } from '../../redux/slices/authSlice';
 import { getAppLockEnabled, isLockAvailable, setAppLockEnabled } from '../../utils/appLock';
 import { confirmAction } from '../../utils/appModal';
+import { TERMS_URL } from '../../Constants/config';
 
 export default function TechnicianSettingsScreen({ onNavigate }) {
   const { t, language } = useI18n();
@@ -112,6 +114,16 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
       subtitle: t('rmtaOffice'),
       type: 'action',
       onPress: () => onNavigate && onNavigate('helpSupport'),
+    },
+    {
+      id: 7,
+      icon: require('../../Assets/icons/helpIcon.png'),
+      title: 'Terms & Conditions',
+      type: 'action',
+      onPress: () =>
+        Linking.openURL(TERMS_URL).catch(() =>
+          alert('Could not open the Terms & Conditions page.'),
+        ),
     },
   ];
 

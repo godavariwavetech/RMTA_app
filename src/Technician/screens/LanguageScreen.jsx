@@ -18,10 +18,13 @@ export default function LanguageScreen({ onNavigate, fromSettings = false }) {
   // The screen's own text previews the language that is currently selected.
   const copy = translations[selected] || translations.en;
 
+  // Both entry points (intro screen and Settings / Profile) push this screen onto
+  // history, so going back is always a pop. This also avoids stacking a duplicate 'intro'.
+  const goBack = () => onNavigate && onNavigate('goBack');
+
   const handleContinue = async () => {
     await setLanguage(selected);
-    if (!onNavigate) return;
-    onNavigate(fromSettings ? 'goBack' : 'intro');
+    goBack();
   };
 
   return (
@@ -30,14 +33,14 @@ export default function LanguageScreen({ onNavigate, fromSettings = false }) {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         {/* Hero */}
         <View style={styles.hero}>
-          {fromSettings && (
-            <TouchableOpacity
-              onPress={() => onNavigate && onNavigate('goBack')}
-              style={styles.backButton}
-            >
-              <Text style={styles.backButtonText}>‹</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={goBack}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Text style={styles.backButtonText}>‹</Text>
+          </TouchableOpacity>
           <Text style={styles.title}>{copy.chooseLanguage}</Text>
           <Text style={styles.subtitle}>{copy.chooseLanguageSub}</Text>
         </View>

@@ -10,6 +10,9 @@
 export const BASE_URL = 'https://rmtatech.com:1810/';
 // export const BASE_URL= 'https://rmtatech.com:1810/';
 
+// Public Terms & Conditions page, opened in the device browser from Register and Settings.
+export const TERMS_URL = 'https://rmtatech.com/terms';
+
 // Default network request timeout (ms) — fail fast instead of hanging.
 // Raised from 10s: this backend is occasionally slow enough to exceed 10s
 // even on requests that ultimately succeed (DB write commits before the
@@ -53,6 +56,7 @@ export const ENDPOINTS = {
   RECENT_ACTIVITY: 'public_app/recent_activity',
   IMEI_CHECK: 'public_app/imei_check',
   REPAIR_REPORT: 'public_app/repair_report',
+  GET_REPORTS: 'public_app/getreports',
   ADMIN_REPAIR_REPORT: 'public_app/admin_repair_report',
   ADMIN_JOBS_LIST: 'public_app/admin_jobs_list',
   ADMIN_TRADE_MONITORING: 'public_app/admin_trade_monitoring',
@@ -95,4 +99,4 @@ export const ENDPOINTS = {
 export const buildUrl = endpoint =>
   /^https?:\/\//i.test(endpoint || '') ? endpoint : `${BASE_URL}${endpoint}`;
 
-export default { BASE_URL, REQUEST_TIMEOUT, ENDPOINTS, buildUrl };
+export default { BASE_URL, REQUEST_TIMEOUT, ENDPOINTS, TERMS_URL, buildUrl };

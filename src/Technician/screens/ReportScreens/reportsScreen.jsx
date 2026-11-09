@@ -18,41 +18,70 @@ import {
 import { useSelector } from 'react-redux';
 
 import { ENDPOINTS } from '../../../Constants/config';
+import { Colors } from '../../../Constants/Colors';
+import CalendarPicker from '../../components/CalendarPicker';
 import { postJson } from '../../../redux/slices/authSlice';
 import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { showAppModal } from '../../../utils/appModal';
 import useRefresh from '../../../utils/useRefresh';
 
-// Static sample figures for the "Monthly overview" graph (revenue in ₹ thousands). Not from the
-// server: it is a fixed placeholder chart.
-const MONTHLY_SAMPLE = [
-  { month: 'May', value: 42 },
-  { month: 'Jun', value: 58 },
-  { month: 'Jul', value: 36 },
-  { month: 'Aug', value: 71 },
-  { month: 'Sep', value: 64 },
-  { month: 'Oct', value: 88 },
-];
-const MONTHLY_MAX = 100; // top of the graph's scale
-const MONTHLY_TICKS = [100, 75, 50, 25, 0];
+// Last N months as { label, from, to } (YYYY-MM-DD). The current month runs up to today.
+const lastMonths = n => {
+  const today = new Date();
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const first = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+    const end = i === 0 ? today : last;
+    out.push({
+      label: first.toLocaleDateString('en-GB', { month: 'short' }),
+      from: ymd(first),
+      to: ymd(end),
+    });
+  }
+  return out;
+};
+
+// Dates are YYYY-MM-DD strings, which is the format the getreports API takes.
+const pad2 = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseYmd = s => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim());
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.getMonth() === Number(m[2]) - 1 ? d : null;
+};
+const rangeFor = id => {
+  const today = new Date();
+  if (id === 'week') {
+    return { from: ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6)), to: ymd(today) };
+  }
+  // Default and 'month': 1st of the current month up to today.
+  return { from: ymd(new Date(today.getFullYear(), today.getMonth(), 1)), to: ymd(today) };
+};
 
 export default function ReportsScreen({ onNavigate }) {
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
-  const [selectedPeriod, setSelectedPeriod] = useState('week');
+  // Opens on the current month. Week / Month set the range; Custom lets the user type one.
+  const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [range, setRange] = useState(() => rangeFor('month'));
+  const [customFrom, setCustomFrom] = useState(range.from);
+  const [customTo, setCustomTo] = useState(range.to);
   const [selectedNavItem, setSelectedNavItem] = useState('reports');
   const [report, setReport] = useState(null);
 
-  // Load the repair report for the selected period (re-fetch when it changes).
+  // Load the report for the selected date range (re-fetch when it changes).
   useEffect(() => {
     let active = true;
     (async () => {
       if (!user.member_id) return;
       try {
-        const { response, data } = await postJson(ENDPOINTS.REPAIR_REPORT, {
+        const { response, data } = await postJson(ENDPOINTS.GET_REPORTS, {
           member_id: user.member_id,
-          period: selectedPeriod === 'month' ? 'month' : 'week',
+          from_date: range.from,
+          to_date: range.to,
         });
         if (active && response.ok && data && data.success !== false) {
           setReport(data.data);
@@ -64,7 +93,58 @@ export default function ReportsScreen({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [user.member_id, selectedPeriod, tick]);
+  }, [user.member_id, range.from, range.to, tick]);
+
+  // Monthly overview: one getreports call per month for the last 6 months, in parallel.
+  const [monthly, setMonthly] = useState([]);
+  useEffect(() => {
+    let active = true;
+    if (!user.member_id) return undefined;
+    Promise.all(
+      lastMonths(6).map(async m => {
+        try {
+          const { response, data } = await postJson(ENDPOINTS.GET_REPORTS, {
+            member_id: user.member_id,
+            from_date: m.from,
+            to_date: m.to,
+          });
+          const ok = response.ok && data && data.success !== false;
+          return { label: m.label, value: ok ? Number(data.data && data.data.total_job_sheets) || 0 : 0 };
+        } catch (e) {
+          return { label: m.label, value: 0 };
+        }
+      }),
+    ).then(rows => {
+      if (active) setMonthly(rows);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user.member_id, tick]);
+
+  const monthMax = Math.max(1, ...monthly.map(m => m.value));
+  const monthTicks = [monthMax, Math.round(monthMax * 0.75), Math.round(monthMax * 0.5), Math.round(monthMax * 0.25), 0];
+  const bestMonth = monthly.reduce((best, m) => (m.value > 0 && (!best || m.value > best.value) ? m : best), null);
+  const bestLabel = bestMonth ? bestMonth.label : '';
+
+  const handlePeriodPress = id => {
+    setSelectedPeriod(id);
+    if (id !== 'custom') setRange(rangeFor(id));
+  };
+
+  const applyCustomRange = () => {
+    const from = parseYmd(customFrom);
+    const to = parseYmd(customTo);
+    if (!from || !to) {
+      showAppModal('Invalid date', 'Enter both dates as YYYY-MM-DD, for example 2026-11-01.');
+      return;
+    }
+    if (from > to) {
+      showAppModal('Invalid range', 'The from date must be on or before the to date.');
+      return;
+    }
+    setRange({ from: customFrom.trim(), to: customTo.trim() });
+  };
 
   const handleNavigation = (screen) => {
     setSelectedNavItem(screen);
@@ -76,11 +156,11 @@ export default function ReportsScreen({ onNavigate }) {
   // Share the current report as text via the native share sheet.
   const handleExportReport = async () => {
     try {
-      const chartRows = reportData.weekRepairs.map(r => `<tr><td>${r.day}</td><td>${r.value}</td></tr>`).join('');
+      const chartRows = reportData.statusBars.map(r => `<tr><td>${r.day}</td><td>${r.value}</td></tr>`).join('');
       const file = await generatePDF({
         fileName: `RMTA_Repair_Report_${Date.now()}`,
         base64: false,
-        html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Repair Report</h1><p>${user.shop_name || 'RMTA'} - ${reportData.period}</p><h2>Summary</h2><p>Repair revenue: ${reportData.repairRevenue}</p><p>Jobs closed: ${reportData.jobsClosed}</p><p>${reportData.repairsCompleted} repairs completed (${reportData.weekGrowth >= 0 ? '+' : ''}${reportData.weekGrowth}%)</p><h2>Daily repairs</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Day</th><th>Repairs</th></tr>${chartRows}</table></body></html>`,
+        html: `<html><body style="font-family:Arial;padding:28px;color:#1f2937"><h1>RMTA Repair Report</h1><p>${user.shop_name || 'RMTA'} - ${reportData.period}</p><h2>Summary</h2><p>Total jobs: ${reportData.totalJobs}</p><p>Jobs closed: ${reportData.jobsClosed}</p><h2>Jobs by status</h2><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><tr><th>Status</th><th>Jobs</th></tr>${chartRows}</table></body></html>`,
       });
       if (!file?.filePath) throw new Error('PDF file was not created.');
       await Share.open({ title: 'RMTA Repair Report', url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`, type: 'application/pdf', failOnCancel: false });
@@ -89,44 +169,32 @@ export default function ReportsScreen({ onNavigate }) {
     }
   };
 
-  // Build the last-7-days chart (weekday labels), filling missing days with 0.
-  const buildWeek = rows => {
-    const map = {};
-    (rows || []).forEach(r => { map[r.d] = Number(r.c) || 0; });
-    const out = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const dt = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-      out.push({ day: dt.toLocaleDateString('en-US', { weekday: 'short' }), value: map[key] || 0 });
-    }
-    return out;
-  };
-
-  const weekRepairs = buildWeek(report && report.chart_rows);
-  const peak = Math.max(...weekRepairs.map(r => r.value));
-  const repairsCompleted = weekRepairs.reduce((s, r) => s + r.value, 0);
-  const prevWeek = (report && report.prev_week_closed) || 0;
-  const weekGrowth = prevWeek > 0
-    ? Math.round(((repairsCompleted - prevWeek) / prevWeek) * 100)
-    : (repairsCompleted > 0 ? 100 : 0);
+  // getreports returns counts for the range (no per-day rows), so the bars are job
+  // statuses: New, Working, Completed, Delivered.
+  const count = v => Number(v) || 0;
+  const statusBars = [
+    { day: 'New', value: count(report && report.new_jobs) },
+    { day: 'Working', value: count(report && report.working_jobs) },
+    { day: 'Completed', value: count(report && report.completed_jobs) },
+    { day: 'Delivered', value: count(report && report.delivered_jobs) },
+  ];
+  const peak = Math.max(...statusBars.map(r => r.value));
+  const totalJobs = count(report && report.total_job_sheets);
 
   const fmtRange = () => {
-    const today = new Date();
+    const from = parseYmd(range.from);
+    const to = parseYmd(range.to);
+    if (!from || !to) return '';
     const fmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    const spanDays = selectedPeriod === 'month' ? 29 : 6;
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - spanDays);
-    return `${fmt(start)} – ${fmt(today)} ${today.getFullYear()}`;
+    return `${fmt(from)} – ${fmt(to)} ${to.getFullYear()}`;
   };
 
   const reportData = {
     period: fmtRange(),
-    type: 'Live data',
-    repairRevenue: `₹${Number((report && report.repair_revenue) || 0).toLocaleString('en-IN')}`,
-    jobsClosed: (report && report.jobs_closed) || 0,
-    weekRepairs,
-    repairsCompleted,
-    weekGrowth,
+    totalJobs,
+    jobsClosed: count(report && report.completed_jobs),
+    statusBars,
+    peak,
   };
 
   const periodOptions = [
@@ -140,13 +208,13 @@ export default function ReportsScreen({ onNavigate }) {
       id: 1,
       icon: require('../../../Assets/bottomTabIcons/reports.png'),
       title: 'Repair performance',
-      subtitle: 'Completion, turnaround and revenue',
+      subtitle: `${count(report && report.completed_jobs)} completed · ${count(report && report.working_jobs)} working`,
     },
     {
       id: 2,
       icon: require('../../../Assets/icons/wallet.png'),
       title: 'Trade summary',
-      subtitle: 'Purchases and sales',
+      subtitle: `${count(report && report.total_purchases)} purchases · ${count(report && report.total_sales)} sales`,
     },
   ];
 
@@ -163,7 +231,7 @@ export default function ReportsScreen({ onNavigate }) {
   };
 
   // Calculate max value for chart scaling (min 1 to avoid divide-by-zero).
-  const maxValue = Math.max(1, ...reportData.weekRepairs.map(r => r.value));
+  const maxValue = Math.max(1, ...reportData.statusBars.map(r => r.value));
 
   return (
     <>
@@ -193,7 +261,7 @@ export default function ReportsScreen({ onNavigate }) {
               <View>
                 <Text style={styles.shopTitle}>Your shop at a glance</Text>
                 <Text style={styles.shopSubtitle}>
-                  {reportData.period} · {reportData.type}
+                  {reportData.period}
                 </Text>
               </View>
             </View>
@@ -207,7 +275,7 @@ export default function ReportsScreen({ onNavigate }) {
                     styles.periodButton,
                     selectedPeriod === option.id && styles.periodButtonActive,
                   ]}
-                  onPress={() => setSelectedPeriod(option.id)}
+                  onPress={() => handlePeriodPress(option.id)}
                 >
                   <Text
                     style={[
@@ -221,11 +289,22 @@ export default function ReportsScreen({ onNavigate }) {
               ))}
             </View>
 
+            {/* Custom date range */}
+            {selectedPeriod === 'custom' && (
+              <View style={styles.customRange}>
+                <CalendarPicker label="From" value={customFrom} onChange={setCustomFrom} />
+                <CalendarPicker label="To" value={customTo} onChange={setCustomTo} />
+                <TouchableOpacity style={styles.customApply} onPress={applyCustomRange} activeOpacity={0.85}>
+                  <Text style={styles.customApplyText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Stats Cards */}
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Repair revenue</Text>
-                <Text style={styles.statValue}>{reportData.repairRevenue}</Text>
+                <Text style={styles.statLabel}>Total jobs</Text>
+                <Text style={styles.statValue}>{reportData.totalJobs}</Text>
               </View>
 
               <View style={styles.statCard}>
@@ -237,12 +316,12 @@ export default function ReportsScreen({ onNavigate }) {
 
           {/* Repairs This Week Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Repairs this week</Text>
+            <Text style={styles.sectionTitle}>Jobs by status</Text>
 
             {/* Bar Chart */}
             <View style={styles.chartContainer}>
               <View style={styles.chartBars}>
-                {reportData.weekRepairs.map((item, index) => (
+                {reportData.statusBars.map((item, index) => (
                   <View key={index} style={styles.barWrapper}>
                     <View style={styles.barContainer}>
                       <View
@@ -264,49 +343,45 @@ export default function ReportsScreen({ onNavigate }) {
             {/* Chart Footer Info */}
             <View style={styles.chartFooter}>
               <Text style={styles.chartFooterText}>
-                <Text style={styles.repairsText}>{reportData.repairsCompleted} repairs completed</Text>
-                <Text style={styles.growthText}> · {reportData.weekGrowth >= 0 ? '+' : ''}{reportData.weekGrowth}% this week</Text>
+                <Text style={styles.repairsText}>{reportData.totalJobs} jobs in this period</Text>
               </Text>
             </View>
           </View>
 
-          {/* Monthly overview: a static bar graph (sample data) */}
+          {/* Monthly overview: jobs per month for the last 6 months, from getreports */}
           <View style={styles.section}>
             <View style={styles.mvHeader}>
               <Text style={styles.sectionTitle}>Monthly overview</Text>
-              <View style={styles.mvBadge}>
-                <Text style={styles.mvBadgeText}>Sample data</Text>
-              </View>
             </View>
-            <Text style={styles.mvSub}>Revenue by month, in ₹ thousands</Text>
+            <Text style={styles.mvSub}>Jobs created each month, last 6 months</Text>
 
             <View style={styles.mvCard}>
               <View style={styles.mvPlot}>
                 {/* Y axis labels and grid lines */}
                 <View style={styles.mvAxis}>
-                  {MONTHLY_TICKS.map(tick => (
-                    <Text key={tick} style={styles.mvTick}>
+                  {monthTicks.map((tick, i) => (
+                    <Text key={`${tick}-${i}`} style={styles.mvTick}>
                       {tick}
                     </Text>
                   ))}
                 </View>
                 <View style={styles.mvBarsArea}>
                   <View style={styles.mvGrid} pointerEvents="none">
-                    {MONTHLY_TICKS.map(tick => (
-                      <View key={tick} style={styles.mvGridLine} />
+                    {monthTicks.map((tick, i) => (
+                      <View key={`${tick}-${i}`} style={styles.mvGridLine} />
                     ))}
                   </View>
                   <View style={styles.mvBars}>
-                    {MONTHLY_SAMPLE.map(item => {
-                      const best = item.value === Math.max(...MONTHLY_SAMPLE.map(m => m.value));
+                    {monthly.map(item => {
+                      const best = item.value > 0 && item.value === monthMax;
                       return (
-                        <View key={item.month} style={styles.mvBarCol}>
+                        <View key={item.label} style={styles.mvBarCol}>
                           <Text style={[styles.mvValue, best && styles.mvValueBest]}>{item.value}</Text>
                           <View style={styles.mvBarTrack}>
                             <View
                               style={[
                                 styles.mvBar,
-                                { height: `${(item.value / MONTHLY_MAX) * 100}%` },
+                                { height: `${(item.value / monthMax) * 100}%` },
                                 best && styles.mvBarBest,
                               ]}
                             />
@@ -321,9 +396,9 @@ export default function ReportsScreen({ onNavigate }) {
               <View style={styles.mvXRow}>
                 <View style={styles.mvAxisSpacer} />
                 <View style={styles.mvXLabels}>
-                  {MONTHLY_SAMPLE.map(item => (
-                    <Text key={item.month} style={styles.mvXLabel}>
-                      {item.month}
+                  {monthly.map(item => (
+                    <Text key={item.label} style={styles.mvXLabel}>
+                      {item.label}
                     </Text>
                   ))}
                 </View>
@@ -332,11 +407,11 @@ export default function ReportsScreen({ onNavigate }) {
               <View style={styles.mvLegend}>
                 <View style={styles.mvLegendItem}>
                   <View style={[styles.mvLegendDot, { backgroundColor: '#2F5DDC' }]} />
-                  <Text style={styles.mvLegendText}>Revenue</Text>
+                  <Text style={styles.mvLegendText}>Jobs</Text>
                 </View>
                 <View style={styles.mvLegendItem}>
                   <View style={[styles.mvLegendDot, { backgroundColor: '#FCD34D' }]} />
-                  <Text style={styles.mvLegendText}>Best month (Oct)</Text>
+                  <Text style={styles.mvLegendText}>{bestLabel ? `Best month (${bestLabel})` : 'Best month'}</Text>
                 </View>
               </View>
             </View>
@@ -442,6 +517,23 @@ const styles = StyleSheet.create({
   },
 
   /* Period Selection */
+  customRange: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: wp('2%'),
+    marginBottom: hp('1.5%'),
+  },
+  customApply: {
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.2%'),
+    borderRadius: wp('2%'),
+    backgroundColor: Colors.secondary,
+  },
+  customApplyText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: wp('3.5%'),
+  },
   periodContainer: {
     flexDirection: 'row',
     gap: wp('2%'),

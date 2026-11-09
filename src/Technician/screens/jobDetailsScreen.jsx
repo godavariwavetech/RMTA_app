@@ -813,7 +813,13 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                           ? 'NA'
                           : STAGE_LABEL[repairStatus],
                       ],
-                      ['Approval', prettify(j.approval_status)],
+                      // A completed (handed-over) job is approved; otherwise show the server value.
+                      [
+                        'Approval',
+                        repairStatus >= 3 || j.status === 'completed'
+                          ? 'Approved'
+                          : prettify(j.approval_status),
+                      ],
                       ['Category', prettify(j.repair_category)],
                       ['Complaint', j.problem_description],
                       ['Technician notes', j.technician_notes],

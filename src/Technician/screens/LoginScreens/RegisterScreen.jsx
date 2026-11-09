@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,6 +14,8 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  FlatList,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
@@ -22,9 +24,24 @@ import {
   heightPercentageToDP as hp,
 } from '../../../utils/responsive';
 import { Colors } from '../../../Constants/Colors';
+import { ENDPOINTS, TERMS_URL } from '../../../Constants/config';
 import { useDispatch } from 'react-redux';
-import { registerMember } from '../../../redux/slices/authSlice';
+import { registerMember, getJson } from '../../../redux/slices/authSlice';
 import { isValidIndianMobileNumber, normalizeMobileNumber } from '../../../utils/mobileValidation';
+
+// Members list for the leader dropdown. Same filter/shape handling as ChatScreen.
+const memberIdOf = m => String(m.id ?? m.member_id ?? '');
+const memberNameOf = m => m.full_name || m.name || m.member_name || '';
+async function fetchLeaderOptions() {
+  const { response, data } = await getJson(ENDPOINTS.GET_ALL_MEMBERS);
+  const rows = Array.isArray(data) ? data : data?.data || data?.members || data?.result;
+  if (!response.ok || !Array.isArray(rows)) {
+    throw new Error((data && (data.message || data.msg)) || `Could not load members (${response.status}).`);
+  }
+  return rows
+    .filter(r => r && !Number(r.d_in) && memberIdOf(r) && memberNameOf(r))
+    .map(r => ({ id: memberIdOf(r), name: memberNameOf(r) }));
+}
 
 // Base URL + endpoint paths now live in src/Constants/config.js and the API
 // call lives in the auth slice (redux/slices/authSlice.js).
@@ -46,7 +63,6 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [legalView, setLegalView] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Shop photo / person photo: { uri, base64 } or null. Sent to the backend
@@ -54,7 +70,42 @@ export default function RegisterScreen({ onNavigate, userInd }) {
   const [shopImage, setShopImage] = useState(null);
   const [personImage, setPersonImage] = useState(null);
 
+  // Leader dropdown: the selected member ({ id, name }) and the loaded member list.
+  const [leader, setLeader] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState('');
+  const [isLeaderPickerOpen, setIsLeaderPickerOpen] = useState(false);
+  const [leaderQuery, setLeaderQuery] = useState('');
+
+  const openLeaderPicker = () => {
+    setLeaderQuery('');
+    setIsLeaderPickerOpen(true);
+  };
+
+  const filteredMembers = (() => {
+    const q = leaderQuery.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(m => m.name.toLowerCase().includes(q));
+  })();
+
   const dispatch = useDispatch();
+
+  const loadMembers = async () => {
+    setMembersLoading(true);
+    setMembersError('');
+    try {
+      setMembers(await fetchLeaderOptions());
+    } catch (err) {
+      setMembersError(err.message || 'Could not load members.');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMembers();
+  }, []);
 
   // Which login type initiated this registration (passed from LoginScreen).
   // 1 = admin (default), 0 = technician. These are separate accounts server-side.
@@ -152,6 +203,11 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       return;
     }
 
+    if (!leader) {
+      alert('Please select a leader from the list');
+      return;
+    }
+
     if (!acceptedTerms) {
       alert('Please accept the Terms & Conditions to continue');
       return;
@@ -171,6 +227,8 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       user_ind, // 1 = admin, 0 = technician (separate account namespaces)
       shop_image: shopImage ? shopImage.base64 : null,
       person_image: personImage ? personImage.base64 : null,
+      leader_id: leader.id,
+      leader_name: leader.name,
     };
 
     // Dispatch the registration thunk (defined in redux/slices/authSlice.js).
@@ -367,6 +425,30 @@ export default function RegisterScreen({ onNavigate, userInd }) {
               </View>
             </View>
 
+            {/* Leader Dropdown */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Leader</Text>
+              <TouchableOpacity
+                style={[
+                  styles.inputWrapper,
+                  styles.selectWrapper,
+                  tried && !leader && styles.inputWrapperError,
+                ]}
+                onPress={openLeaderPicker}
+                activeOpacity={0.8}
+                accessibilityRole="combobox"
+                accessibilityLabel="Select leader"
+              >
+                <Text
+                  style={[styles.selectText, !leader && styles.selectPlaceholder]}
+                  numberOfLines={1}
+                >
+                  {leader ? leader.name : 'Select a member'}
+                </Text>
+                <Text style={styles.selectChevron}>▾</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Shop Photo & Person Photo Row */}
             <View style={styles.rowContainer}>
               <View style={styles.rowFieldContainer}>
@@ -490,18 +572,15 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 <Text
                   style={styles.termsLink}
                   accessibilityRole="link"
-                  onPress={() => setLegalView('terms')}
+                  onPress={() =>
+                    Linking.openURL(TERMS_URL).catch(() =>
+                      alert('Could not open the Terms & Conditions page.'),
+                    )
+                  }
                 >
                   Terms & Conditions
-                </Text>{' '}
-                and{' '}
-                <Text
-                  style={styles.termsLink}
-                  accessibilityRole="link"
-                  onPress={() => setLegalView('privacy')}
-                >
-                  Privacy Policy
-                </Text>.
+                </Text>
+                .
               </Text>
             </View>
 
@@ -535,33 +614,74 @@ export default function RegisterScreen({ onNavigate, userInd }) {
         </KeyboardAvoidingView>
       </SafeAreaView>
       <Modal
-        visible={!!legalView}
+        visible={isLeaderPickerOpen}
         animationType="slide"
-        onRequestClose={() => setLegalView(null)}
+        onRequestClose={() => setIsLeaderPickerOpen(false)}
       >
         <SafeAreaView style={styles.legalScreen}>
           <View style={styles.legalHeader}>
             <TouchableOpacity
-              onPress={() => setLegalView(null)}
+              onPress={() => setIsLeaderPickerOpen(false)}
               style={styles.legalBackButton}
               accessibilityRole="button"
-              accessibilityLabel="Back to registration"
+              accessibilityLabel="Close member list"
             >
               <Text style={styles.legalBackText}>‹</Text>
             </TouchableOpacity>
-            <Text style={styles.legalTitle}>
-              {legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
-            </Text>
+            <Text style={styles.legalTitle}>Select leader</Text>
             <View style={styles.legalHeaderSpacer} />
           </View>
-          <ScrollView contentContainerStyle={styles.legalContent}>
-            <Text style={styles.legalNoticeTitle}>Document unavailable</Text>
-            <Text style={styles.legalNotice}>
-              The current RMTA {legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
-              {' '}document has not been added to the app. Please contact an RMTA administrator
-              for the current document before registering.
-            </Text>
-          </ScrollView>
+          <View style={styles.pickerSearchWrapper}>
+            <TextInput
+              style={styles.pickerSearchInput}
+              placeholder="Search member name"
+              placeholderTextColor="#999999"
+              value={leaderQuery}
+              onChangeText={setLeaderQuery}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+          </View>
+          {membersLoading ? (
+            <View style={styles.pickerCenter}>
+              <ActivityIndicator color={Colors.secondary} />
+            </View>
+          ) : membersError ? (
+            <View style={styles.pickerCenter}>
+              <Text style={styles.pickerErrorText}>{membersError}</Text>
+              <TouchableOpacity style={styles.pickerRetry} onPress={loadMembers}>
+                <Text style={styles.pickerRetryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredMembers}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.pickerList}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.pickerEmptyText}>
+                  {members.length === 0 ? 'No members found.' : 'No matching members.'}
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const selected = leader && leader.id === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+                    onPress={() => {
+                      setLeader(item);
+                      setIsLeaderPickerOpen(false);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.pickerRowText}>{item.name}</Text>
+                    {selected && <Text style={styles.pickerTick}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          )}
         </SafeAreaView>
       </Modal>
     </>
@@ -707,6 +827,90 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: hp('8%'),
+  },
+  selectWrapper: {
+    justifyContent: 'space-between',
+    paddingVertical: hp('1.5%'),
+  },
+  selectText: {
+    flex: 1,
+    fontSize: wp('3.8%'),
+    color: '#1F2937',
+  },
+  selectPlaceholder: {
+    color: '#999999',
+  },
+  selectChevron: {
+    fontSize: wp('4%'),
+    color: '#6B7280',
+    marginLeft: wp('2%'),
+  },
+  pickerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: wp('6%'),
+  },
+  pickerErrorText: {
+    color: '#B91C1C',
+    fontSize: wp('3.6%'),
+    textAlign: 'center',
+    marginBottom: hp('2%'),
+  },
+  pickerRetry: {
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('1%'),
+    borderRadius: wp('2.5%'),
+    backgroundColor: Colors.secondary,
+  },
+  pickerRetryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  pickerSearchWrapper: {
+    marginHorizontal: wp('4%'),
+    marginVertical: hp('1.5%'),
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: wp('2.5%'),
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: wp('3%'),
+  },
+  pickerSearchInput: {
+    paddingVertical: hp('1.3%'),
+    fontSize: wp('3.8%'),
+    color: '#1F2937',
+  },
+  pickerList: {
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1%'),
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: hp('1.6%'),
+    paddingHorizontal: wp('3%'),
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickerRowSelected: {
+    backgroundColor: '#F3F6FF',
+  },
+  pickerRowText: {
+    flex: 1,
+    fontSize: wp('3.8%'),
+    color: '#1F2937',
+  },
+  pickerTick: {
+    color: Colors.secondary,
+    fontSize: wp('4%'),
+    fontWeight: '800',
+  },
+  pickerEmptyText: {
+    textAlign: 'center',
+    color: '#6B7280',
+    marginTop: hp('4%'),
   },
   photoPicker: {
     height: hp('11%'),
