@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useScreenBack } from '../../../utils/screenBack';
 import {
   StyleSheet,
   Text,
@@ -116,6 +117,8 @@ export default function CreateJobSheetStep5({ onNavigate }) {
     };
   };
 
+  // Android system back runs the same save-draft-then-go-back as the Back button.
+  useScreenBack(() => handleBackPress());
   const handleBackPress = () => {
     // Persist current edits so they're kept when navigating back.
     dispatch(updateJobDraft({ access: buildAccess() }));

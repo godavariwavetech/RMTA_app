@@ -31,6 +31,30 @@ export default function TechnicianProfileScreen({ onNavigate }) {
   const user = useSelector(state => state.auth.user) || {};
   const [selectedNavItem, setSelectedNavItem] = useState('profile');
 
+  useEffect(() => {
+    console.log('[Profile][LOCAL AUTH DATA]', {
+      user_id: user.user_id ?? null,
+      member_id: user.member_id ?? null,
+      tech_id: user.tech_id ?? null,
+      role: user.role ?? null,
+      full_name: user.full_name ?? null,
+      leader_name: user.leader_name ?? null,
+      shop_name: user.shop_name ?? null,
+      city: user.city ?? null,
+      state: user.state ?? null,
+    });
+  }, [
+    user.user_id,
+    user.member_id,
+    user.tech_id,
+    user.role,
+    user.full_name,
+    user.leader_name,
+    user.shop_name,
+    user.city,
+    user.state,
+  ]);
+
   // Full profile (admin_details for admins, technician_details for technicians).
   const profile = useAccountProfile();
   // A technician (staff) login belongs to a member, its admin: that member's details, found by
@@ -44,13 +68,11 @@ export default function TechnicianProfileScreen({ onNavigate }) {
   // Anything the account has no data for stays empty and is left out of the screen.
   const techMobile = d.mobile || '';
   const techShop = d.shop_name || '';
+  const techLeader = d.leader_name || '';
   const techLocation = [d.city, d.state].filter(Boolean).join(', ');
-  // The member code is empty for some accounts, so fall back to the member id.
-  const techRmtaId = d.member_code
-    ? `Member code: ${d.member_code}`
-    : d.member_id
-    ? `Member code: ${d.member_id}`
-    : '';
+  // Show the member code only. member_id is the internal database id (a different
+  // value), so it is never shown in its place; with no code the line is hidden.
+  const techMemberCode = d.member_code ? `Member code: ${d.member_code}` : '';
   const techValidUntil = d.valid_until;
   const isAdmin = user.role === 'admin';
 
@@ -213,7 +235,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                 </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{techName}</Text>
-                  {!!techRmtaId && <Text style={styles.memberId}>{techRmtaId}</Text>}
+                  {!!techMemberCode && <Text style={styles.memberCode}>{techMemberCode}</Text>}
                   {!!techShop && <Text style={styles.shopName}>{techShop}</Text>}
                   {(!!techLocation || !!techValidUntil) && (
                     <Text style={styles.locationValidity}>
@@ -231,6 +253,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
           {[
             [t('mobile'), techMobile],
             [t('shop'), techShop],
+            ['Leader', techLeader],
             [t('location'), techLocation],
           ].filter(([, value]) => !!value).length > 0 && (
             <View style={styles.section}>
@@ -239,6 +262,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                 {[
                   [t('mobile'), techMobile],
                   [t('shop'), techShop],
+                  ['Leader', techLeader],
                   [t('location'), techLocation],
                 ]
                   .filter(([, value]) => !!value)
@@ -255,7 +279,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
             </View>
           )}
 
-          {/* Admin details: only for a staff login, based on its member id */}
+          {/* Admin details: only for a staff login, looked up by its member id */}
           {isStaff && (
             <View style={styles.section}>
               {/* The shop this staff login works for, instead of a generic "Your admin" heading */}
@@ -269,7 +293,8 @@ export default function TechnicianProfileScreen({ onNavigate }) {
                     'Location',
                     [adminProfile.address, adminProfile.city, adminProfile.state].filter(Boolean).join(', '),
                   ],
-                  ['Member code', user.member_id ? String(user.member_id) : ''],
+                  // The admin's member code from their getallmembers row, not the member id.
+                  ['Member code', adminProfile.member_code ? String(adminProfile.member_code) : ''],
                 ]
                   .filter(([, value]) => !!value)
                   .map(([label, value], idx, rows) => (
@@ -434,7 +459,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 4,
   },
-  memberId: {
+  memberCode: {
     fontSize: 13,
     fontWeight: '700',
     color: '#F2B233',

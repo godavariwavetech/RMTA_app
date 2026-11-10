@@ -42,9 +42,9 @@ const STATUS_META = {
   cancelled: { label: 'Cancelled', color: '#EF4444' },
 };
 
-// A job is finished once the server's completed_status reaches 3 (handed over).
+// Status 3 is handed over; status 4 is returned without repair.
 const isJobCompleted = job =>
-  Number(job.completed_status) === 3 || job.status === 'completed';
+  [3, 4].includes(Number(job.completed_status)) || job.status === 'completed';
 
 // Matches the Home screen's "Jobs today" count: created today, any status.
 const isJobToday = job => {
@@ -222,7 +222,9 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
 
   const renderJobItem = item => {
     const completed = isJobCompleted(item);
-    const meta = completed
+    const meta = Number(item.completed_status) === 4
+      ? { label: 'Returned without repair', color: '#B45309' }
+      : completed
       ? STATUS_META.completed
       : STATUS_META[item.status] || { label: item.status, color: '#9CA3AF' };
     const deviceName = [item.device_brand, item.device_model].filter(Boolean).join(' ') || 'Device';

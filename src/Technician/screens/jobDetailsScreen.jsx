@@ -72,6 +72,9 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   // Handover step 1: the final amount the customer pays, asked before the OTP is generated.
   const [amountVisible, setAmountVisible] = useState(false);
   const [finalAmount, setFinalAmount] = useState('');
+  const [returnWithoutRepairVisible, setReturnWithoutRepairVisible] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [returnFinalCost, setReturnFinalCost] = useState('');
   const [otpVisible, setOtpVisible] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
@@ -238,7 +241,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     2: { label: 'Handover', next: 3 },
   };
 
-  const handleAdvanceStatus = async nextStatus => {
+  const handleAdvanceStatus = async (nextStatus, extraFields = {}) => {
     // The job's id comes from the list row (jobSummary.id), falling back to
     // the id this screen was opened with.
     const targetJobId = (jobSummary && jobSummary.id) || jobId;
@@ -247,10 +250,11 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
       member_id: user.member_id,
       job_id: targetJobId,
       completed_status: nextStatus,
+      ...extraFields,
     };
     // The handover (status 3) also carries the final amount entered before the OTP.
     if (nextStatus === 3 && finalAmount) {
-      payload.final_cost = finalAmount;
+      payload.final_cost = String(finalAmount);
     }
     setStarting(true);
     try {
@@ -268,7 +272,12 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
           : data && data.completed_status != null
           ? Number(data.completed_status)
           : nextStatus;
-      setJob(prev => ({ ...(prev || {}), completed_status: returned }));
+      setJob(prev => ({
+        ...(prev || {}),
+        ...extraFields,
+        completed_status: returned,
+        ...(returned === 4 ? { status: 'completed' } : {}),
+      }));
       dispatch(
         setActiveJob({
           id: targetJobId,
@@ -279,11 +288,28 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
           status: j.status,
         }),
       );
+      return true;
     } catch (err) {
       console.log('[repairStatus] error →', err.message);
       alert(err.message || 'Could not update the repair status. Please try again.');
+      return false;
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleReturnWithoutRepair = async () => {
+    const reason = returnReason.trim();
+    const finalCost = returnFinalCost.trim();
+    if (!reason || finalCost === '' || !Number.isFinite(Number(finalCost)) || starting) return;
+    const succeeded = await handleAdvanceStatus(4, {
+      reason,
+      final_cost: String(finalCost),
+    });
+    if (succeeded) {
+      setReturnWithoutRepairVisible(false);
+      setReturnReason('');
+      setReturnFinalCost('');
     }
   };
 
@@ -291,7 +317,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   // open the OTP entry; the final status update (3) happens once it matches.
   const handleHandover = async () => {
     const customerId = (jobSummary && jobSummary.customer_id) || j.customer_id;
-    if (starting) return;
+    if (starting) return false;
     const payload = { member_id: user.member_id, customer_id: customerId };
     setStarting(true);
     try {
@@ -303,15 +329,17 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
           (data && (data.message || data.msg)) ||
             'Could not generate the handover OTP. Please try again.',
         );
-        return;
+        return false;
       }
       console.log('[handoverOtp] OTP popup opened, waiting for input');
       setEnteredOtp('');
       setOtpError('');
       setOtpVisible(true);
+      return true;
     } catch (err) {
       console.log('[handoverOtp] error →', err.message);
       alert(err.message || 'Could not generate the handover OTP. Please try again.');
+      return false;
     } finally {
       setStarting(false);
     }
@@ -422,7 +450,9 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
   let parsed = {};
   try { parsed = j.details_json ? JSON.parse(j.details_json) : {}; } catch (e) {}
   const statusMeta =
-    STATUS_META[j.status] || { label: j.status || 'NA', color: '#9CA3AF', bg: '#F3F4F6' };
+    repairStatus === 4
+      ? { label: 'Returned without repair', color: '#B45309', bg: '#FEF3C7' }
+      : STATUS_META[j.status] || { label: j.status || 'NA', color: '#9CA3AF', bg: '#F3F4F6' };
   const deviceName = [j.device_brand, j.device_model].filter(Boolean).join(' ') || 'NA';
   const deviceSpec = [j.storage, j.color].filter(Boolean).join(' · ') || 'NA';
   const estimate =
@@ -548,146 +578,19 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     handedOverDate || fmtDateOnly(j.estimated_delivery) || 'NA';
   const money = v =>
     v != null && v !== '' ? `₹${Number(v).toLocaleString('en-IN')}` : '';
-  const STAGE_LABEL = { 0: 'Not started', 1: 'Repair in progress', 2: 'Repair completed', 3: 'Handed over' };
+  const STAGE_LABEL = {
+    0: 'Not started',
+    1: 'Repair in progress',
+    2: 'Repair completed',
+    3: 'Handed over',
+    4: 'Returned without repair',
+  };
   const prettify = s =>
     String(s || '')
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
       .replace(/_/g, ' ')
       .replace(/-/g, ' ')
       .replace(/\b\w/g, c => c.toUpperCase());
-  const displayedDetailKeys = new Set([
-    'id',
-    'jobid',
-    'jobcode',
-    'memberid',
-    'customerid',
-    'status',
-    'completedstatus',
-    'estimatedcost',
-    'finalcost',
-    'estimateddelivery',
-    'approvalstatus',
-    'repaircategory',
-    'problemdescription',
-    'techniciannotes',
-    'customername',
-    'customermobile',
-    'customernumber',
-    'mobilenumber',
-    'alternate',
-    'alternatemobile',
-    'customeralternatenumber',
-    'aadhaarlast4',
-    'aadharnumber',
-    'address',
-    'devicebrand',
-    'brand',
-    'devicemodel',
-    'model',
-    'storage',
-    'color',
-    'imei1',
-    'imei2',
-    'unlockvalue',
-    'devicelock',
-    'accessmode',
-    'locktype',
-    'consentotp',
-    'conditions',
-    'screen',
-    'body',
-    'camera',
-    'speaker',
-    'chargingport',
-    'chargingpoint',
-    'battery',
-    'batterey',
-    'photos',
-    'frontimage',
-    'backimage',
-    'damageimage',
-    'frontphoto',
-    'backphoto',
-    'damagephoto',
-    'customerphoto',
-    'customerimage',
-    'createdat',
-    'updatedat',
-    'completedat',
-    'completeddate',
-    'completiondate',
-    'completedon',
-    'handoverat',
-    'handoverdate',
-    'handedoverat',
-    'deliveredat',
-  ]);
-  const isAlreadyDisplayed = (key, label) => {
-    const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
-    return (
-      displayedDetailKeys.has(normalizedKey) ||
-      /^(front|back|damage)(image|photo|picture)(url)?$/.test(normalizedKey) ||
-      /(customer.*(photo|image)|(photo|image).*customer)/i.test(label)
-    );
-  };
-  const otherDetailRows = [];
-  const appendOtherDetail = (value, label, key = label) => {
-    if (isAlreadyDisplayed(key, label)) return;
-    if (value !== null && typeof value === 'object') {
-      const entries = Array.isArray(value)
-        ? value.map((item, index) => [`Item ${index + 1}`, item])
-        : Object.entries(value).filter(([childKey]) => !isAlreadyDisplayed(childKey, label));
-      if (entries.length === 0) {
-        if (Object.keys(value).length === 0) otherDetailRows.push([label, 'NA']);
-        return;
-      }
-      entries.forEach(([childKey, child]) => {
-        const childLabel = `${label} · ${prettify(childKey)}`;
-        if (
-          ['created_at', 'updated_at', 'completed_at'].includes(String(childKey).toLowerCase()) &&
-          child
-        ) {
-          appendOtherDetail(fmtDateTime(child), childLabel, childKey);
-        } else {
-          appendOtherDetail(child, childLabel, childKey);
-        }
-      });
-      return;
-    }
-
-    const text = value === null || value === undefined || value === ''
-      ? 'NA'
-      : typeof value === 'boolean'
-      ? value ? 'Yes' : 'No'
-      : String(value);
-    const aadhaarDigits = text.replace(/\D/g, '');
-    const isAadhaar = /(aadhaar|aadhar)/i.test(label) && aadhaarDigits.length >= 8;
-    const source = imageSource(value, label);
-    otherDetailRows.push([
-      label,
-      isAadhaar ? `•••• ${aadhaarDigits.slice(-4)}` : source ? '' : text,
-      source,
-    ]);
-  };
-  Object.entries(j).forEach(([key, value]) => {
-    if (key !== 'details_json' && isAlreadyDisplayed(key, prettify(key))) return;
-    const label = prettify(key);
-    if (key === 'details_json' && typeof value === 'string') {
-      try {
-        appendOtherDetail(JSON.parse(value), label);
-        return;
-      } catch (e) {
-        // Show the original field when it is not valid JSON.
-      }
-    }
-    if (['created_at', 'updated_at', 'completed_at'].includes(key.toLowerCase()) && value) {
-      appendOtherDetail(fmtDateTime(value), label);
-    } else {
-      appendOtherDetail(value, label);
-    }
-  });
-  if (otherDetailRows.length === 0) otherDetailRows.push(['Job data', 'NA']);
-
   return (
     <>
       <StatusBar
@@ -742,10 +645,13 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                   </View>
                 </View>
 
-                {/* Progress: Received > Repairing > Completed > Handed over */}
+                {/* Progress: status 4 is a return without repair, not a repair handover. */}
                 <View style={styles.steps}>
-                  {['Received', 'Repairing', 'Completed', 'Handed over'].map((label, i) => {
-                    const done = i <= repairStatus;
+                  {(repairStatus === 4
+                    ? ['Received', 'Repairing', 'Returned without repair']
+                    : ['Received', 'Repairing', 'Completed', 'Handed over']
+                  ).map((label, i, steps) => {
+                    const done = repairStatus === 4 ? true : i <= repairStatus;
                     return (
                       <View key={label} style={styles.step}>
                         <View style={styles.stepLineRow}>
@@ -754,7 +660,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                             {done && <Text style={styles.stepCheck}>✓</Text>}
                           </View>
                           <View
-                            style={[styles.stepLine, i === 3 && styles.stepLineHidden, i < repairStatus && styles.stepLineOn]}
+                            style={[styles.stepLine, i === steps.length - 1 && styles.stepLineHidden, i < repairStatus && styles.stepLineOn]}
                           />
                         </View>
                         <Text style={[styles.stepLabel, done && styles.stepLabelOn]} numberOfLines={1}>
@@ -816,12 +722,15 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                       // A completed (handed-over) job is approved; otherwise show the server value.
                       [
                         'Approval',
-                        repairStatus >= 3 || j.status === 'completed'
+                        repairStatus === 3 || (repairStatus !== 4 && j.status === 'completed')
                           ? 'Approved'
+                          : repairStatus === 4
+                          ? 'Not applicable'
                           : prettify(j.approval_status),
                       ],
                       ['Category', prettify(j.repair_category)],
                       ['Complaint', j.problem_description],
+                      ...(repairStatus === 4 ? [['Return reason', j.reason]] : []),
                       ['Technician notes', j.technician_notes],
                     ],
                   },
@@ -968,33 +877,6 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                   )}
                 </View>
 
-                {/* All fields from the job record, including fields not shown above. */}
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHead}>
-                    <View style={styles.sectionIcon}>
-                      <Text style={styles.sectionIconText}>📋</Text>
-                    </View>
-                    <Text style={styles.sectionTitle}>Other Details</Text>
-                  </View>
-                  {otherDetailRows.map(([label, value, source], idx) => (
-                    <View
-                      key={`${label}-${idx}`}
-                      style={[
-                        styles.otherDetailRow,
-                        source && styles.otherDetailImageRow,
-                        idx === otherDetailRows.length - 1 && styles.kvRowLast,
-                      ]}
-                    >
-                      <Text style={styles.otherDetailLabel}>{label}</Text>
-                      {source ? (
-                        <Image source={source} style={styles.otherDetailImage} resizeMode="cover" />
-                      ) : (
-                        <Text style={styles.otherDetailValue}>{value}</Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-
                 {/* Timeline */}
                 <View style={styles.sectionCard}>
                   <View style={styles.sectionHead}>
@@ -1030,21 +912,123 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
         {/* Start Repair Button */}
         {!!job && !!REPAIR_STAGES[repairStatus] && (
           <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.startButton}
-              disabled={starting}
-              onPress={confirmStage}
-            >
-              {starting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.startButtonText}>
-                  {REPAIR_STAGES[repairStatus].label}
-                </Text>
-              )}
-            </TouchableOpacity>
+            {repairStatus === 1 ? (
+              <View style={styles.repairActionRow}>
+                <TouchableOpacity
+                  style={[styles.startButton, styles.repairActionButton]}
+                  disabled={starting}
+                  onPress={confirmStage}
+                >
+                  {starting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.startButtonText}>Completed repair</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.returnButton, styles.repairActionButton]}
+                  disabled={starting}
+                  onPress={() => {
+                    setReturnReason('');
+                    setReturnFinalCost('');
+                    setReturnWithoutRepairVisible(true);
+                  }}
+                >
+                  <Text style={styles.returnButtonText}>Return without repair</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.startButton}
+                disabled={starting}
+                onPress={confirmStage}
+              >
+                {starting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.startButtonText}>
+                    {REPAIR_STAGES[repairStatus].label}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         )}
+
+        {/* Return without repair: collect both the final amount and reason. */}
+        <Modal
+          transparent
+          animationType="fade"
+          visible={returnWithoutRepairVisible}
+          onRequestClose={() => setReturnWithoutRepairVisible(false)}
+          statusBarTranslucent
+        >
+          <View style={styles.otpScrim}>
+            <View style={styles.otpCard}>
+              <Text style={styles.otpTitle}>Return without repair</Text>
+              <Text style={styles.otpSubtitle}>
+                Enter the final amount and why the device is being returned without repair.
+              </Text>
+              <Text style={styles.returnFieldLabel}>Final amount</Text>
+              <View style={styles.amountBox}>
+                <Text style={styles.amountSymbol}>₹</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={returnFinalCost}
+                  onChangeText={text => setReturnFinalCost(sanitizeAmount(text))}
+                  placeholder="0"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <Text style={styles.returnFieldLabel}>Reason for return</Text>
+              <TextInput
+                style={styles.reasonInput}
+                value={returnReason}
+                onChangeText={setReturnReason}
+                placeholder="Reason for return"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                maxLength={500}
+                textAlignVertical="top"
+              />
+              <View style={styles.otpActions}>
+                <TouchableOpacity
+                  style={[styles.otpButton, styles.otpCancel]}
+                  disabled={starting}
+                  onPress={() => setReturnWithoutRepairVisible(false)}
+                >
+                  <Text style={styles.otpCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.otpButton,
+                    styles.returnConfirm,
+                    (
+                      !returnReason.trim() ||
+                      returnFinalCost.trim() === '' ||
+                      !Number.isFinite(Number(returnFinalCost)) ||
+                      starting
+                    ) && styles.otpDisabled,
+                  ]}
+                  disabled={
+                    !returnReason.trim() ||
+                    returnFinalCost.trim() === '' ||
+                    !Number.isFinite(Number(returnFinalCost)) ||
+                    starting
+                  }
+                  onPress={handleReturnWithoutRepair}
+                >
+                  {starting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.otpConfirmText}>Confirm return</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Handover: final amount first */}
         <Modal
@@ -1109,7 +1093,9 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
         >
           <View style={styles.otpScrim}>
             <View style={styles.otpCard}>
-              <Text style={styles.otpTitle}>Handover OTP</Text>
+              <Text style={styles.otpTitle}>
+                Handover OTP
+              </Text>
               <Text style={styles.otpSubtitle}>
                 Enter the 6-digit code sent to the customer to complete the handover.
               </Text>
@@ -1518,8 +1504,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
   },
+  reasonInput: {
+    minHeight: 110,
+    maxHeight: 180,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: '#1F2937',
+  },
   amountSymbol: { fontSize: 24, fontWeight: '700', color: '#6B7280', marginRight: 6 },
   amountInput: { flex: 1, paddingVertical: 14, fontSize: 26, fontWeight: '700', color: '#1F2937' },
+  returnFieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
   amountHint: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
   otpInputError: { borderColor: '#DC2626' },
   otpErrorText: { color: '#DC2626', fontSize: 13, marginTop: 8 },
@@ -1528,6 +1525,7 @@ const styles = StyleSheet.create({
   otpCancel: { backgroundColor: '#F3F4F6' },
   otpCancelText: { color: '#374151', fontWeight: '600' },
   otpConfirm: { backgroundColor: Colors.primary },
+  returnConfirm: { backgroundColor: '#B45309' },
   otpConfirmText: { color: '#FFFFFF', fontWeight: '600' },
   otpDisabled: { opacity: 0.5 },
   otpResend: { textAlign: 'center', color: Colors.primary, fontWeight: '600', marginTop: 16 },
@@ -1546,6 +1544,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  repairActionRow: { flexDirection: 'row', gap: 10 },
+  repairActionButton: { flex: 1, minHeight: 52 },
+  returnButton: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    color: '#9A3412',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   completedButton: {
     backgroundColor: '#9CA3AF',
@@ -1673,30 +1689,6 @@ const styles = StyleSheet.create({
   kvRowLast: { borderBottomWidth: 0 },
   kvLabel: { fontSize: 12, color: '#94A3B8', marginRight: 10 },
   kvValue: { flex: 1, fontSize: 13, fontWeight: '700', color: '#0F172A', textAlign: 'right' },
-  otherDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 7,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
-  },
-  otherDetailLabel: { flex: 1, fontSize: 12, color: '#94A3B8', marginRight: 10 },
-  otherDetailValue: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'right',
-  },
-  otherDetailImageRow: { flexDirection: 'column' },
-  otherDetailImage: {
-    width: '100%',
-    height: 190,
-    marginTop: 8,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-  },
   customerPhotoContainer: { marginTop: 10 },
   customerPhotoLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 8 },
   customerPhoto: {

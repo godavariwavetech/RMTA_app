@@ -1,6 +1,12 @@
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { check, openSettings, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
 import { showAppActionSheet } from './appModal';
+
+const cameraPermission = Platform.select({
+  ios: PERMISSIONS.IOS.CAMERA,
+  android: PERMISSIONS.ANDROID.CAMERA,
+});
 
 // react-native-image-picker reports a missing/denied permission with a raw,
 // developer-facing native message (e.g. "...does not require
@@ -20,9 +26,31 @@ const showPermissionAlert = source => {
     `RMTA needs permission to use your ${source} to take a photo. Please allow it in Settings, then try again.`,
     [
       { text: 'Not now', style: 'cancel' },
-      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      {
+        text: 'Open Settings',
+        onPress: () => openSettings().catch(() => Linking.openSettings()),
+      },
     ],
   );
+};
+
+const ensureCameraPermission = async () => {
+  if (!cameraPermission) {
+    Alert.alert('Camera unavailable', 'Camera permission is not supported on this device.');
+    return false;
+  }
+
+  try {
+    const current = await check(cameraPermission);
+    const result = current === RESULTS.GRANTED ? current : await request(cameraPermission);
+    if (result === RESULTS.GRANTED) return true;
+    showPermissionAlert('camera');
+    return false;
+  } catch (error) {
+    console.warn('[imagePicker] camera permission check failed:', error.message);
+    Alert.alert('Camera unavailable', 'Camera permission could not be checked on this device.');
+    return false;
+  }
 };
 
 export function chooseImageSource(options = {}, onResponse) {
@@ -49,7 +77,8 @@ export function chooseImageSource(options = {}, onResponse) {
       wrapResponse('photo library'),
     );
 
-  const takePhoto = () =>
+  const takePhoto = async () => {
+    if (!(await ensureCameraPermission())) return;
     launchCamera(
       {
         mediaType: 'photo',
@@ -62,6 +91,7 @@ export function chooseImageSource(options = {}, onResponse) {
       },
       wrapResponse('camera'),
     );
+  };
 
   showAppActionSheet('Add a photo', 'Choose where to get your image.', [
     {

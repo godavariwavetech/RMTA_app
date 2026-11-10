@@ -226,6 +226,9 @@ export default function LoginScreen({ onNavigate, initialMode }) {
             onPress: () => onNavigate('register', { user_ind: 1 }),
           },
         );
+      } else if (payload && payload.code === 'ACCOUNT_DELETED') {
+        setLoginError(payload.message);
+        showMessageModal('Unable to sign in', payload.message);
       } else if (isNetworkError) {
         const message =
           (payload && payload.message) || 'Login failed. Please try again.';

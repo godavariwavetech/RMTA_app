@@ -30,6 +30,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
   const user = useSelector(state => state.auth.user) || {};
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
   const draftBillImage = useSelector(state => state.purchase.draft.billImage);
+  const draftCeirVerified = useSelector(state => state.purchase.draft.ceirVerified);
   const [submitting, setSubmitting] = useState(false);
 
   // Collapse all the screens' data into the flat payload create_purchase expects.
@@ -45,6 +46,9 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       imei2: imeiData?.imei2 || '',
       // "YYYY-MM-DD HH:mm:ss" in India time: when the IMEI was verified on step 3.
       imeiverified_date: imeiData?.verifiedAt || istDateTime(),
+      // Step 3's "IMEI verified on Sanchar Saathi" checkbox: 0 = not verified
+      // (default, also when the box was never ticked), 1 = verified.
+      imei_not_verified: (ceirVerified ?? draftCeirVerified) ? 1 : 0,
       color: deviceData?.color || '',
       storage: deviceData?.storage || '',
       screen: conditionData?.screen || '',

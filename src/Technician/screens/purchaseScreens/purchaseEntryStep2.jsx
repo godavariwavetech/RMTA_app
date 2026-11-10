@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useScreenBack } from '../../../utils/screenBack';
 import {
   StyleSheet,
   Text,
@@ -78,6 +79,8 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
     );
   };
 
+  // Android system back runs the same save-draft-then-go-back as the Back button.
+  useScreenBack(() => handleBackPress());
   const handleBackPress = () => {
     dispatch(updatePurchaseDraft({ device: formData }));
     if (onNavigate) {

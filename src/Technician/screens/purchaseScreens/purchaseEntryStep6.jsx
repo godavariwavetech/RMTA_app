@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useScreenBack } from '../../../utils/screenBack';
 import {
   StyleSheet,
   Text,
@@ -7,7 +8,6 @@ import {
   TouchableOpacity,
   StatusBar,
   TextInput,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -54,6 +54,8 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
     }
   };
 
+  // Android system back runs the same save-draft-then-go-back as the Back button.
+  useScreenBack(() => handleBackPress());
   const handleBackPress = () => {
     dispatch(updatePurchaseDraft({ price: buildPrice() }));
     if (onNavigate) {
@@ -141,9 +143,7 @@ export default function PurchaseEntryStep6({ onNavigate, sellerData, deviceData,
 
             {/* Transaction ID Field */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>
-                Transaction ID{paymentMode !== 'Cash' && {/* <Text style={styles.required}> *</Text> */}}
-              </Text>
+              <Text style={styles.label}>Transaction ID</Text>
               <TextInput {...nav.props(1)}
                 style={[styles.input, tried && paymentMode !== 'Cash' && !transactionId.trim() && styles.inputError]}
                 placeholder="Enter Transaction ID"

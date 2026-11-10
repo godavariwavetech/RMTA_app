@@ -323,6 +323,15 @@ export const loginUser = createAsyncThunk(
         });
       }
 
+      // d_in = 1 marks a deleted account: refuse the login before anything is saved.
+      if (Number(responseUser.d_in)) {
+        return rejectWithValue({
+          status: response.status,
+          code: 'ACCOUNT_DELETED',
+          message: 'This account is no longer active. Please contact your admin.',
+        });
+      }
+
       // A technician login that succeeds is an active account even when the
       // response carries no membership_status.
       const rawMembershipStatus = String(

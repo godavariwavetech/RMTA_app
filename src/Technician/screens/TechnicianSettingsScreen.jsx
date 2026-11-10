@@ -28,8 +28,6 @@ import { TERMS_URL } from '../../Constants/config';
 export default function TechnicianSettingsScreen({ onNavigate }) {
   const { t, language } = useI18n();
   const dispatch = useDispatch();
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [smsUpdates, setSmsUpdates] = useState(true);
   // App lock (Face ID / fingerprint / passcode when the app opens).
   const [appLock, setAppLock] = useState(true);
   const [lockAvailable, setLockAvailable] = useState(true);
@@ -64,29 +62,6 @@ export default function TechnicianSettingsScreen({ onNavigate }) {
   };
 
   const settingsItems = [
-    {
-      id: 1,
-      icon: require('../../Assets/icons/lockIcon.png'),
-      title: t('accountSecurity'),
-      subtitle: t('updatePassword'),
-      type: 'action',
-    },
-    {
-      id: 2,
-      icon: require('../../Assets/icons/circle-check.png'),
-      title: t('pushEnabled'),
-      type: 'toggle',
-      state: pushNotifications,
-      setState: setPushNotifications,
-    },
-    {
-      id: 3,
-      icon: require('../../Assets/icons/circle-check.png'),
-      title: t('smsEnabled'),
-      type: 'toggle',
-      state: smsUpdates,
-      setState: setSmsUpdates,
-    },
     {
       id: 6,
       icon: require('../../Assets/icons/lockIcon.png'),

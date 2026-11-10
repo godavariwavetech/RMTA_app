@@ -4,6 +4,7 @@ import VersionCheck from 'react-native-version-check';
 import { Colors } from './src/Constants/Colors';
 import { APP_MAX_WIDTH } from './src/utils/responsive';
 import AppLockGate from './src/Components/AppLockGate';
+import { runScreenBack } from './src/utils/screenBack';
 import { AppModalHost, installAppModalAlerts } from './src/utils/appModal';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { I18nProvider, useI18n } from './src/i18n';
@@ -202,10 +203,13 @@ function PlayerIdSync() {
 // Account status check: POST { member_id } to loginstatusdata every time the Home
 // screen is shown (app open, login, coming back from any other screen) and every
 // time the app returns to the foreground.
-// A status of 0 or 2 means the account is no longer allowed in, so the session is
-// cleared and the member is sent to the login screen.
-function pickStatus(data: any) {
-  const row = Array.isArray(data?.data) ? data.data[0] : data?.data ?? data;
+// A status of 0 or 2, or a d_in flag (account deleted), means the account is no
+// longer allowed in, so the session is cleared and the member is sent to the login screen.
+function pickRow(data: any) {
+  return Array.isArray(data?.data) ? data.data[0] : data?.data ?? data;
+}
+
+function pickStatus(row: any) {
   const value = row?.status ?? row?.login_status ?? row?.membership_status ?? row?.member_status;
   if (value === undefined || value === null || value === '' || typeof value === 'boolean') {
     return undefined;
@@ -234,9 +238,12 @@ function LoginStatusWatcher({ onLogout, isHome }: { onLogout: () => void; isHome
         if (!response.ok) {
           return;
         }
-        const status = pickStatus(data);
-        console.log('[loginStatus] status →', status);
-        if (status === 0 || status === 2) {
+        const row = pickRow(data);
+        const status = pickStatus(row);
+        // d_in = 1 marks a deleted row; anything non-numeric/empty counts as not deleted.
+        const deleted = !!Number(row?.d_in);
+        console.log('[loginStatus] status →', status, 'd_in →', row?.d_in);
+        if (status === 0 || status === 2 || deleted) {
           loggingOut = true;
           await dispatch(logoutUser());
           logoutRef.current();
@@ -367,6 +374,10 @@ function AppContent() {
       if (navigationHistory.length <= 1) {
         return false;
       }
+      // A form step handles Back itself so it can save its draft first.
+      if (runScreenBack()) {
+        return true;
+      }
 
       const previousHistory = popHistory(navigationHistory);
       setNavigationHistory(previousHistory);
@@ -484,8 +495,12 @@ function AppContent() {
       screen !== 'replaceStack' &&
       navigationHistory[navigationHistory.length - 1] !== newScreen;
     if (isPush) {
-      // Remember the screen we're leaving, with the params it was opened with.
-      savedParams.current[navigationHistory.length - 1] = navigationParams;
+      // Remember the screen we're leaving, with the params it was opened with —
+      // minus `fresh`: that flag means "start a new form" and must only apply on
+      // the first open. Replaying it on Back would wipe the form's saved draft.
+      const keptParams = { ...(navigationParams || {}) };
+      delete keptParams.fresh;
+      savedParams.current[navigationHistory.length - 1] = keptParams;
     }
     setNavigationParams(params || {});
     if (screen === 'goBackTo' || screen === 'resetTo' || screen === 'replaceStack') {
