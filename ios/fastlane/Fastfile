@@ -1,0 +1,90 @@
+require "base64"
+require "shellwords"
+require "tmpdir"
+
+default_platform(:ios)
+
+BUNDLE_ID = "com.rmta"
+SCHEME = "RMTA"
+
+# Reads a secret, failing with a clear message when it is not set.
+def env!(name)
+  value = ENV[name].to_s
+  UI.user_error!("Missing secret #{name} (see docs/ios-testflight.md)") if value.strip.empty?
+  value
+end
+
+# Writes a base64 secret to a temp file and returns its path.
+def decode_to_file(env_name, filename)
+  path = File.join(Dir.tmpdir, filename)
+  File.binwrite(path, Base64.decode64(env!(env_name)))
+  path
+end
+
+platform :ios do
+  desc "Build a signed App Store build and upload it to TestFlight"
+  lane :beta do
+    team_id = env!("APPLE_TEAM_ID")
+
+    # Temporary keychain on CI so the signing certificate can be imported.
+    setup_ci
+
+    api_key = app_store_connect_api_key(
+      key_id: env!("ASC_KEY_ID"),
+      issuer_id: env!("ASC_ISSUER_ID"),
+      key_content: Base64.decode64(env!("ASC_KEY_P8_BASE64")),
+      in_house: false,
+    )
+
+    import_certificate(
+      certificate_path: decode_to_file("IOS_DIST_CERT_P12_BASE64", "dist.p12"),
+      certificate_password: ENV["IOS_DIST_CERT_PASSWORD"].to_s,
+      keychain_name: "fastlane_tmp_keychain",
+      keychain_password: "",
+    )
+
+    # Install the App Store provisioning profile and read its name for signing.
+    profile_path = decode_to_file("IOS_PROVISIONING_PROFILE_BASE64", "app.mobileprovision")
+    install_provisioning_profile(path: profile_path)
+    profile_name = sh(
+      "security cms -D -i #{profile_path.shellescape} | plutil -extract Name raw -o - -",
+      log: false,
+    ).strip
+
+    # Each upload needs a higher build number than the last one on TestFlight.
+    latest = latest_testflight_build_number(api_key: api_key, app_identifier: BUNDLE_ID, initial_build_number: 0)
+    increment_build_number(build_number: latest + 1, xcodeproj: "RMTA.xcodeproj")
+
+    # The project has no team / manual signing set; apply it for this build only.
+    update_code_signing_settings(
+      path: "RMTA.xcodeproj",
+      targets: [SCHEME],
+      use_automatic_signing: false,
+      team_id: team_id,
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name,
+      bundle_identifier: BUNDLE_ID,
+    )
+
+    build_app(
+      workspace: "RMTA.xcworkspace",
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      clean: true,
+      export_options: {
+        teamID: team_id,
+        signingStyle: "manual",
+        provisioningProfiles: { BUNDLE_ID => profile_name },
+      },
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      # Don't keep the runner (and its minutes) busy while Apple processes it.
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end
