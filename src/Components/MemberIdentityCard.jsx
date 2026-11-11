@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, Image, Linking, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ViewableImage from './ViewableImage';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
@@ -75,7 +76,7 @@ export default function MemberIdentityCard({ member = {} }) {
     <View>
       <View style={styles.card}>
         <View style={styles.banner}>
-          {shopPhoto ? <Image source={{ uri: shopPhoto }} style={styles.bannerImage} /> : null}
+          {shopPhoto ? <ViewableImage source={{ uri: shopPhoto }} style={styles.bannerImage} /> : null}
         </View>
         <View style={styles.avatarWrap}>
           {personPhoto ? (

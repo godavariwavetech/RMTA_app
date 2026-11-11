@@ -30,6 +30,11 @@ export default function CreateJobSheetStep2({ onNavigate }) {
   const nav = useFieldNav();
   const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
+  // Editing an existing job (opened from Job details): show which job.
+  const editJobCode = useSelector(state => {
+    const e = state.jobSheet.draft.editJob;
+    return e && e.id ? e.job_code || `#${e.id}` : '';
+  });
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftDevice = useSelector(state => state.jobSheet.draft.device) || {};
   const [deviceBrand, setDeviceBrand] = useState(draftDevice.brand || '');
@@ -107,7 +112,9 @@ export default function CreateJobSheetStep2({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 2 OF 7 · DEVICE</Text>
+            <Text style={styles.stepText}>
+              {editJobCode ? `EDITING ${editJobCode} · DEVICE` : 'STEP 2 OF 7 · DEVICE'}
+            </Text>
           </View>
 
           {/* Progress Bar */}

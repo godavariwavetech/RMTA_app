@@ -5,13 +5,13 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   ActivityIndicator,
   Linking,
   Modal,
   TextInput,
 } from 'react-native';
+import ViewableImage from '../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -26,7 +26,7 @@ import { ENDPOINTS, BASE_URL } from '../../Constants/config';
 import { postJson } from '../../redux/slices/authSlice';
 import { confirmAction } from '../../utils/appModal';
 import { sanitizeAmount } from '../../Components/FieldNav';
-import { setActiveJob } from '../../redux/slices/jobSheetSlice';
+import { setActiveJob, startJobEdit, jobToDraft } from '../../redux/slices/jobSheetSlice';
 import useRefresh from '../../utils/useRefresh';
 
 const STATUS_META = {
@@ -585,6 +585,18 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
     3: 'Handed over',
     4: 'Returned without repair',
   };
+  // Job details (not the customer) can be edited until the repair is completed:
+  // not started (0) or in progress (1). Completed (2), handed over (3) and
+  // returned (4) jobs are locked.
+  const canEdit = !!job && repairStatus < 2 && j.status !== 'completed';
+  const handleEditJob = () => {
+    dispatch(
+      startJobEdit(
+        jobToDraft({ ...j, id: j.id || (jobSummary && jobSummary.id) || jobId }, { photoUri: imageUri }),
+      ),
+    );
+    onNavigate('createJobSheetStep2');
+  };
   const prettify = s =>
     String(s || '')
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -607,6 +619,11 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                 <Text style={styles.heroBackText}>‹</Text>
               </TouchableOpacity>
               <Text style={styles.heroTitle}>Job details</Text>
+              {canEdit && (
+                <TouchableOpacity onPress={handleEditJob} style={styles.heroEdit}>
+                  <Text style={styles.heroEditText}>✎ Edit</Text>
+                </TouchableOpacity>
+              )}
               {!!job && (
                 <View style={styles.heroCode}>
                   <Text style={styles.heroCodeText}>{j.job_code || `#${j.id || jobId || ''}`}</Text>
@@ -622,7 +639,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
             {!!job && (
               <>
                 <View style={styles.heroDevice}>
-                  <Image
+                  <ViewableImage
                     source={
                       photos.length
                         ? { uri: photos[0].uri }
@@ -804,7 +821,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                         <View style={styles.customerPhotoContainer}>
                           <Text style={styles.customerPhotoLabel}>Customer photo</Text>
                           {customerPhotoSource && !customerPhotoFailed ? (
-                            <Image
+                            <ViewableImage
                               source={customerPhotoSource}
                               style={styles.customerPhoto}
                               resizeMode="contain"
@@ -864,7 +881,7 @@ export default function JobDetailsScreen({ onNavigate, jobId, jobSummary }) {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       {photos.map((p, idx) => (
                         <View key={`${p.type}-${idx}`} style={styles.photoItem}>
-                          <Image source={{ uri: p.uri }} style={styles.photoThumb} />
+                          <ViewableImage source={{ uri: p.uri }} style={styles.photoThumb} />
                           <Text style={styles.photoCaption}>{prettify(p.type)}</Text>
                         </View>
                       ))}
@@ -1593,6 +1610,14 @@ const styles = StyleSheet.create({
   heroTitle: { flex: 1, color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginLeft: 4 },
   heroCode: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
   heroCodeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  heroEdit: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  heroEditText: { color: Colors.primary, fontSize: 12, fontWeight: '800' },
   heroDevice: { flexDirection: 'row', alignItems: 'center' },
   heroImage: {
     width: 66,

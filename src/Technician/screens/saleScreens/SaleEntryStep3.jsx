@@ -6,12 +6,12 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   TextInput,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -158,7 +158,7 @@ export default function SaleEntryStep3({ onNavigate, buyerData, deviceData }) {
           <View style={styles.content}>
             {/* Device Summary Card */}
             <View style={styles.deviceCard}>
-              <Image
+              <ViewableImage
                 source={device.deviceImage}
                 style={styles.deviceImage}
               />

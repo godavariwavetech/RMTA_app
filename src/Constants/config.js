@@ -68,6 +68,8 @@ export const ENDPOINTS = {
   HANDOVER_REPAIR: 'public_app/handover_repair',
   VERIFY_HANDOVER_OTP: 'public_app/verify_handoverotp',
   MARK_JOB_READY: 'public_app/mark_job_ready',
+  // Edit an existing job (device / condition / repair / lock), never its customer.
+  EDIT_JOB_SHEET: 'public_app/editjobsheet',
   CREATE_PURCHASE_CUSTOMER: 'public_app/create_purchase_customer',
   CREATE_PURCHASE: 'public_app/create_purchase',
   GET_PURCHASE_SHEETS: 'public_app/get_purchase_sheets',

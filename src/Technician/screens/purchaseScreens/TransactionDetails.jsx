@@ -5,9 +5,9 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   widthPercentageToDP as wp,
@@ -16,6 +16,7 @@ import {
 
 import { Colors } from '../../../Constants/Colors';
 import { getPhotos } from '../../../utils/photoCache';
+import { formatDisplayDateTime } from '../../../utils/istDate';
 
 // Preferred display order / labels; any other field the API returns is
 // appended afterwards with a prettified label.
@@ -31,6 +32,9 @@ const LABELS = {
   color: 'Color',
   imei1: 'IMEI 1',
   imei2: 'IMEI 2',
+  imei_not_verified: 'IMEI verification',
+  imei_verified_datetime: 'IMEI verified on',
+  imeiverified_date: 'IMEI checked on',
   seller_name: 'Seller',
   seller_mobile: 'Seller mobile',
   buyer_name: 'Buyer',
@@ -70,17 +74,13 @@ const prettify = key =>
   key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 
 const formatValue = (key, v) => {
-  if (/_at$|_date$/.test(key)) {
-    const d = new Date(v);
-    if (!isNaN(d)) {
-      const hasTime = String(v).includes('T') && !/T00:00:00(\.000)?Z?$/.test(String(v));
-      return d.toLocaleString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        ...(hasTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-      });
-    }
+  // 0/1 flag from the purchase: show what it means, not the raw number.
+  // (Despite the name, 1 = verified on Sanchar Saathi, 0 = not verified.)
+  if (key === 'imei_not_verified') {
+    return Number(v) === 1 ? 'Verified' : 'Not verified';
+  }
+  if (/_at$|date$|datetime$/.test(key)) {
+    return formatDisplayDateTime(v);
   }
   if (MONEY.includes(key) && !isNaN(Number(v))) {
     return `₹${Number(v).toLocaleString('en-IN')}`;
@@ -227,7 +227,7 @@ export default function TransactionDetails({ onNavigate, type = 'purchases', ite
                 <View key={photo.label} style={styles.section}>
                   <Text style={styles.sectionTitle}>{photo.label}</Text>
                   <View style={styles.photoCard}>
-                    <Image source={{ uri: photo.uri }} style={styles.deviceImage} />
+                    <ViewableImage source={{ uri: photo.uri }} style={styles.deviceImage} />
                   </View>
                 </View>
               ))}

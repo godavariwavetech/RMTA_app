@@ -10,6 +10,7 @@ import {
   StatusBar,
   TextInput,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -259,7 +260,7 @@ export default function SaleEntryStep2({ onNavigate, buyerData }) {
           {/* Device Banner */}
           <View style={styles.bannerContainer}>
             {selectedDevice ? (
-              <Image
+              <ViewableImage
                 source={selectedDevice.deviceImage}
                 style={styles.bannerImage}
               />

@@ -5,11 +5,11 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -20,7 +20,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { formatDisplayDate } from '../../../Components/DatePickerModal';
 import { Colors } from '../../../Constants/Colors';
-import { createJobSheet } from '../../../redux/slices/jobSheetSlice';
+import { createJobSheet, editJobSheet } from '../../../redux/slices/jobSheetSlice';
 import StepNav from '../../../Components/StepNav';
 
 export default function CreateJobSheetStep7({ onNavigate }) {
@@ -28,6 +28,9 @@ export default function CreateJobSheetStep7({ onNavigate }) {
   const { draft } = useSelector(state => state.jobSheet);
   const user = useSelector(state => state.auth.user) || {};
   const [submitting, setSubmitting] = useState(false);
+  // Set when the steps were opened from Job details' Edit button: this step then
+  // saves the changes to that job instead of creating a new one.
+  const editJob = draft.editJob && draft.editJob.id ? draft.editJob : null;
 
   // Build the review summary from everything captured in steps 1–6.
   const customer = draft.customer || {};
@@ -106,7 +109,8 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
     const payload = {
       member_id: user.member_id,
-      customer_id: customer.customer_id || null,
+      // Editing never touches the customer, so customer_id isn't sent then.
+      ...(editJob ? { job_id: editJob.id } : { customer_id: customer.customer_id || null }),
       device_brand: device.brand || '',
       device_model: device.model || '',
       imei1: device.imei1 || '',
@@ -124,11 +128,32 @@ export default function CreateJobSheetStep7({ onNavigate }) {
       estimated_cost: repair.estimated_cost || '',
       estimated_delivery: repair.estimated_delivery_text || '',
       devicelock: access.lock_type && access.lock_type !== 'none' ? access.unlock_value || '' : '',
-      frontimage: photoBase64('front'),
-      backimage: photoBase64('back'),
-      damageimage: photoBase64('damage'),
+      // Photos are only sent when creating; editing a job can't change them.
+      ...(editJob
+        ? {}
+        : {
+            frontimage: photoBase64('front'),
+            backimage: photoBase64('back'),
+            damageimage: photoBase64('damage'),
+          }),
     };
     setSubmitting(true);
+    if (editJob) {
+      const updated = await dispatch(editJobSheet(payload));
+      setSubmitting(false);
+      if (editJobSheet.fulfilled.match(updated)) {
+        Alert.alert('Job updated', 'The job details have been saved.');
+        // Back to the job (reloaded from the server), dropping the edit steps.
+        onNavigate('goBackTo', { target: 'jobDetails', screenParams: { jobId: editJob.id } });
+      } else {
+        Alert.alert(
+          'Could not save',
+          (updated.payload && updated.payload.message) ||
+            'Could not update the job sheet. Please try again.',
+        );
+      }
+      return;
+    }
     const result = await dispatch(createJobSheet(payload));
     setSubmitting(false);
 
@@ -155,7 +180,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Text style={styles.backButtonText}>‹</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Review Job Sheet</Text>
+            <Text style={styles.headerTitle}>{editJob ? 'Review Changes' : 'Review Job Sheet'}</Text>
             <View style={styles.placeholderButton} />
           </View>
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -163,7 +188,9 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 6 OF 7 · REVIEW</Text>
+            <Text style={styles.stepText}>
+              {editJob ? `EDITING ${editJob.job_code || 'JOB'} · REVIEW` : 'STEP 6 OF 7 · REVIEW'}
+            </Text>
           </View>
 
           {/* Progress Bar */}
@@ -173,7 +200,7 @@ export default function CreateJobSheetStep7({ onNavigate }) {
 
           {/* Device Reference Image */}
           <View style={styles.deviceReferenceContainer}>
-            <Image source={previewSource} style={styles.deviceImage} />
+            <ViewableImage source={previewSource} style={styles.deviceImage} />
           </View>
 
 
@@ -182,13 +209,15 @@ export default function CreateJobSheetStep7({ onNavigate }) {
             {/* Title */}
             <Text style={styles.sectionTitle}>Everything look right?</Text>
             <Text style={styles.sectionDescription}>
-              Review the details before creating this job.
+              {editJob
+                ? 'Review the changes before saving. Customer details can\'t be changed.'
+                : 'Review the details before creating this job.'}
             </Text>
 
             {/* Device Summary Card */}
             <View style={styles.summaryCard}>
               <View style={styles.deviceSummaryHeader}>
-                <Image source={previewSource} style={styles.deviceSummaryImage} />
+                <ViewableImage source={previewSource} style={styles.deviceSummaryImage} />
                 <View style={styles.deviceSummaryInfo}>
                   <Text style={styles.deviceSummaryName}>{deviceName}</Text>
                   <Text style={styles.deviceSummarySpec}>{deviceSpec}</Text>
@@ -209,11 +238,15 @@ export default function CreateJobSheetStep7({ onNavigate }) {
                 <Text style={styles.detailLabel}>Mobile</Text>
                 <Text style={styles.detailValue}>{customerMobile}</Text>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Consent</Text>
-                <Text style={styles.detailValue}>{consentText}</Text>
-              </View>
+              {!editJob && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Consent</Text>
+                    <Text style={styles.detailValue}>{consentText}</Text>
+                  </View>
+                </>
+              )}
             </View>
 
             {/* Repair Section */}
@@ -250,7 +283,9 @@ export default function CreateJobSheetStep7({ onNavigate }) {
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.createButtonText}>Create job sheet</Text>
+              <Text style={styles.createButtonText}>
+                {editJob ? 'Save changes' : 'Create job sheet'}
+              </Text>
             )}
           </TouchableOpacity>
           </StepNav>

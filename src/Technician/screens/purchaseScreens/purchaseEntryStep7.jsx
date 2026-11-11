@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -23,7 +24,7 @@ import { ENDPOINTS } from '../../../Constants/config';
 import { postJson } from '../../../redux/slices/authSlice';
 import { resetPurchaseDraft } from '../../../redux/slices/purchaseSlice';
 import StepNav from '../../../Components/StepNav';
-import { istDateTime } from '../../../utils/istDate';
+import { istDateTime, formatDisplayDateTime } from '../../../utils/istDate';
 
 export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData, imeiData, ceirVerified, conditionData, priceData }) {
   const dispatch = useDispatch();
@@ -31,12 +32,14 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
   const draftConditionPhotos = useSelector(state => state.purchase.draft.conditionPhotos);
   const draftBillImage = useSelector(state => state.purchase.draft.billImage);
   const draftCeirVerified = useSelector(state => state.purchase.draft.ceirVerified);
+  const draftCeirVerifiedAt = useSelector(state => state.purchase.draft.ceirVerifiedAt);
   const [submitting, setSubmitting] = useState(false);
 
   // Collapse all the screens' data into the flat payload create_purchase expects.
   const buildPayload = () => {
     const now = new Date().toISOString();
     const conditionPhotos = Array.isArray(draftConditionPhotos) ? draftConditionPhotos : [];
+    const isCeirVerified = !!(ceirVerified ?? draftCeirVerified);
     return {
       member_id: user.member_id,
       seller_id: sellerData?.customer_id || null,
@@ -48,7 +51,9 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
       imeiverified_date: imeiData?.verifiedAt || istDateTime(),
       // Step 3's "IMEI verified on Sanchar Saathi" checkbox: 0 = not verified
       // (default, also when the box was never ticked), 1 = verified.
-      imei_not_verified: (ceirVerified ?? draftCeirVerified) ? 1 : 0,
+      imei_not_verified: isCeirVerified ? 1 : 0,
+      // "YYYY-MM-DD HH:mm:ss" in India time: when that box was ticked; null when not verified.
+      imei_verified_datetime: isCeirVerified ? draftCeirVerifiedAt || istDateTime() : null,
       color: deviceData?.color || '',
       storage: deviceData?.storage || '',
       screen: conditionData?.screen || '',
@@ -185,7 +190,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
           {/* Device Image Section */}
           <View style={styles.deviceImageSection}>
-            <Image
+            <ViewableImage
               source={deviceImageSource}
               style={styles.deviceImage}
             />
@@ -199,7 +204,7 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
 
             {/* Device Card */}
             <View style={styles.deviceCard}>
-                <Image
+                <ViewableImage
                 source={deviceImageSource}
                 style={styles.deviceImageSmall}
                 />
@@ -260,7 +265,11 @@ export default function PurchaseEntryStep7({ onNavigate, sellerData, deviceData,
                 />
                 <View style={styles.statusContent}>
                   <Text style={styles.statusTitle}>CEIR verified</Text>
-                  <Text style={styles.statusSubtitle}>Device check recorded</Text>
+                  <Text style={styles.statusSubtitle}>
+                    {draftCeirVerifiedAt
+                      ? `Verified on ${formatDisplayDateTime(draftCeirVerifiedAt)}`
+                      : 'Device check recorded'}
+                  </Text>
                 </View>
               </View>
             )}

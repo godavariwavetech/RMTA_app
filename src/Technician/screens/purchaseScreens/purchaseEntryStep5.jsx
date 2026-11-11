@@ -10,6 +10,7 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
 
@@ -346,7 +347,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
                   {photos.map((photo, index) => (
                     <View key={photo.uri || index} style={styles.thumbWrapper}>
                       {photo.uri ? (
-                        <Image source={{ uri: photo.uri }} style={styles.thumb} />
+                        <ViewableImage source={{ uri: photo.uri }} style={styles.thumb} />
                       ) : (
                         <View style={[styles.thumb, styles.thumbPlaceholder]}>
                           <Text style={styles.thumbPlaceholderText}>✓</Text>
@@ -384,7 +385,7 @@ export default function PurchaseEntryStep5({ onNavigate, sellerData, deviceData,
               {billImage ? (
                 <View style={styles.thumbRow}>
                   <View style={styles.thumbWrapper}>
-                    <Image source={{ uri: billImage.uri }} style={styles.thumb} />
+                    <ViewableImage source={{ uri: billImage.uri }} style={styles.thumb} />
                     <TouchableOpacity
                       style={styles.thumbRemove}
                       onPress={() => setBillImage(null)}

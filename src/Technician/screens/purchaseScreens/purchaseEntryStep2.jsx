@@ -11,6 +11,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
 
@@ -176,7 +177,7 @@ export default function PurchaseEntryStep2({ onNavigate, sellerData }) {
                 onPress={handleCapturePhoto}
               >
                 {formData.devicePhoto && formData.devicePhoto.uri ? (
-                  <Image
+                  <ViewableImage
                     source={{ uri: formData.devicePhoto.uri }}
                     style={styles.photoPreview}
                   />

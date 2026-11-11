@@ -10,6 +10,7 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
 
@@ -33,6 +34,11 @@ const PHOTO_CATEGORIES = [
 export default function CreateJobSheetStep3({ onNavigate }) {
   const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
+  // Editing an existing job (opened from Job details): show which job.
+  const editJobCode = useSelector(state => {
+    const e = state.jobSheet.draft.editJob;
+    return e && e.id ? e.job_code || `#${e.id}` : '';
+  });
   const draftPhotos = useSelector(state => state.jobSheet.draft.photos);
   const draftConditions = useSelector(state => state.jobSheet.draft.conditions);
 
@@ -70,8 +76,9 @@ export default function CreateJobSheetStep3({ onNavigate }) {
     const restored = {};
     if (Array.isArray(draftPhotos)) {
       draftPhotos.forEach(p => {
-        if (p && p.base64) {
-          restored[p.photo_type] = { uri: p.uri || null, base64: p.base64 };
+        // Photos already on the server (editing a job) have a uri but no base64.
+        if (p && (p.base64 || p.uri)) {
+          restored[p.photo_type] = { uri: p.uri || null, base64: p.base64 || null };
         }
       });
     }
@@ -114,11 +121,13 @@ export default function CreateJobSheetStep3({ onNavigate }) {
         condition_value: selections[key],
       }));
     // Keep the local uri too so the previews show when revisiting this step.
+    // A photo without base64 is an existing server photo (editing a job): it is
+    // kept for the preview but not re-uploaded.
     const photoList = Object.keys(photos)
-      .filter(key => photos[key] && photos[key].base64)
+      .filter(key => photos[key] && (photos[key].base64 || photos[key].uri))
       .map(key => ({
         photo_type: key,
-        base64: photos[key].base64,
+        base64: photos[key].base64 || null,
         uri: photos[key].uri || null,
       }));
     return { conditions, photos: photoList, conditionPhotos: [] };
@@ -204,7 +213,9 @@ export default function CreateJobSheetStep3({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 3 OF 7 · CONDITION</Text>
+            <Text style={styles.stepText}>
+              {editJobCode ? `EDITING ${editJobCode} · CONDITION` : 'STEP 3 OF 7 · CONDITION'}
+            </Text>
           </View>
 
           {/* Progress Bar */}
@@ -262,15 +273,20 @@ export default function CreateJobSheetStep3({ onNavigate }) {
               <View style={styles.photoGrid}>
                 {PHOTO_CATEGORIES.map(category => {
                   const photo = photos[category.id];
+                  // Photos can't be changed when editing an existing job: the card
+                  // only shows the saved photo (tap the image to view it).
+                  const PhotoCard = editJobCode ? View : TouchableOpacity;
+                  const cardProps = editJobCode
+                    ? {}
+                    : { onPress: () => pickPhoto(category.id), activeOpacity: 0.8 };
                   return (
-                    <TouchableOpacity
+                    <PhotoCard
                       key={category.id}
                       style={styles.photoCard}
-                      onPress={() => pickPhoto(category.id)}
-                      activeOpacity={0.8}
+                      {...cardProps}
                     >
                       {photo && photo.uri ? (
-                        <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+                        <ViewableImage source={{ uri: photo.uri }} style={styles.photoPreview} />
                       ) : (
                         <Image
                           source={require('../../../Assets/icons/camera.png')}
@@ -279,9 +295,15 @@ export default function CreateJobSheetStep3({ onNavigate }) {
                       )}
                       <Text style={styles.photoTitle}>{category.title}</Text>
                       <Text style={[styles.photoSubtext, photo && styles.photoUploaded]}>
-                        {photo ? '✓ Tap to replace' : 'JPG or PNG'}
+                        {editJobCode
+                          ? photo
+                            ? '✓ Saved'
+                            : 'No photo'
+                          : photo
+                          ? '✓ Tap to replace'
+                          : 'JPG or PNG'}
                       </Text>
-                    </TouchableOpacity>
+                    </PhotoCard>
                   );
                 })}
               </View>

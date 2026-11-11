@@ -57,6 +57,14 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
   // The technician ticks this after checking the IMEI on Sanchar Saathi.
   const draftCeirVerified = useSelector(state => state.purchase.draft.ceirVerified);
   const [sancharChecked, setSancharChecked] = useState(!!draftCeirVerified);
+  // When the box was ticked (India time), sent with the purchase as imei_verified_datetime.
+  const draftCeirVerifiedAt = useSelector(state => state.purchase.draft.ceirVerifiedAt);
+  const [ceirVerifiedAt, setCeirVerifiedAt] = useState(draftCeirVerified ? draftCeirVerifiedAt || null : null);
+  const toggleSancharChecked = () => {
+    const next = !sancharChecked;
+    setSancharChecked(next);
+    setCeirVerifiedAt(next ? istDateTime() : null);
+  };
 
   const openLink = url => {
     Linking.openURL(url).catch(() =>
@@ -84,6 +92,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
     setImeiVerified(false);
     setVerifiedAt(null);
     setSancharChecked(false);
+    setCeirVerifiedAt(null);
     setImeiStatus('');
   };
 
@@ -100,7 +109,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
 
   const handleContinue = () => {
     const imeiData = { imei: imei, imei2: imei2, verified: imeiVerified, verifiedAt };
-    dispatch(updatePurchaseDraft({ imei: imeiData, ceirVerified: sancharChecked }));
+    dispatch(updatePurchaseDraft({ imei: imeiData, ceirVerified: sancharChecked, ceirVerifiedAt }));
     if (onNavigate) {
       onNavigate('purchaseEntryStep5', {
         sellerData: sellerData,
@@ -118,6 +127,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
       updatePurchaseDraft({
         imei: { imei: imei, imei2: imei2, verified: imeiVerified, verifiedAt },
         ceirVerified: sancharChecked,
+        ceirVerifiedAt,
       }),
     );
     if (onNavigate) {
@@ -237,7 +247,7 @@ export default function PurchaseEntryStep3({ onNavigate, sellerData, deviceData 
 
                 <TouchableOpacity
                   style={[styles.checkRow, sancharChecked && styles.checkRowDone, !sancharChecked && styles.checkRowRequired]}
-                  onPress={() => setSancharChecked(prev => !prev)}
+                  onPress={toggleSancharChecked}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.checkBox, sancharChecked && styles.checkBoxDone]}>

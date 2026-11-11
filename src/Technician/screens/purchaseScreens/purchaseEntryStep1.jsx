@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
 
@@ -266,7 +267,7 @@ export default function PurchaseEntryStep1({ onNavigate, fresh }) {
               onPress={handleCapturePhoto}
             >
               {formData.sellerPhoto && formData.sellerPhoto.uri ? (
-                <Image
+                <ViewableImage
                   source={{ uri: formData.sellerPhoto.uri }}
                   style={styles.photoPreview}
                 />

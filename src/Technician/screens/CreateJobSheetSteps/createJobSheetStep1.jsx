@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { chooseImageSource } from '../../../utils/imagePicker';
 
@@ -323,7 +324,7 @@ export default function CreateJobSheetStep1({ onNavigate, fresh }) {
                   activeOpacity={0.8}
                 >
                   {photo && photo.uri ? (
-                    <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+                    <ViewableImage source={{ uri: photo.uri }} style={styles.photoPreview} />
                   ) : (
                     <Image
                       source={require('../../../Assets/icons/camera.png')}

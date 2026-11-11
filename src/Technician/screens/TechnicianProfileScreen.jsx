@@ -8,6 +8,7 @@ import {
   Image,
   StatusBar,
 } from 'react-native';
+import ViewableImage from '../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -226,7 +227,7 @@ export default function TechnicianProfileScreen({ onNavigate }) {
               <View style={[styles.profileCardSubCon, styles.profileRow]}>
                 <View style={styles.photoCircle}>
                   {photoUri ? (
-                    <Image source={{ uri: photoUri }} style={styles.photoImage} />
+                    <ViewableImage source={{ uri: photoUri }} style={styles.photoImage} />
                   ) : (
                     <Text style={styles.photoInitial}>
                       {String(techName).trim().charAt(0).toUpperCase()}

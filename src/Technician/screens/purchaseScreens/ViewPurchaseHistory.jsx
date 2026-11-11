@@ -10,6 +10,7 @@ import {
   TextInput,
   FlatList,
 } from 'react-native';
+import ViewableImage from '../../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -122,7 +123,7 @@ export default function ViewPurchaseHistory({ onNavigate }) {
   const renderPurchaseCard = ({ item }) => (
     <View style={styles.transactionCard}>
       <View style={styles.deviceCardHeader}>
-        <Image
+        <ViewableImage
           source={item.image}
           style={styles.deviceImage}
         />

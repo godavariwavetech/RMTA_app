@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import ViewableImage from '../../Components/ViewableImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -68,7 +69,7 @@ export default function SupportUsersScreen({ onNavigate }) {
       <View style={styles.userCard}>
         <View style={styles.userTopRow}>
           {photo ? (
-            <Image source={{ uri: photo }} style={styles.shopImage} />
+            <ViewableImage source={{ uri: photo }} style={styles.shopImage} />
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>

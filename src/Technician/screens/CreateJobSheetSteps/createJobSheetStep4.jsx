@@ -29,6 +29,11 @@ export default function CreateJobSheetStep4({ onNavigate }) {
   const nav = useFieldNav();
   const [tried, setTried] = useState(false);
   const dispatch = useDispatch();
+  // Editing an existing job (opened from Job details): show which job.
+  const editJobCode = useSelector(state => {
+    const e = state.jobSheet.draft.editJob;
+    return e && e.id ? e.job_code || `#${e.id}` : '';
+  });
   // Pre-fill from the saved draft so navigating back keeps what was entered.
   const draftRepair = useSelector(state => state.jobSheet.draft.repair) || {};
   // Several categories can be picked (e.g. Display + Battery). Restored from the draft;
@@ -106,7 +111,9 @@ export default function CreateJobSheetStep4({ onNavigate }) {
 
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>STEP 4 OF 7 · REPAIR</Text>
+            <Text style={styles.stepText}>
+              {editJobCode ? `EDITING ${editJobCode} · REPAIR` : 'STEP 4 OF 7 · REPAIR'}
+            </Text>
           </View>
 
           {/* Progress Bar */}
