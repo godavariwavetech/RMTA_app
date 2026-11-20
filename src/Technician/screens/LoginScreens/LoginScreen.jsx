@@ -49,9 +49,9 @@ export default function LoginScreen({ onNavigate, initialMode }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const passwordInput = useRef(null);
-  // 'technician' or 'admin' — defaults to technician, but can be preselected
-  // (e.g. RegisterScreen sends 'admin' when the account already exists).
-  const [loginMode, setLoginMode] = useState(initialMode || 'technician');
+  // 'technician' or 'admin' (Union Member) — defaults to Union Member, but can be
+  // preselected by the caller (e.g. RegisterScreen passes the mode it registered for).
+  const [loginMode, setLoginMode] = useState(initialMode || 'admin');
 
   const dispatch = useDispatch();
 

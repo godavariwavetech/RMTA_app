@@ -54,6 +54,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
     fullName: '',
     mobileNumber: '',
     shopName: '',
+    gstNumber: '',
     shopAddress: '',
     city: '',
     state: '',
@@ -150,6 +151,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       fullName,
       mobileNumber,
       shopName,
+      gstNumber,
       shopAddress,
       city,
       state,
@@ -199,6 +201,13 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       return;
     }
 
+    // GST / RC number is optional; when given it must look like one.
+    const gst = String(gstNumber || '').trim().toUpperCase();
+    if (gst && !/^[A-Z0-9/-]{5,20}$/.test(gst)) {
+      alert('Please enter a valid GST / RC number (letters and digits only)');
+      return;
+    }
+
     if (password.length < 6) {
       alert('Password must be at least 6 characters');
       return;
@@ -215,6 +224,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       full_name: fullName.trim(),
       mobile: normalizeMobileNumber(mobileNumber),
       shop_name: shopName.trim(),
+      ...(gst ? { gst_number: gst } : {}),
       address: shopAddress.trim(),
       city: city.trim(),
       state: state.trim(),
@@ -369,6 +379,23 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                   value={form.shopName}
                   onChangeText={text => updateField('shopName', text)}
                   autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            {/* GST / RC Number Field (optional) — printed on invoices and job sheets */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>GST / RC number (Optional)</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 37ABCDE1234F1Z5"
+                  placeholderTextColor="#999999"
+                  value={form.gstNumber}
+                  onChangeText={text => updateField('gstNumber', text.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={20}
                 />
               </View>
             </View>

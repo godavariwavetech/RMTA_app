@@ -1,6 +1,7 @@
 import FileShare from 'react-native-share';
 
 import { convertToPdf, pdfBodyStyle, pdfHeadStyle } from './pdfSizes';
+import { shopInfoFrom } from './shopInfo';
 
 // Builds and shares the job sheet PDF. Used by the job list (the "Share job sheet PDF"
 // button on a card) and by the "Job created" screen, so both make the same document.
@@ -24,8 +25,17 @@ export function jobSheetInfo(record) {
   return { j, jobId, jobCode, deviceName, price };
 }
 
-export function buildJobSheetHtml(record, sizeKey) {
+// `member` is the shop owner's record (useMemberProfile()): its shop name, contact
+// number and GST/RC number head the sheet instead of RMTA.
+export function buildJobSheetHtml(record, sizeKey, member) {
   const { j, jobId, jobCode, deviceName, price } = jobSheetInfo(record);
+  const shop = shopInfoFrom(member);
+  const shopName = shop.name || 'Service Record';
+  const shopLines = [
+    shop.address,
+    shop.mobile && `Contact: ${shop.mobile}`,
+    shop.gst && `GST / RC No: ${shop.gst}`,
+  ].filter(Boolean);
   const row = (label, value) =>
     value !== null && value !== undefined && value !== ''
       ? `<tr><th>${esc(label)}</th><td>${esc(value)}</td></tr>`
@@ -41,6 +51,7 @@ export function buildJobSheetHtml(record, sizeKey) {
         *{box-sizing:border-box} body{font-family:Helvetica,Arial,sans-serif;color:#17243A;background:#fff}
         .brand{background:#071A3D;color:#fff;padding:22px 24px;border-radius:12px;margin-bottom:22px}
         .brand small{color:#9CCBFF;font-size:10px;letter-spacing:2px;font-weight:bold}
+        .shop{font-size:11px;color:#D4DFEF;margin:2px 0 0}
         h1{font-size:24px;margin:8px 0 4px;color:#fff} .meta{font-size:11px;color:#D4DFEF;margin:0}
         h2{font-size:13px;color:#173B82;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #DCE5F1}
         table{width:100%;border-collapse:collapse} tr:nth-child(even){background:#F6F8FB}
@@ -50,7 +61,12 @@ export function buildJobSheetHtml(record, sizeKey) {
         ${sizeKey === 'thermal' ? '.brand{padding:10px;border-radius:6px;margin-bottom:12px}h1{font-size:16px}h2{font-size:11px;margin:10px 0 4px}th,td{font-size:9px;padding:5px 4px}' : ''}
       </style></head>
       <body style="${pdfBodyStyle(sizeKey)}">
-        <header class="brand"><small>RMTA · SERVICE RECORD</small><h1>Job Sheet</h1><p class="meta">${esc(jobCode)} · ${esc(created)}</p></header>
+        <header class="brand">
+          <small>JOB SHEET</small>
+          <h1>${esc(shopName)}</h1>
+          ${shopLines.map(l => `<p class="shop">${esc(l)}</p>`).join('')}
+          <p class="meta" style="margin-top:8px">${esc(jobCode)} · ${esc(created)}</p>
+        </header>
         <h2 style="border-bottom:1px solid #E5E7EB;padding-bottom:8px;">Customer</h2>
         <table style="width:100%;border-collapse:collapse;">
           ${row('Job ID', jobId)}
@@ -82,17 +98,18 @@ export function buildJobSheetHtml(record, sizeKey) {
           ${row('Estimated cost', price)}
           ${row('Estimated delivery', j.estimated_delivery)}
         </table>
-        <p class="footer">Thank you for choosing RMTA · Keep this sheet for your service records</p>
+        <p class="footer">Thank you for choosing ${esc(shop.name || 'us')}${shop.mobile ? ` · For queries call ${esc(shop.mobile)}` : ''} · Keep this sheet for your service records</p>
       </body>
     </html>`;
 }
 
 // Creates the PDF and opens the system share sheet (WhatsApp, Gmail, Drive...). Resolves
 // { saved: true, filePath } when the share sheet could not open and the file was only saved.
-export async function shareJobSheetPdf(record, sizeKey) {
+export async function shareJobSheetPdf(record, sizeKey, member) {
   const { jobCode, deviceName } = jobSheetInfo(record);
+  const shop = shopInfoFrom(member);
   const file = await convertToPdf({
-    html: buildJobSheetHtml(record, sizeKey),
+    html: buildJobSheetHtml(record, sizeKey, member),
     fileName: `JobSheet-${jobCode}`.replace(/[^A-Za-z0-9_-]/g, '_'),
     sizeKey,
   });
@@ -100,7 +117,13 @@ export async function shareJobSheetPdf(record, sizeKey) {
   try {
     await FileShare.open({
       title: `Job Sheet ${jobCode}`,
-      message: `Job Sheet ${jobCode} - ${deviceName}`,
+      message: [
+        `Job Sheet ${jobCode} - ${deviceName}`,
+        shop.name,
+        shop.mobile && `Contact: ${shop.mobile}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
       url,
       type: 'application/pdf',
       failOnCancel: false,

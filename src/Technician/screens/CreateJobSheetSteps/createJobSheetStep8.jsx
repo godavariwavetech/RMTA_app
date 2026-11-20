@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PdfSizeModal from '../../../Components/PdfSizeModal';
 import { shareJobSheetPdf } from '../../../utils/jobSheetPdf';
+import { useMemberProfile } from '../../../utils/useAccountProfile';
 
 import {
   widthPercentageToDP as wp,
@@ -26,6 +27,8 @@ export default function CreateJobSheetStep8({ onNavigate, job, summary }) {
   // `summary` carries everything entered in the steps; `job` is the server's
   // record (job code, id, ...) and wins where both have a field.
   const j = { ...(summary || {}), ...(job || {}) };
+  // The shop's own details (name, contact, GST) go on the job sheet.
+  const shopProfile = useMemberProfile();
   const [sharing, setSharing] = useState(false);
   const [sizeModalVisible, setSizeModalVisible] = useState(false);
   const jobId = j.job_id || j.job_sheet_id || j.id || j.insertId || '';
@@ -47,7 +50,7 @@ export default function CreateJobSheetStep8({ onNavigate, job, summary }) {
     if (sharing) return;
     setSharing(true);
     try {
-      const result = await shareJobSheetPdf(j, sizeKey);
+      const result = await shareJobSheetPdf(j, sizeKey, shopProfile);
       if (result.saved) Alert.alert('PDF saved', `Saved to:\n${result.filePath}`);
     } catch (err) {
       Alert.alert('Could not create PDF', err.message || 'Please try again.');

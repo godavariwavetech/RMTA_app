@@ -28,6 +28,7 @@ import { postJson } from '../../redux/slices/authSlice';
 import useRefresh from '../../utils/useRefresh';
 import PdfSizeModal from '../../Components/PdfSizeModal';
 import { shareJobSheetPdf } from '../../utils/jobSheetPdf';
+import { useMemberProfile } from '../../utils/useAccountProfile';
 import { canAccessTechnicianMenu } from '../../utils/technicianPermissions';
 
 // DB status → display label + colour for the card badge.
@@ -64,6 +65,8 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
   const { tick, refreshControl } = useRefresh();
   const user = useSelector(state => state.auth.user) || {};
   const canCreateJobSheet = canAccessTechnicianMenu(user, 1);
+  // The shop's own details (name, contact, GST) go on shared job sheets.
+  const shopProfile = useMemberProfile();
   const [selectedNavItem, setSelectedNavItem] = useState('jobs');
   const [searchText, setSearchText] = useState('');
   const [selectedFilter, setSelectedFilter] = useState(initialFilter || 'active');
@@ -77,7 +80,7 @@ export default function JobSheetList({ onNavigate, initialFilter }) {
   const sharePdf = async (job, sizeKey) => {
     setPdfBusyId(job.id);
     try {
-      const result = await shareJobSheetPdf(job, sizeKey);
+      const result = await shareJobSheetPdf(job, sizeKey, shopProfile);
       if (result.saved) Alert.alert('PDF saved', `Saved to:\n${result.filePath}`);
     } catch (err) {
       Alert.alert('Could not create PDF', err.message || 'Please try again.');

@@ -23,6 +23,8 @@ import {
   heightPercentageToDP as hp,
 } from '../../../utils/responsive';
 import { useSelector } from 'react-redux';
+import { useMemberProfile } from '../../../utils/useAccountProfile';
+import { shopInfoFrom } from '../../../utils/shopInfo';
 
 import { Colors } from '../../../Constants/Colors';
 import StepNav from '../../../Components/StepNav';
@@ -42,7 +44,16 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
     month: 'long',
     day: '2-digit'
   }));
-  const [storeName] = useState(user.shop_name || 'Your Store');
+  // The shop's own details head the invoice. Staff logins have no shop of their
+  // own, so the owner's (member's) record is used for them.
+  const shopProfile = useMemberProfile();
+  const shop = shopInfoFrom({ ...user, ...shopProfile });
+  const storeName = shop.name || 'Your Store';
+  const shopLines = [
+    shop.address,
+    shop.mobile && `Contact: ${shop.mobile}`,
+    shop.gst && `GST / RC No: ${shop.gst}`,
+  ].filter(Boolean);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [printing, setPrinting] = useState(false);
 
@@ -50,8 +61,12 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
     <html>
       <head>${pdfHeadStyle(sizeKey)}</head>
       <body style="${pdfBodyStyle(sizeKey)}">
-        <h1 style="margin-bottom: 4px;">${invoiceId}</h1>
-        <p style="color: #6B7280; margin-top: 0;">${invoiceDate} · ${storeName}</p>
+        <div style="border-bottom: 2px solid #071A3D; padding-bottom: 10px; margin-bottom: 14px;">
+          <h1 style="margin: 0 0 4px;">${storeName}</h1>
+          ${shopLines.map(l => `<p style="color: #374151; margin: 2px 0; font-size: 12px;">${l}</p>`).join('')}
+        </div>
+        <h2 style="margin-bottom: 4px;">${invoiceId}</h2>
+        <p style="color: #6B7280; margin-top: 0;">${invoiceDate}</p>
         <h2 style="border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">Invoice</h2>
         <table style="width: 100%; border-collapse: collapse;">
           <tr><td style="padding: 8px 0; color: #6B7280;">Buyer</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${buyer.buyerName || 'N/A'}</td></tr>
@@ -163,6 +178,7 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
 Invoice: ${invoiceId}
 Date: ${invoiceDate}
 Store: ${storeName}
+${shopLines.join('\n')}
 
 Buyer: ${buyer.buyerName || 'N/A'}
 Device: ${deviceTitle}
@@ -270,6 +286,11 @@ Payment: ${paymentMethodDisplay}
               <Text style={styles.invoiceDate}>
                 {invoiceDate} - {storeName}
               </Text>
+              {shopLines.map(line => (
+                <Text key={line} style={styles.invoiceDate}>
+                  {line}
+                </Text>
+              ))}
             </View>
 
             {/* Invoice Card */}
