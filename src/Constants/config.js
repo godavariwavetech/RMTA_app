@@ -44,6 +44,7 @@ export const ENDPOINTS = {
   GET_JOBS_DATA: 'public_app/getjobsdata',
   CREATE_TECHNICIANS_DATA: 'public_app/createtechniciansdata',
   GET_TECHNICIANS_DATA: 'public_app/gettechniciansdata',
+  DELETE_TECHNICIAN: 'public_app/deletetechenician',
   GET_APP_MENU: 'public_app/geappmenu',
   POST_TECHNICIAN_PERMISSIONS: 'public_app/posttechinicianspermissions',
   GET_TECHNICIAN_PERMISSIONS: 'public_app/gettechicianspeermissionsdata',

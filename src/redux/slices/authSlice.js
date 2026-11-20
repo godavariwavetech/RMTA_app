@@ -308,6 +308,31 @@ export const loginUser = createAsyncThunk(
       const responseUser = Array.isArray(responseData)
         ? responseData[0]
         : responseData || (data && data.user) || data;
+
+      // Deleted account: the server may flag it with d_in = 1 on the record (even
+      // alongside success:false), a 403/410 status, a code, or a message saying so.
+      // Check this before the generic failure so it isn't shown as "invalid credentials".
+      const serverMessage = String((data && (data.message || data.msg)) || '');
+      const serverCode = String((data && data.code) || '').toUpperCase();
+      const failed = !response.ok || !data || data.success === false;
+      const isDeleted =
+        (responseUser && typeof responseUser === 'object' && Number(responseUser.d_in) === 1) ||
+        Number(data && data.d_in) === 1 ||
+        response.status === 410 ||
+        Number(data && data.status) === 410 ||
+        (failed &&
+          (/DELETED|REMOVED|DISABLED|BLOCKED/.test(serverCode) ||
+            /delet|remov|deactivat|disabled|blocked|no longer/i.test(serverMessage)));
+      if (isDeleted) {
+        return rejectWithValue({
+          status: response.status,
+          code: 'ACCOUNT_DELETED',
+          message: isTechnician
+            ? 'Your account has been deleted by your shop owner. Please contact them to get access again.'
+            : 'Your account has been deleted. Please contact the RMTA administrator.',
+        });
+      }
+
       if (
         !response.ok ||
         !data ||
@@ -320,15 +345,6 @@ export const loginUser = createAsyncThunk(
           code: data && data.code,
           message:
             (data && data.message) || 'Login failed. Please try again.',
-        });
-      }
-
-      // d_in = 1 marks a deleted account: refuse the login before anything is saved.
-      if (Number(responseUser.d_in)) {
-        return rejectWithValue({
-          status: response.status,
-          code: 'ACCOUNT_DELETED',
-          message: 'This account is no longer active. Please contact your admin.',
         });
       }
 

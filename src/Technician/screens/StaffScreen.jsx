@@ -194,6 +194,45 @@ export default function StaffScreen({ onNavigate }) {
     }
   };
 
+  // Delete a staff member: POST /public_app/deletetechenician { member_id, mobile_number, tech_id }
+  const [deletingId, setDeletingId] = useState(null);
+  const deleteStaff = async member => {
+    setDeletingId(member.id);
+    try {
+      const { response, data } = await postJson(ENDPOINTS.DELETE_TECHNICIAN, {
+        member_id: user.member_id,
+        mobile_number: member.mobile_number,
+        tech_id: member.id,
+      });
+      setDeletingId(null);
+      if (!response.ok || (data && data.success === false)) {
+        Alert.alert(
+          'Could not delete staff',
+          (data && (data.message || data.msg)) || 'Please try again.',
+        );
+        return;
+      }
+      setStaff(prev => prev.filter(s => String(s.id) !== String(member.id)));
+      loadStaff();
+      Alert.alert('Staff deleted', `${member.tech_name || 'Staff member'} has been removed.`);
+    } catch (err) {
+      setDeletingId(null);
+      Alert.alert('Could not delete staff', err.message);
+    }
+  };
+
+  const confirmDelete = member => {
+    if (deletingId) return;
+    Alert.alert(
+      'Delete staff',
+      `Remove ${member.tech_name || 'this staff member'} from your staff? They will no longer be able to log in.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteStaff(member) },
+      ],
+    );
+  };
+
   const openForm = () => {
     setName('');
     setMobile('');
@@ -471,6 +510,18 @@ export default function StaffScreen({ onNavigate }) {
                 {!!item.mobile_number && <Text style={styles.mobile}>{item.mobile_number}</Text>}
               </View>
               {!!item.i_ts && <Text style={styles.added}>{String(item.i_ts).slice(0, 10)}</Text>}
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => confirmDelete(item)}
+                disabled={!!deletingId}
+                hitSlop={8}
+              >
+                {String(deletingId) === String(item.id) ? (
+                  <ActivityIndicator size="small" color="#DC2626" />
+                ) : (
+                  <Text style={styles.deleteText}>Delete</Text>
+                )}
+              </TouchableOpacity>
               <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>
           )}
@@ -552,6 +603,16 @@ const styles = StyleSheet.create({
   mobile: { fontSize: 12, color: '#64748B', marginTop: 2 },
   added: { fontSize: 11, color: '#94A3B8' },
   chevron: { fontSize: 22, color: '#CBD5E1', marginLeft: 8 },
+  deleteButton: {
+    marginLeft: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  deleteText: { color: '#DC2626', fontSize: 12, fontWeight: '700' },
 
   detailCard: {
     backgroundColor: '#FFFFFF',

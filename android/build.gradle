@@ -20,3 +20,21 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// react-native-print hardcodes compileSdk 31 / buildTools 31.0.0, which fails
+// the release AAR metadata check (RN 0.87 needs 34+). Force it onto the app's
+// SDK versions here, since edits inside node_modules are lost on `npm ci`.
+subprojects { subproject ->
+    if (subproject.name == "react-native-print") {
+        subproject.afterEvaluate {
+            subproject.android {
+                compileSdkVersion rootProject.ext.compileSdkVersion
+                buildToolsVersion rootProject.ext.buildToolsVersion
+                defaultConfig {
+                    minSdkVersion rootProject.ext.minSdkVersion
+                    targetSdkVersion rootProject.ext.targetSdkVersion
+                }
+            }
+        }
+    }
+}

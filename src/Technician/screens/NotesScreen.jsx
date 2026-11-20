@@ -405,9 +405,11 @@ export default function NotesScreen({ onNavigate }) {
             </Text>
             <Text style={styles.rowTime}>{timeOf(item.updatedAt || item.createdAt)}</Text>
           </View>
-          <Text style={styles.rowPreview} numberOfLines={2}>
-            {rest || 'No additional text'}
-          </Text>
+          {!!rest && (
+            <Text style={styles.rowPreview} numberOfLines={2}>
+              {rest}
+            </Text>
+          )}
           <View style={styles.rowActions}>
             <TouchableOpacity style={styles.actionBtn} onPress={() => openEdit(item)} activeOpacity={0.8}>
               <Text style={styles.actionEditText}>✎  {t('notesEdit')}</Text>

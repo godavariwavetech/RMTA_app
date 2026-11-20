@@ -6,14 +6,17 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Share,
   Alert,
   ActivityIndicator,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PdfSizeModal from '../../../Components/PdfSizeModal';
 import { convertToPdf, pdfBodyStyle, pdfHeadStyle } from '../../../utils/pdfSizes';
 import FileShare from 'react-native-share';
+import RNPrint from 'react-native-print';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 
 import {
   widthPercentageToDP as wp,
@@ -66,8 +69,12 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
   const generateInvoicePdf = sizeKey =>
     convertToPdf({ html: buildInvoiceHtml(sizeKey), fileName: invoiceId, sizeKey });
 
+  const toFileUrl = path => (path.startsWith('file://') ? path : `file://${path}`);
+  const toPlainPath = path => path.replace(/^file:\/\//, '');
+
   // Download / Print first ask which paper size to make the PDF for.
   const [pdfAction, setPdfAction] = useState(null); // 'download' | 'print' | null
+  const [sharing, setSharing] = useState(false);
   const handlePdfSizeSelected = sizeKey => {
     const action = pdfAction;
     setPdfAction(null);
@@ -75,73 +82,122 @@ export default function SaleEntryStep4({ onNavigate, buyerData, deviceData, sale
     else if (action === 'print') handlePrint(sizeKey);
   };
 
+  // Saves the PDF onto the phone: Android -> Downloads folder,
+  // iOS -> the "Save to Files" picker.
+  const saveToDevice = async (srcPath, fileName) => {
+    if (Platform.OS === 'ios') {
+      await FileShare.open({
+        url: toFileUrl(srcPath),
+        type: 'application/pdf',
+        filename: fileName,
+        saveToFiles: true,
+        failOnCancel: false,
+      });
+      return null;
+    }
+
+    if (Platform.Version >= 29) {
+      // Android 10+: MediaStore Downloads collection, no permission needed.
+      await ReactNativeBlobUtil.media.copyToMediaStore(
+        { name: `${fileName}.pdf`, parentFolder: '', mime: 'application/pdf' },
+        'Download',
+        srcPath,
+      );
+      return `Downloads/${fileName}.pdf`;
+    }
+
+    // Android 9 and below: write to the public Download folder directly.
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+    );
+    if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+      throw new Error('Storage permission is needed to save the PDF.');
+    }
+    const dest = `${ReactNativeBlobUtil.fs.dirs.LegacyDownloadDir}/${fileName}.pdf`;
+    if (await ReactNativeBlobUtil.fs.exists(dest)) {
+      await ReactNativeBlobUtil.fs.unlink(dest);
+    }
+    await ReactNativeBlobUtil.fs.cp(srcPath, dest);
+    await ReactNativeBlobUtil.media.addDownload({
+      title: `${fileName}.pdf`,
+      description: 'Sale invoice',
+      mime: 'application/pdf',
+      path: dest,
+      notification: true,
+    });
+    return dest;
+  };
+
   const handleDownloadPDF = async sizeKey => {
     if (generatingPdf) return;
     setGeneratingPdf(true);
     try {
-      const file = await generateInvoicePdf();
-      try {
-        // Best-effort share sheet (works reliably on iOS; some Android
-        // versions restrict sharing raw file:// paths).
-        await FileShare.open({
-          title: `Sale Invoice ${invoiceId}`,
-          url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`,
-          type: 'application/pdf',
-          failOnCancel: false,
-        });
-      } catch (shareErr) {
-        Alert.alert('PDF saved', `Saved to:\n${file.filePath}`);
+      const file = await generateInvoicePdf(sizeKey);
+      const srcPath = toPlainPath(file.filePath);
+      const savedTo = await saveToDevice(srcPath, invoiceId);
+      if (savedTo) {
+        Alert.alert('Invoice downloaded', `Saved to ${savedTo}`, [
+          { text: 'OK' },
+          {
+            text: 'Open',
+            onPress: () =>
+              ReactNativeBlobUtil.open
+                .file(srcPath, { mime: 'application/pdf' })
+                .catch(() => Alert.alert('No PDF viewer', 'Install a PDF viewer app to open the invoice.')),
+          },
+        ]);
       }
     } catch (err) {
-      Alert.alert('Could not create PDF', err.message || 'Please try again.');
+      Alert.alert('Could not download PDF', err.message || 'Please try again.');
     } finally {
       setGeneratingPdf(false);
     }
   };
 
+  // Sends the invoice PDF (A4) with a text summary to WhatsApp, email, etc.
   const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
     try {
       const invoiceText = `
 Invoice: ${invoiceId}
 Date: ${invoiceDate}
 Store: ${storeName}
 
-SALE INVOICE DETAILS:
 Buyer: ${buyer.buyerName || 'N/A'}
 Device: ${deviceTitle}
-IMEI: ${device.imei || 'N/A'}
 Sale Amount: ₹${sale.salePrice || '0'}
-Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale.transactionId}` : ''}${sale.warranty ? `\nNotes: ${sale.warranty}` : ''}
+Payment: ${paymentMethodDisplay}
       `.trim();
 
-      await Share.share({
-        message: invoiceText,
+      const file = await generateInvoicePdf('a4');
+      await FileShare.open({
         title: `Sale Invoice ${invoiceId}`,
+        url: toFileUrl(file.filePath),
+        type: 'application/pdf',
+        filename: invoiceId,
+        message: invoiceText,
+        failOnCancel: false,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to share invoice');
+    } finally {
+      setSharing(false);
     }
   };
 
-  // No dedicated print library — generate the same PDF and hand it to the
-  // share sheet, where most Android print services accept a PDF directly.
+  // Opens the system print dialog (Android print service / iOS AirPrint).
   const handlePrint = async sizeKey => {
     if (printing) return;
     setPrinting(true);
     try {
-      const file = await generateInvoicePdf();
-      try {
-        await FileShare.open({
-          title: `Print Invoice ${invoiceId}`,
-          url: file.filePath.startsWith('file://') ? file.filePath : `file://${file.filePath}`,
-          type: 'application/pdf',
-          failOnCancel: false,
-        });
-      } catch (shareErr) {
-        Alert.alert('PDF saved', `Open this file and print from there:\n${file.filePath}`);
-      }
+      const file = await generateInvoicePdf(sizeKey);
+      await RNPrint.print({
+        filePath: toPlainPath(file.filePath),
+        jobName: `Invoice ${invoiceId}`,
+      });
     } catch (err) {
-      Alert.alert('Could not prepare for printing', err.message || 'Please try again.');
+      Alert.alert('Could not print', err.message || 'Please try again.');
     } finally {
       setPrinting(false);
     }
@@ -283,8 +339,13 @@ Payment: ${paymentMethodDisplay}${sale.transactionId ? `\nTransaction ID: ${sale
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={handleShare}
+                disabled={sharing}
               >
-                <Text style={styles.actionButtonText}>Share</Text>
+                {sharing ? (
+                  <ActivityIndicator color={Colors.primary} />
+                ) : (
+                  <Text style={styles.actionButtonText}>Share</Text>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity

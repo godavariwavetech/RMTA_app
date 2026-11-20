@@ -158,6 +158,12 @@ export default function RegisterScreen({ onNavigate, userInd }) {
     } = form;
 
     setTried(true);
+    // Terms & Conditions are mandatory — check first so the user is told right away.
+    if (!acceptedTerms) {
+      alert('Please accept the Terms & Conditions to register');
+      return;
+    }
+
     // Validate required inputs
     if (
       !fullName.trim() ||
@@ -203,16 +209,6 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       return;
     }
 
-    if (!leader) {
-      alert('Please select a leader from the list');
-      return;
-    }
-
-    if (!acceptedTerms) {
-      alert('Please accept the Terms & Conditions to continue');
-      return;
-    }
-
     // Build the registration payload using the exact field names the backend
     // accepts: POST /public_app/member_registertion reads only these keys.
     const registrationData = {
@@ -227,8 +223,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
       user_ind, // 1 = admin, 0 = technician (separate account namespaces)
       shop_image: shopImage ? shopImage.base64 : null,
       person_image: personImage ? personImage.base64 : null,
-      leader_id: leader.id,
-      leader_name: leader.name,
+      ...(leader ? { leader_id: leader.id, leader_name: leader.name } : {}),
     };
 
     // Dispatch the registration thunk (defined in redux/slices/authSlice.js).
@@ -427,13 +422,9 @@ export default function RegisterScreen({ onNavigate, userInd }) {
 
             {/* Leader Dropdown */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Leader</Text>
+              <Text style={styles.fieldLabel}>Leader (Optional)</Text>
               <TouchableOpacity
-                style={[
-                  styles.inputWrapper,
-                  styles.selectWrapper,
-                  tried && !leader && styles.inputWrapperError,
-                ]}
+                style={[styles.inputWrapper, styles.selectWrapper]}
                 onPress={openLeaderPicker}
                 activeOpacity={0.8}
                 accessibilityRole="combobox"
@@ -559,6 +550,7 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 style={[
                   styles.checkbox,
                   acceptedTerms && styles.checkboxChecked,
+                  tried && !acceptedTerms && styles.checkboxError,
                 ]}
                 onPress={() => setAcceptedTerms(!acceptedTerms)}
                 accessibilityRole="checkbox"
@@ -580,9 +572,14 @@ export default function RegisterScreen({ onNavigate, userInd }) {
                 >
                   Terms & Conditions
                 </Text>
-                .
+                . <Text style={styles.required}>*</Text>
               </Text>
             </View>
+            {tried && !acceptedTerms && (
+              <Text style={styles.termsError}>
+                You must accept the Terms & Conditions to register.
+              </Text>
+            )}
 
 
             {/* Sign In Link */}
@@ -600,7 +597,10 @@ export default function RegisterScreen({ onNavigate, userInd }) {
           {/* Footer with Register Button */}
           <View style={styles.footer}>
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[
+                styles.registerButton,
+                !acceptedTerms && styles.registerButtonDisabled,
+              ]}
               onPress={handleRegister}
               disabled={isSubmitting}
             >
@@ -995,6 +995,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.secondary,
     borderColor: Colors.secondary,
   },
+  checkboxError: {
+    borderColor: '#EF4444',
+    borderWidth: 2,
+  },
+  termsError: {
+    color: '#EF4444',
+    fontSize: wp('3%'),
+    marginHorizontal: wp('4%'),
+    marginTop: -hp('0.8%'),
+    marginBottom: hp('1%'),
+  },
   checkboxTick: {
     color: '#FFFFFF',
     fontSize: wp('3.5%'),
@@ -1088,6 +1099,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
+  },
+  registerButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    elevation: 0,
+    shadowOpacity: 0,
   },
   registerButtonText: {
     fontSize: wp('4.2%'),

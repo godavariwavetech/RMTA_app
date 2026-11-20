@@ -228,7 +228,7 @@ export default function LoginScreen({ onNavigate, initialMode }) {
         );
       } else if (payload && payload.code === 'ACCOUNT_DELETED') {
         setLoginError(payload.message);
-        showMessageModal('Unable to sign in', payload.message);
+        showMessageModal('Account deleted', payload.message);
       } else if (isNetworkError) {
         const message =
           (payload && payload.message) || 'Login failed. Please try again.';
